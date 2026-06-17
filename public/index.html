@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SeoShark — Bộ công cụ SEO</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🦈</text></svg>" />
+</head>
+<body>
+
+  <!-- ============ LOGIN OVERLAY ============ -->
+  <div id="authOverlay" class="auth-overlay show">
+    <div class="auth-card">
+      <div class="auth-logo">🦈 <b>SeoShark</b></div>
+      <p class="auth-sub">Đăng nhập để sử dụng công cụ SEO</p>
+      <div id="authMsg"></div>
+
+      <div class="auth-tabs">
+        <div class="atab active" data-atab="login">Đăng nhập</div>
+        <div class="atab" data-atab="register">Tạo tài khoản</div>
+      </div>
+
+      <form class="auth-form active" data-aform="login" autocomplete="on">
+        <label>Email</label>
+        <input id="loginEmail" type="text" placeholder="email@example.com" />
+        <label>Mật khẩu</label>
+        <input id="loginPassword" type="password" placeholder="••••••" />
+        <button id="btnLogin" type="submit" style="width:100%;margin-top:8px">Đăng nhập</button>
+      </form>
+
+      <form class="auth-form" data-aform="register" autocomplete="on">
+        <label>Họ tên</label>
+        <input id="regName" type="text" placeholder="Nguyễn Văn A" />
+        <label>Email</label>
+        <input id="regEmail" type="text" placeholder="email@example.com" />
+        <label>Mật khẩu (tối thiểu 6 ký tự)</label>
+        <input id="regPassword" type="password" placeholder="••••••" />
+        <button id="btnRegister" type="submit" style="width:100%;margin-top:8px">Gửi mã xác nhận</button>
+        <p class="muted" style="margin-top:10px">🔒 Mã xác nhận được gửi tới chủ sở hữu công cụ (imknownasthu@gmail.com). Hãy liên hệ chủ sở hữu để nhận mã tạo tài khoản.</p>
+      </form>
+
+      <form class="auth-form" data-aform="verify" autocomplete="off">
+        <p style="font-size:14px">Nhập mã xác nhận đã được cấp cho <b id="verifyEmailLabel"></b>:</p>
+        <label>Mã xác nhận (6 số)</label>
+        <input id="verifyCode" type="text" inputmode="numeric" maxlength="6" placeholder="123456" />
+        <button id="btnVerify" type="submit" style="width:100%;margin-top:8px">Xác nhận &amp; tạo tài khoản</button>
+        <div style="display:flex;justify-content:space-between;margin-top:10px;align-items:center">
+          <a id="backToRegister" class="muted" style="cursor:pointer">← Quay lại</a>
+          <button class="ghost small" id="btnResend" type="button">Gửi lại mã</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="app">
+
+    <!-- ============ SIDEBAR MENU ============ -->
+    <aside class="sidebar">
+      <div class="logo-area">
+        <img src="logo.png" alt="Shark Dental Clinic"
+             onerror="this.style.display='none';document.getElementById('logoFallback').style.display='flex';" />
+        <div class="logo-fallback" id="logoFallback" style="display:none">
+          <svg class="fish" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M24 6c-7 0-12 4-12 11 0 4 1.5 7 1.5 12 0 3 1.5 6 3 6s2-2 2.5-4.5S22 38 24 38s3 .5 3.5 2.5S29 47 30.5 47s3-3 3-6c0-5 1.5-8 1.5-12 0-7-5-11-12-11z" fill="#0097dc"/>
+            <path d="M30 9c3-2 8-3 11-1-2 2-3 5-3 8-3-3-6-5-8-7z" fill="#5cc6f0"/>
+          </svg>
+          <div class="txt"><b>SHARK</b><span>DENTAL CLINIC</span></div>
+        </div>
+      </div>
+
+      <nav class="menu" id="menu">
+        <div class="menu-label">Công cụ SEO</div>
+        <div class="menu-item active" data-section="internal-link">
+          <span class="mi-ic">🔗</span> Tối ưu Internal link
+        </div>
+        <div class="menu-item disabled" data-section="soon" data-name="Audit Onpage SEO">
+          <span class="mi-ic">🩺</span> Audit Onpage <span class="soon">Sắp ra mắt</span>
+        </div>
+        <div class="menu-item disabled" data-section="soon" data-name="Nghiên cứu từ khóa">
+          <span class="mi-ic">🔑</span> Nghiên cứu từ khóa <span class="soon">Sắp ra mắt</span>
+        </div>
+        <div class="menu-item disabled" data-section="soon" data-name="Theo dõi thứ hạng">
+          <span class="mi-ic">📈</span> Theo dõi thứ hạng <span class="soon">Sắp ra mắt</span>
+        </div>
+        <div class="menu-item disabled" data-section="soon" data-name="Phân tích đối thủ">
+          <span class="mi-ic">🥊</span> Phân tích đối thủ <span class="soon">Sắp ra mắt</span>
+        </div>
+      </nav>
+
+      <div class="sidebar-foot"><b>SeoShark</b> v0.3 · DN Group</div>
+    </aside>
+
+    <!-- ============ CONTENT ============ -->
+    <main class="content">
+      <div class="topbar">
+        <div>
+          <div class="crumb">Công cụ SEO</div>
+          <h2 id="sectionTitle">Tối ưu Internal link</h2>
+        </div>
+        <div class="right">
+          <span class="engine-pill"><span class="dot" id="enginePillDot"></span><span id="enginePillText">Local</span></span>
+          <span class="user-chip" id="userChip" style="display:none">
+            <span class="uava" id="userAvatar">U</span>
+            <span id="userEmail"></span>
+            <button class="ghost small" id="btnLogout">Đăng xuất</button>
+          </span>
+        </div>
+      </div>
+
+      <!-- ===== SECTION: TỐI ƯU INTERNAL LINK ===== -->
+      <div class="section active page" data-section="internal-link">
+
+        <!-- ENGINE (dùng chung) -->
+        <section class="card">
+          <details id="engineBox">
+            <summary style="cursor:pointer;font-weight:700;font-size:14px;color:var(--brand-dark)">⚙️ Engine xử lý (mặc định: Local — miễn phí, không cần key)</summary>
+            <div class="grid cols-2" style="margin-top:12px">
+              <div>
+                <label>Engine</label>
+                <select id="engine">
+                  <option value="local">🟢 Local — Miễn phí, offline, không cần key</option>
+                  <option value="gemini">✨ Gemini — Free key (Google AI Studio)</option>
+                  <option value="claude">🤖 Claude — Cần key trả phí (Anthropic)</option>
+                </select>
+                <p class="muted" id="engineHint"></p>
+              </div>
+              <div id="modelWrap">
+                <label>Model</label>
+                <select id="model"></select>
+              </div>
+            </div>
+            <div id="keyWrap" class="hidden" style="margin-top:4px">
+              <label id="keyLabel">API Key</label>
+              <input id="apiKey" type="password" placeholder="" />
+              <p class="muted" id="keyHelp"></p>
+            </div>
+          </details>
+        </section>
+
+        <!-- SUB-TABS: Internal / Incoming -->
+        <div class="tabs subtabs" id="featureTabs">
+          <div class="tab active" data-feat="internal">🔗 Internal Link (trong bài)</div>
+          <div class="tab" data-feat="incoming">🔁 Incoming Link (bài khác trỏ về)</div>
+        </div>
+
+        <!-- ---- INTERNAL ---- -->
+        <div class="featpane active" data-featpane="internal">
+          <section class="card">
+            <h2>1. Phân tích bài viết</h2>
+            <p class="hint">Nhập URL bài viết cần tối ưu. Công cụ đọc toàn bộ nội dung và nạp URL nội bộ từ sitemap.</p>
+            <div class="grid cols-2">
+              <div>
+                <label>URL bài viết cần tối ưu *</label>
+                <input id="articleUrl" type="text" placeholder="https://nhakhoashark.vn/bai-viet-can-toi-uu" />
+              </div>
+              <div>
+                <label>Sitemap (tùy chọn — để trống sẽ tự dò /sitemap.xml)</label>
+                <input id="sitemapUrl" type="text" placeholder="https://nhakhoashark.vn/sitemap.xml" />
+              </div>
+            </div>
+            <div style="margin-top:16px"><button id="btnAnalyze">🔍 Phân tích bài viết</button></div>
+            <div id="analyzeMsg"></div>
+          </section>
+
+          <section class="card hidden" id="articleCard">
+            <div class="flexbar">
+              <h2 style="margin:0">📄 <span id="aTitle"></span></h2>
+              <span class="badge ok" id="aTargetBadge"></span>
+            </div>
+            <div class="stats" id="aStats"></div>
+            <details>
+              <summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--brand-dark)">Xem cấu trúc bài viết (sapo &amp; kết bài bị khóa)</summary>
+              <div class="preview-blocks" id="aBlocks" style="margin-top:10px"></div>
+            </details>
+          </section>
+
+          <section class="card hidden" id="optionsCard">
+            <h2>2. Chọn phương án tối ưu Internal Link</h2>
+            <p class="hint">Sapo (mở bài) và đoạn kết luôn được bỏ qua. Link được chèn đúng ngữ cảnh, dễ đọc.</p>
+            <div class="options">
+              <div class="opt">
+                <h3>⚡ Phương án 1 — Tự động</h3>
+                <p class="d">Công cụ tự chọn vị trí phù hợp nhất và chèn theo số lượng bạn muốn (lấy URL từ sitemap).</p>
+                <label>Số lượng internal link muốn chèn</label>
+                <input id="autoCount" type="number" min="1" max="20" value="3" />
+                <div class="spacer"></div>
+                <div style="margin-top:14px"><button id="btnAuto">Tối ưu tự động</button></div>
+              </div>
+              <div class="opt">
+                <h3>🎯 Phương án 2 — Theo từ khóa</h3>
+                <p class="d">Bạn cung cấp từ khóa (và URL đích nếu muốn). Công cụ tìm vị trí phù hợp; chưa có chỗ thì viết thêm ý hợp lý.</p>
+                <div id="kwRows"></div>
+                <button class="ghost small" id="btnAddKw" type="button">+ Thêm từ khóa</button>
+                <div class="spacer"></div>
+                <div style="margin-top:14px"><button id="btnKw">Chèn theo từ khóa</button></div>
+              </div>
+            </div>
+            <div id="optMsg" style="margin-top:14px"></div>
+          </section>
+
+          <section class="card hidden" id="resultCard">
+            <div class="flexbar">
+              <h2 style="margin:0">3. Kết quả</h2>
+              <span class="muted" id="resMeta"></span>
+            </div>
+            <div id="resAlerts"></div>
+            <div class="tabs subtabs" id="resTabs">
+              <div class="tab active" data-tab="table">📊 Bảng đối chiếu</div>
+              <div class="tab" data-tab="render">👁️ Trước / Sau</div>
+              <div class="tab" data-tab="html">🧩 Mã HTML</div>
+              <div class="tab" data-tab="md">📝 Markdown</div>
+            </div>
+            <div class="tabpane active" data-pane="table"><div id="tableWrap"></div></div>
+            <div class="tabpane" data-pane="render">
+              <div class="split">
+                <div class="pane"><div class="ph">Bản gốc (TRƯỚC)</div><div class="render" id="renderBefore"></div></div>
+                <div class="pane after"><div class="ph">Đã chèn link (SAU) <button class="ghost small" data-copy="afterHtml">Copy HTML</button></div><div class="render" id="renderAfter"></div></div>
+              </div>
+            </div>
+            <div class="tabpane" data-pane="html">
+              <div class="split">
+                <div class="pane"><div class="ph">HTML — TRƯỚC <button class="ghost small" data-copy="beforeHtml">Copy</button></div><pre class="code" id="codeBeforeHtml"></pre></div>
+                <div class="pane after"><div class="ph">HTML — SAU <button class="ghost small" data-copy="afterHtml">Copy</button></div><pre class="code" id="codeAfterHtml"></pre></div>
+              </div>
+            </div>
+            <div class="tabpane" data-pane="md">
+              <div class="split">
+                <div class="pane"><div class="ph">Markdown — TRƯỚC <button class="ghost small" data-copy="beforeMarkdown">Copy</button></div><pre class="code" id="codeBeforeMd"></pre></div>
+                <div class="pane after"><div class="ph">Markdown — SAU <button class="ghost small" data-copy="afterMarkdown">Copy</button></div><pre class="code" id="codeAfterMd"></pre></div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- ---- INCOMING ---- -->
+        <div class="featpane" data-featpane="incoming">
+          <section class="card">
+            <h2>1. URL đích cần tăng link (incoming)</h2>
+            <p class="hint">Nhập URL bài viết bạn muốn các bài khác trỏ về. Công cụ đọc nội dung & gợi ý các bài cùng chủ đề (pillar) từ sitemap để chèn link trỏ về.</p>
+            <div class="grid cols-2">
+              <div>
+                <label>URL đích (bài nhận incoming link) *</label>
+                <input id="incTargetUrl" type="text" placeholder="https://nhakhoashark.vn/bai-can-tang-link" />
+              </div>
+              <div>
+                <label>Sitemap (tùy chọn — tự dò /sitemap.xml)</label>
+                <input id="incSitemapUrl" type="text" placeholder="https://nhakhoashark.vn/sitemap.xml" />
+              </div>
+            </div>
+            <div style="margin-top:16px"><button id="btnIncAnalyze">🔍 Phân tích &amp; gợi ý bài nguồn</button></div>
+            <div id="incAnalyzeMsg"></div>
+          </section>
+
+          <section class="card hidden" id="incPickCard">
+            <div class="flexbar">
+              <h2 style="margin:0">🎯 URL đích: <span id="incTargetTitle"></span></h2>
+              <span class="badge ok" id="incSitemapBadge"></span>
+            </div>
+            <div style="margin:10px 0 18px">
+              <label>Anchor mặc định (từ khóa muốn trỏ về URL đích)</label>
+              <input id="incDefaultAnchor" type="text" />
+              <p class="muted">Dùng cho những bài bạn không nhập anchor riêng bên dưới.</p>
+            </div>
+            <h3 style="margin:6px 0">Bước 1 — Chọn bài nguồn cùng chủ đề (gợi ý từ sitemap)</h3>
+            <p class="muted">Tick chọn bài muốn chèn link trỏ về URL đích. Đặt anchor riêng cho từng bài nếu muốn (để trống = dùng anchor mặc định). <b>Tối đa 10 bài/lần.</b></p>
+            <div class="preview-blocks" id="incSuggestions" style="max-height:360px"></div>
+            <h3 style="margin:18px 0 6px">Hoặc thêm bài nguồn thủ công</h3>
+            <div id="incManualRows"></div>
+            <button class="ghost small" id="incAddManual" type="button">+ Thêm URL bài nguồn</button>
+            <div class="flexbar" style="margin-top:18px">
+              <span class="muted" id="incSelCount">Đã chọn: 0 bài</span>
+              <button id="btnIncInsert">Chèn incoming link vào bài đã chọn</button>
+            </div>
+            <div id="incInsertMsg" style="margin-top:12px"></div>
+          </section>
+
+          <section class="card hidden" id="incResultCard">
+            <div class="flexbar">
+              <h2 style="margin:0">2. Kết quả Incoming</h2>
+              <span class="muted" id="incResMeta"></span>
+            </div>
+            <div id="incResults"></div>
+          </section>
+        </div>
+
+      </div>
+
+      <!-- ===== SECTION: COMING SOON ===== -->
+      <div class="section page" data-section="soon">
+        <div class="coming">
+          <div class="big">🚧</div>
+          <h2 id="soonName">Tính năng sắp ra mắt</h2>
+          <p>Tính năng này đang được phát triển và sẽ sớm có mặt trong SeoShark.</p>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="app.js"></script>
+</body>
+</html>

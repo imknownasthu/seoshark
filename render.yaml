@@ -1,0 +1,16 @@
+# Cau hinh deploy len Render.com (https://render.com) - mien phi
+# Cach dung: day thu muc seoshark len GitHub -> Render se tu doc file nay.
+services:
+  - type: web
+    name: seoshark
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      # (Tuy chon) dat key Gemini free o day neu muon dung chung cho moi nguoi.
+      # De trong thi nguoi dung tu nhap key trong giao dien.
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-3.5-flash

@@ -1,0 +1,86 @@
+// src/gemini.js
+// Engine Gemini (Google AI Studio) - API key MIEN PHI, khong can the/credit.
+// Lay key: https://aistudio.google.com/app/apikey
+
+import { SYSTEM_PROMPT, buildUserPrompt } from "./prompt.js";
+
+const RESPONSE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    edits: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          blockIndex: { type: "INTEGER" },
+          newHtml: { type: "STRING" },
+          anchor: { type: "STRING" },
+          targetUrl: { type: "STRING" },
+          keyword: { type: "STRING" },
+          addedContent: { type: "BOOLEAN" },
+          reason: { type: "STRING" },
+        },
+        required: ["blockIndex", "newHtml", "anchor", "targetUrl", "addedContent", "reason"],
+      },
+    },
+    notes: { type: "STRING" },
+  },
+  required: ["edits"],
+};
+
+export async function optimizeWithGemini({ apiKey, model, article, mode, count, keywords, targets }) {
+  const mdl = model || "gemini-3.5-flash";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${mdl}:generateContent?key=${encodeURIComponent(
+    apiKey
+  )}`;
+
+  const userContent = buildUserPrompt({ article, mode, count, keywords, targets });
+
+  const body = {
+    systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+    contents: [{ role: "user", parts: [{ text: userContent }] }],
+    generationConfig: {
+      temperature: 0.4,
+      maxOutputTokens: 8192,
+      responseMimeType: "application/json",
+      responseSchema: RESPONSE_SCHEMA,
+    },
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  const data = await res.json();
+  if (!res.ok) {
+    const msg = data?.error?.message || `HTTP ${res.status}`;
+    throw new Error(`Gemini loi: ${msg}`);
+  }
+
+  const cand = data?.candidates?.[0];
+  const text = cand?.content?.parts?.map((p) => p.text).join("") || "";
+  if (!text) {
+    const reason = cand?.finishReason || data?.promptFeedback?.blockReason || "khong ro";
+    throw new Error(`Gemini khong tra ve noi dung (ly do: ${reason}).`);
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    throw new Error("Gemini tra ve JSON khong hop le.");
+  }
+
+  return {
+    edits: Array.isArray(parsed.edits) ? parsed.edits : [],
+    notes: parsed.notes || "",
+    usage: data?.usageMetadata
+      ? {
+          input_tokens: data.usageMetadata.promptTokenCount,
+          output_tokens: data.usageMetadata.candidatesTokenCount,
+        }
+      : null,
+  };
+}
