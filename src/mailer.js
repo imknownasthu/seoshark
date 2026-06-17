@@ -1,7 +1,8 @@
 // src/mailer.js
-// Gui email ma xac nhan. Co 2 che do:
+// Gui email ma xac nhan. Co cac che do:
 //  - SMTP that (khi co SMTP_USER + SMTP_PASS, vd Gmail App Password)
 //  - TEST (mac dinh): in ma ra console + ghi vao data/outbox.log
+// Neu SMTP loi/treo -> tu fallback sang ghi log (KHONG lam treo dang ky).
 
 import fs from "node:fs";
 import path from "node:path";
@@ -17,11 +18,16 @@ function getTransporter() {
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
   if (user && pass) {
+    const port = Number(process.env.SMTP_PORT || 465);
     _transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || "smtp.gmail.com",
-      port: Number(process.env.SMTP_PORT || 465),
-      secure: Number(process.env.SMTP_PORT || 465) === 465,
+      port,
+      secure: port === 465,
       auth: { user, pass },
+      // Timeout de KHONG treo neu khong ket noi duoc
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 20000,
     });
   } else {
     _transporter = false;
@@ -31,6 +37,22 @@ function getTransporter() {
 
 export function mailMode() {
   return getTransporter() ? "smtp" : "test";
+}
+
+function logCode({ ownerEmail, requesterEmail, code, reason }) {
+  const line = `[${new Date().toISOString()}] TO=${ownerEmail} | dang_ky=${requesterEmail} | MA=${code}${reason ? " | " + reason : ""}\n`;
+  try {
+    fs.mkdirSync(path.dirname(OUTBOX), { recursive: true });
+    fs.appendFileSync(OUTBOX, line, "utf8");
+  } catch {}
+  console.log(
+    "\n========== [SEOSHARK • MA XAC NHAN] ==========\n" +
+      `Gui toi : ${ownerEmail}\n` +
+      `Dang ky : ${requesterEmail}\n` +
+      `MA XAC NHAN: ${code}\n` +
+      (reason ? `(${reason})\n` : "") +
+      "==============================================\n"
+  );
 }
 
 export async function sendRegistrationCode({ ownerEmail, requesterEmail, name, code }) {
@@ -44,28 +66,17 @@ export async function sendRegistrationCode({ ownerEmail, requesterEmail, name, c
 
   const t = getTransporter();
   if (t) {
-    await t.sendMail({
-      from: `"SeoShark" <${process.env.SMTP_USER}>`,
-      to: ownerEmail,
-      subject,
-      text,
-    });
-    return { mode: "smtp" };
+    try {
+      await t.sendMail({ from: `"SeoShark" <${process.env.SMTP_USER}>`, to: ownerEmail, subject, text });
+      return { mode: "smtp" };
+    } catch (e) {
+      // SMTP loi/treo -> fallback ghi log, dang ky van hoan tat
+      logCode({ ownerEmail, requesterEmail, code, reason: "SMTP loi: " + (e.message || e) });
+      return { mode: "smtp-failed", error: e.message || String(e) };
+    }
   }
 
-  // TEST MODE
-  const line = `[${new Date().toISOString()}] TO=${ownerEmail} | dang_ky=${requesterEmail} | MA=${code}\n`;
-  try {
-    fs.mkdirSync(path.dirname(OUTBOX), { recursive: true });
-    fs.appendFileSync(OUTBOX, line, "utf8");
-  } catch {}
-  console.log(
-    "\n========== [SEOSHARK • MAIL TEST MODE] ==========\n" +
-      `Gui toi : ${ownerEmail}\n` +
-      `Dang ky : ${requesterEmail}\n` +
-      `MA XAC NHAN: ${code}\n` +
-      "(Bat SMTP that bang cach dat SMTP_USER + SMTP_PASS trong .env)\n" +
-      "=================================================\n"
-  );
+  // TEST MODE (chua cau hinh SMTP)
+  logCode({ ownerEmail, requesterEmail, code });
   return { mode: "test" };
 }

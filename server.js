@@ -64,14 +64,15 @@ app.post("/api/auth/register", async (req, res) => {
     const { email, name, password } = req.body || {};
     const { email: em, code } = await auth.registerStart({ email, name, password });
     const r = await sendRegistrationCode({ ownerEmail: OWNER_EMAIL, requesterEmail: em, name, code });
-    res.json({
-      ok: true,
-      mode: r.mode,
-      message:
-        r.mode === "smtp"
-          ? `Đã gửi mã xác nhận tới ${OWNER_EMAIL}. Lấy mã từ hộp thư đó để hoàn tất.`
-          : `Đã tạo mã xác nhận (chế độ TEST). Mã hiển thị ở console/log của server (gửi tới ${OWNER_EMAIL} khi bật SMTP).`,
-    });
+    let message;
+    if (r.mode === "smtp") {
+      message = `Đã gửi mã xác nhận tới ${OWNER_EMAIL}. Lấy mã từ hộp thư đó (kiểm tra cả Spam) để hoàn tất.`;
+    } else if (r.mode === "smtp-failed") {
+      message = `⚠️ Gửi email lỗi (${r.error}). Mã đã được ghi vào Logs của server. Kiểm tra lại SMTP_USER/SMTP_PASS (App Password Gmail).`;
+    } else {
+      message = `Đã tạo mã xác nhận (chế độ TEST). Mã hiển thị ở Logs của server (sẽ gửi tới ${OWNER_EMAIL} khi bật SMTP).`;
+    }
+    res.json({ ok: true, mode: r.mode, message });
   } catch (err) {
     res.status(400).json({ error: err.message || String(err) });
   }

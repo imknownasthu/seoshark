@@ -37,6 +37,8 @@ export async function initStore() {
       pool = new pg.Pool({
         connectionString: url,
         ssl: { rejectUnauthorized: false },
+        connectionTimeoutMillis: 10000,
+        max: 5,
       });
       // Tranh loi idle client lam sap process
       pool.on("error", (e) => console.error("  [store] Postgres pool error:", e.message));
