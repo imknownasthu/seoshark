@@ -261,6 +261,22 @@ pre.code { margin: 0; padding: 12px 14px; background: #0c2230; color: #d7eef8; m
 .auth-form label { margin-top: 12px; }
 .auth-form label:first-child { margin-top: 0; }
 
+/* Tab tinh nang (Internal/Incoming) */
+.featpane { display: none; }
+.featpane.active { display: block; }
+
+/* Chip nhay toi anchor */
+.chips { display: flex; flex-wrap: wrap; gap: 7px; margin: 0 0 12px; }
+.chip-jump {
+  cursor: pointer; border: 1px solid var(--brand); background: var(--brand-light);
+  color: var(--brand-dark); font-size: 12.5px; font-weight: 600;
+  padding: 5px 11px; border-radius: 999px; transition: .12s; box-shadow: none;
+}
+.chip-jump:hover { background: var(--brand); color: #fff; transform: none; }
+.chips .lbl { font-size: 12px; color: var(--muted); align-self: center; margin-right: 2px; }
+@keyframes flashmark { 0% { background: #ffd54a; } 100% { background: transparent; } }
+.render a.jumped { animation: flashmark 1.8s ease-out; border-radius: 3px; padding: 0 2px; }
+
 .user-chip { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); }
 .user-chip .uava { width: 28px; height: 28px; border-radius: 50%; background: var(--brand); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; text-transform: uppercase; }
 @media (max-width: 600px) { .user-chip #userEmail { display: none; } }

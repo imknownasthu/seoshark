@@ -295,6 +295,7 @@ function renderResult(d) {
   // Render truoc/sau
   $("#renderBefore").innerHTML = d.beforeHtml;
   $("#renderAfter").innerHTML = d.afterHtml;
+  $("#anchorChips").innerHTML = buildChips(d.table, "renderAfter");
 
   // Code
   $("#codeBeforeHtml").textContent = formatHtml(d.beforeHtml);
@@ -352,12 +353,46 @@ document.addEventListener("click", (e) => {
   }
 });
 
+// --- CHIP NHẢY TỚI ANCHOR ---
+function buildChips(rows, scopeId) {
+  if (!rows || !rows.length) return "";
+  const chips = rows.map((r, i) =>
+    `<button class="chip-jump" data-jump-scope="${scopeId}" data-jump-anchor="${esc(r.anchor)}" data-jump-url="${esc(r.url)}">🔗 ${esc(r.anchor) || ("link " + (i + 1))}</button>`
+  ).join("");
+  return `<span class="lbl">Nhảy tới:</span>${chips}`;
+}
+
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-jump-scope]");
+  if (!b) return;
+  const scope = document.getElementById(b.dataset.jumpScope);
+  if (!scope) return;
+  const anchor = (b.dataset.jumpAnchor || "").trim();
+  const url = b.dataset.jumpUrl || "";
+  const links = Array.from(scope.querySelectorAll("a"));
+  const el =
+    links.find((a) => a.textContent.trim() === anchor && a.getAttribute("href") === url) ||
+    links.find((a) => a.textContent.trim() === anchor) ||
+    links.find((a) => a.getAttribute("href") === url);
+  if (el) {
+    // mo cac <details> cha neu dang dong
+    let p = el.parentElement;
+    while (p) { if (p.tagName === "DETAILS") p.open = true; p = p.parentElement; }
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.remove("jumped");
+    void el.offsetWidth;
+    el.classList.add("jumped");
+  } else {
+    toast("Không tìm thấy anchor trong nội dung");
+  }
+});
+
 // ==================== INCOMING LINK ====================
-let incSession = { id: null, target: null, results: null };
+let incSession = { id: null, target: null, results: null, suggestions: [] };
 
 $("#incSitemapUrl").value = localStorage.getItem("seoshark_sitemap") || "";
 
-// Phan tich URL dich + goi y bai nguon
+// Buoc 1: Phan tich URL dich
 $("#btnIncAnalyze").addEventListener("click", async () => {
   const targetUrl = $("#incTargetUrl").value.trim();
   const sitemapUrl = $("#incSitemapUrl").value.trim();
@@ -366,7 +401,7 @@ $("#btnIncAnalyze").addEventListener("click", async () => {
   if (!targetUrl) { msg.innerHTML = alertHtml("err", "Hãy nhập URL đích."); return; }
 
   const btn = $("#btnIncAnalyze");
-  busy(btn, true, "Đang đọc URL đích & sitemap...");
+  busy(btn, true, "Đang đọc bài viết & sitemap...");
   try {
     const res = await fetch("/api/incoming/analyze", {
       method: "POST",
@@ -378,10 +413,12 @@ $("#btnIncAnalyze").addEventListener("click", async () => {
 
     incSession.id = data.id;
     incSession.target = data.target;
-    renderIncPick(data);
-    $("#incPickCard").classList.remove("hidden");
+    incSession.suggestions = data.suggestions || [];
+    renderIncTarget(data);
+    $("#incTargetCard").classList.remove("hidden");
+    $("#incOptionsCard").classList.remove("hidden");
     $("#incResultCard").classList.add("hidden");
-    $("#incPickCard").scrollIntoView({ behavior: "smooth" });
+    $("#incTargetCard").scrollIntoView({ behavior: "smooth" });
   } catch (e) {
     msg.innerHTML = alertHtml("err", "❌ " + e.message);
   } finally {
@@ -389,74 +426,65 @@ $("#btnIncAnalyze").addEventListener("click", async () => {
   }
 });
 
-function renderIncPick(d) {
+function renderIncTarget(d) {
   $("#incTargetTitle").textContent = d.target.title || d.target.url;
   $("#incSitemapBadge").textContent = `${d.sitemapCount} bài trong sitemap`;
+  $("#incStats").innerHTML = `
+    <div class="stat"><b>${(d.target.wordCount || 0).toLocaleString("vi")}</b><span>Số từ</span></div>
+    <div class="stat"><b>${d.suggestions.length}</b><span>Bài cùng chủ đề</span></div>
+    <div class="stat"><b>${d.sitemapCount}</b><span>Tổng bài sitemap</span></div>`;
   $("#incDefaultAnchor").value = d.defaultAnchorSuggestion || "";
 
+  // Goi y bai nguon (bam de them vao PA2)
   if (!d.suggestions.length) {
-    $("#incSuggestions").innerHTML = alertHtml("warn", "Không đọc được sitemap hoặc không có gợi ý. Hãy thêm bài nguồn thủ công bên dưới.");
+    $("#incSuggestions").innerHTML = alertHtml("warn", "Không đọc được sitemap. Hãy nhập URL bài nguồn thủ công.");
   } else {
-    $("#incSuggestions").innerHTML = d.suggestions.map((s, i) => `
+    $("#incSuggestions").innerHTML = d.suggestions.map((s) => `
       <div class="sug-row">
-        <input type="checkbox" class="sug-check" data-url="${esc(s.url)}" />
+        <button class="ghost small grow0" type="button" data-addsrc="${esc(s.url)}">+ Thêm</button>
         <div class="sug-main">
           <div><b>${esc(s.title)}</b> <span class="badge ${s.score > 0 ? "ok" : "ket"} score">điểm ${s.score}</span></div>
           <a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url)}</a>
         </div>
-        <input type="text" class="sug-anchor" placeholder="Anchor riêng (tùy chọn)" />
       </div>`).join("");
   }
-  // reset manual
-  $("#incManualRows").innerHTML = "";
-  addIncManualRow();
-  updateIncCount();
+
+  // reset rows PA2
+  $("#incKwRows").innerHTML = "";
+  addIncKwRow();
 }
 
-function addIncManualRow() {
+function addIncKwRow(url = "", anchor = "") {
   const div = document.createElement("div");
   div.className = "kw-row";
   div.innerHTML = `
-    <input type="text" class="man-url" placeholder="URL bài nguồn (https://...)" style="flex:2" />
-    <input type="text" class="man-anchor" placeholder="Anchor (tùy chọn)" style="flex:1" />
+    <input type="text" class="src-url" placeholder="URL bài nguồn (https://...)" style="flex:2" value="${esc(url)}" />
+    <input type="text" class="src-anchor" placeholder="Anchor (trống = mặc định)" style="flex:1" value="${esc(anchor)}" />
     <button class="ghost small grow0" type="button" title="Xóa">✕</button>`;
-  div.querySelector("button").addEventListener("click", () => { div.remove(); updateIncCount(); });
-  div.querySelectorAll("input").forEach((inp) => inp.addEventListener("input", updateIncCount));
-  $("#incManualRows").appendChild(div);
+  div.querySelector("button").addEventListener("click", () => div.remove());
+  $("#incKwRows").appendChild(div);
 }
-$("#incAddManual").addEventListener("click", addIncManualRow);
+$("#incAddKw").addEventListener("click", () => addIncKwRow());
 
-function gatherIncSources() {
-  const sources = [];
-  $$(".sug-row").forEach((r) => {
-    const cb = r.querySelector(".sug-check");
-    if (cb && cb.checked) {
-      sources.push({ url: cb.dataset.url, anchor: r.querySelector(".sug-anchor").value.trim() });
-    }
-  });
-  $$("#incManualRows .kw-row").forEach((r) => {
-    const url = r.querySelector(".man-url").value.trim();
-    if (url) sources.push({ url, anchor: r.querySelector(".man-anchor").value.trim() });
-  });
-  return sources;
-}
-function updateIncCount() {
-  const n = gatherIncSources().length;
-  const el = $("#incSelCount");
-  el.textContent = `Đã chọn: ${n} bài` + (n > 10 ? " (chỉ xử lý 10 bài đầu)" : "");
-  el.style.color = n > 10 ? "var(--red)" : "var(--muted)";
-}
-document.addEventListener("change", (e) => {
-  if (e.target.classList && e.target.classList.contains("sug-check")) updateIncCount();
+// Bam "+ Thêm" o goi y -> them 1 dong vao PA2 (dien san URL)
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-addsrc]");
+  if (!b) return;
+  // tranh trung URL
+  const exists = $$("#incKwRows .src-url").some((i) => i.value.trim() === b.dataset.addsrc);
+  if (!exists) {
+    const empty = $$("#incKwRows .kw-row").find((r) => !r.querySelector(".src-url").value.trim());
+    if (empty) empty.querySelector(".src-url").value = b.dataset.addsrc;
+    else addIncKwRow(b.dataset.addsrc);
+  }
+  toast("Đã thêm vào Phương án 2");
 });
 
-// Chen incoming link
-$("#btnIncInsert").addEventListener("click", async () => {
-  const msg = $("#incInsertMsg");
+async function runIncInsert(sources, btn) {
+  const msg = $("#incOptMsg");
   msg.innerHTML = "";
-  if (!incSession.id) { msg.innerHTML = alertHtml("err", "Hãy phân tích URL đích trước."); return; }
-  const sources = gatherIncSources();
-  if (!sources.length) { msg.innerHTML = alertHtml("err", "Hãy chọn hoặc nhập ít nhất 1 bài nguồn."); return; }
+  if (!incSession.id) { msg.innerHTML = alertHtml("err", "Hãy phân tích bài viết trước."); return; }
+  if (!sources.length) { msg.innerHTML = alertHtml("err", "Không có bài nguồn nào."); return; }
 
   const payload = {
     id: incSession.id,
@@ -466,8 +494,6 @@ $("#btnIncInsert").addEventListener("click", async () => {
     apiKey: $("#apiKey").value.trim() || undefined,
     model: $("#model").value || undefined,
   };
-
-  const btn = $("#btnIncInsert");
   busy(btn, true, `Đang chèn vào ${Math.min(sources.length, 10)} bài...`);
   try {
     const res = await fetch("/api/incoming/insert", {
@@ -486,6 +512,29 @@ $("#btnIncInsert").addEventListener("click", async () => {
   } finally {
     busy(btn, false);
   }
+}
+
+// PA1: tu dong - lay top N bai goi y
+$("#btnIncAuto").addEventListener("click", () => {
+  const n = Math.max(1, Math.min(10, parseInt($("#incAutoCount").value, 10) || 5));
+  if (!incSession.suggestions.length) {
+    $("#incOptMsg").innerHTML = alertHtml("warn", "Không có bài gợi ý từ sitemap. Hãy dùng Phương án 2 (nhập URL thủ công).");
+    return;
+  }
+  const sources = incSession.suggestions.slice(0, n).map((s) => ({ url: s.url, anchor: "" }));
+  runIncInsert(sources, $("#btnIncAuto"));
+});
+
+// PA2: theo tu khoa - tu cac dong nhap
+$("#btnIncKw").addEventListener("click", () => {
+  const sources = $$("#incKwRows .kw-row")
+    .map((r) => ({ url: r.querySelector(".src-url").value.trim(), anchor: r.querySelector(".src-anchor").value.trim() }))
+    .filter((s) => /^https?:\/\//i.test(s.url));
+  if (!sources.length) {
+    $("#incOptMsg").innerHTML = alertHtml("err", "Hãy nhập ít nhất 1 URL bài nguồn (bấm gợi ý hoặc dán URL).");
+    return;
+  }
+  runIncInsert(sources, $("#btnIncKw"));
 });
 
 function renderIncResults(d) {
@@ -523,9 +572,10 @@ function renderIncResults(d) {
         ${tableHtml}
         <details style="margin-top:14px" open>
           <summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--brand-dark)">Xem bản gốc trước / sau khi chèn</summary>
-          <div class="split" style="margin-top:10px">
+          <div class="chips" style="margin-top:10px">${buildChips(r.table, "inc-after-" + idx)}</div>
+          <div class="split">
             <div class="pane"><div class="ph">Bản gốc (TRƯỚC)</div><div class="render">${r.beforeHtml}</div></div>
-            <div class="pane after"><div class="ph">Đã chèn link (SAU) <button class="ghost small" data-inccopy="${idx}|afterHtml">Copy HTML</button></div><div class="render">${r.afterHtml}</div></div>
+            <div class="pane after"><div class="ph">Đã chèn link (SAU) <button class="ghost small" data-inccopy="${idx}|afterHtml">Copy HTML</button></div><div class="render" id="inc-after-${idx}">${r.afterHtml}</div></div>
           </div>
         </details>
         <details style="margin-top:10px">
