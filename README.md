@@ -84,16 +84,13 @@ Công cụ yêu cầu đăng nhập (email + mật khẩu) trước khi dùng.
 > Tài khoản lưu ở **Postgres** nếu đặt biến `DATABASE_URL` (lưu vĩnh viễn — khuyên dùng khi deploy); nếu không thì lưu file `data/users.json` (chạy local). Mật khẩu hash scrypt. Phiên đăng nhập giữ 7 ngày qua cookie.
 
 ### Chế độ gửi mã
-- **TEST (mặc định):** mã hiện ở **console/log của server** và ghi vào `data/outbox.log` (không gửi mail thật). Dùng để chạy thử ngay.
-- **Gửi mail thật qua Gmail:**
-  1. Bật **xác minh 2 bước (2FA)** cho `imknownasthu@gmail.com`.
-  2. Tạo **App Password**: https://myaccount.google.com/apppasswords
-  3. Mở `.env`, điền:
-     ```
-     SMTP_USER=imknownasthu@gmail.com
-     SMTP_PASS=<app-password-16-ky-tu>
-     ```
-  4. Khởi động lại server → mã sẽ gửi thật về hộp thư.
+- **TEST (mặc định):** mã hiện ở **Logs server** + ghi `data/outbox.log` (không gửi mail).
+- **Resend (KHUYÊN DÙNG, chạy được trên Render):** gửi mail qua HTTPS, miễn phí.
+  1. Đăng ký https://resend.com **bằng chính email owner** (`imknownasthu@gmail.com`).
+  2. Tạo **API Key** → copy `re_...`.
+  3. Đặt biến `RESEND_API_KEY=re_...` (trong `.env` hoặc Render Environment).
+  4. Vì dùng domain mặc định `onboarding@resend.dev`, mail chỉ gửi được **tới chính email đã đăng ký Resend** — đúng bằng owner nên hợp lệ.
+- **Gmail SMTP:** chỉ chạy **local**; **Render CHẶN SMTP** nên không dùng được khi deploy. (Đặt `SMTP_USER`+`SMTP_PASS` nếu chạy máy nhà.)
 
 > Muốn tắt đăng nhập (dùng tự do): đặt `AUTH_ENABLED=false` trong `.env`.
 
