@@ -18,36 +18,53 @@ export function storeMode() {
   return mode;
 }
 
-export async function initStore() {
-  if (process.env.DATABASE_URL) {
-    const { default: pg } = await import("pg");
-    pool = new pg.Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
-    });
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        email      TEXT PRIMARY KEY,
-        name       TEXT,
-        salt       TEXT NOT NULL,
-        hash       TEXT NOT NULL,
-        verified   BOOLEAN NOT NULL DEFAULT TRUE,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-      )
-    `);
-    mode = "pg";
-    console.log("  [store] Dung Postgres (DATABASE_URL) - tai khoan luu vinh vien.");
-  } else {
-    mode = "json";
-    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-    if (!fs.existsSync(USERS_FILE)) fs.writeFileSync(USERS_FILE, "{}", "utf8");
-    try {
-      jsonUsers = JSON.parse(fs.readFileSync(USERS_FILE, "utf8")) || {};
-    } catch {
-      jsonUsers = {};
-    }
-    console.log("  [store] Dung file JSON (chua co DATABASE_URL).");
+function initJson() {
+  mode = "json";
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  if (!fs.existsSync(USERS_FILE)) fs.writeFileSync(USERS_FILE, "{}", "utf8");
+  try {
+    jsonUsers = JSON.parse(fs.readFileSync(USERS_FILE, "utf8")) || {};
+  } catch {
+    jsonUsers = {};
   }
+}
+
+export async function initStore() {
+  const url = (process.env.DATABASE_URL || "").trim();
+  if (url) {
+    try {
+      const { default: pg } = await import("pg");
+      pool = new pg.Pool({
+        connectionString: url,
+        ssl: { rejectUnauthorized: false },
+      });
+      // Tranh loi idle client lam sap process
+      pool.on("error", (e) => console.error("  [store] Postgres pool error:", e.message));
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS users (
+          email      TEXT PRIMARY KEY,
+          name       TEXT,
+          salt       TEXT NOT NULL,
+          hash       TEXT NOT NULL,
+          verified   BOOLEAN NOT NULL DEFAULT TRUE,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      mode = "pg";
+      console.log("  [store] Dung Postgres (DATABASE_URL) - tai khoan luu vinh vien.");
+      return;
+    } catch (e) {
+      // DATABASE_URL sai/khong ket noi duoc -> KHONG sap app, tu quay ve JSON
+      console.error(
+        `  [store] !! Khong ket noi duoc Postgres (${e.message}). ` +
+          `Kiem tra lai DATABASE_URL. Tam dung file JSON (tai khoan se KHONG luu vinh vien).`
+      );
+      try { if (pool) await pool.end(); } catch {}
+      pool = null;
+    }
+  }
+  initJson();
+  console.log("  [store] Dung file JSON" + (url ? " (do DATABASE_URL loi)" : " (chua co DATABASE_URL)") + ".");
 }
 
 function saveJson() {
