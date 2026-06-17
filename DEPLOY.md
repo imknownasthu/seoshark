@@ -39,7 +39,14 @@ Trong Render → tab **Environment** → **Add Environment Variable**, thêm:
 - `SMTP_PASS` = App Password Gmail (xem README mục Đăng nhập)
 - (tùy chọn) `GEMINI_API_KEY` = key Gemini free
 
-> ⚠️ **Lưu ý tài khoản trên Render Free:** dữ liệu tài khoản lưu ở file `data/users.json`. Bản Free của Render **xóa file này mỗi lần deploy lại / khởi động lại** → tài khoản đã đăng ký sẽ mất, phải tạo lại. Muốn lưu vĩnh viễn cần **Persistent Disk** (trả phí) hoặc dùng cơ sở dữ liệu ngoài. Nếu chỉ vài người dùng, có thể đặt `AUTH_ENABLED=false` để bỏ đăng nhập, hoặc chấp nhận tạo lại tài khoản sau mỗi lần cập nhật.
+> ✅ **Giữ tài khoản vĩnh viễn:** đặt biến `DATABASE_URL` (Postgres free từ Neon/Supabase) trong Environment → tài khoản lưu vào DB, **không mất khi deploy lại**. Nếu KHÔNG đặt, tài khoản lưu file `data/users.json` và sẽ bị Render Free xóa mỗi lần deploy. Xem hướng dẫn tạo DB free bên dưới.
+
+### Tạo Postgres free (giữ tài khoản) — Neon
+1. Vào https://neon.tech → **Sign up** (bằng Google/GitHub, miễn phí, không cần thẻ).
+2. **Create project** (để mặc định) → Neon tạo database.
+3. Ở trang dự án, bấm **Connect** → copy **Connection string** (dạng `postgresql://...:...@....neon.tech/...?sslmode=require`).
+4. Trong Render → **Environment** → thêm biến `DATABASE_URL` = chuỗi vừa copy → **Save**.
+5. Bảng `users` sẽ tự tạo khi server khởi động. Xong — tài khoản lưu vĩnh viễn.
 
 ### Bước 3b (tùy chọn): Đặt key Gemini dùng chung
 - Trong Render → tab **Environment** → **Add Environment Variable**

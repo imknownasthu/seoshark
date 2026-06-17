@@ -81,7 +81,7 @@ Công cụ yêu cầu đăng nhập (email + mật khẩu) trước khi dùng.
 2. Một **mã xác nhận 6 số** được gửi tới **imknownasthu@gmail.com** (hộp thư chủ sở hữu).
 3. Chủ sở hữu xem mã và đưa cho người được phép → người đó nhập mã để hoàn tất tạo tài khoản.
 
-> Tài khoản lưu tại `data/users.json` (mật khẩu được hash scrypt). Phiên đăng nhập giữ 7 ngày qua cookie.
+> Tài khoản lưu ở **Postgres** nếu đặt biến `DATABASE_URL` (lưu vĩnh viễn — khuyên dùng khi deploy); nếu không thì lưu file `data/users.json` (chạy local). Mật khẩu hash scrypt. Phiên đăng nhập giữ 7 ngày qua cookie.
 
 ### Chế độ gửi mã
 - **TEST (mặc định):** mã hiện ở **console/log của server** và ghi vào `data/outbox.log` (không gửi mail thật). Dùng để chạy thử ngay.
