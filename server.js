@@ -19,7 +19,7 @@ app.use(express.json({ limit: "5mb" }));
 app.use(express.static(path.join(__dirname, "public")));
 
 // ====== AUTH ======
-auth.initAuth();
+await auth.initAuth();
 const OWNER_EMAIL = (process.env.MAIL_TO || "imknownasthu@gmail.com").trim();
 const AUTH_ENABLED = process.env.AUTH_ENABLED !== "false";
 const COOKIE = "seoshark_session";
@@ -62,7 +62,7 @@ app.get("/api/auth/me", (req, res) => {
 app.post("/api/auth/register", async (req, res) => {
   try {
     const { email, name, password } = req.body || {};
-    const { email: em, code } = auth.registerStart({ email, name, password });
+    const { email: em, code } = await auth.registerStart({ email, name, password });
     const r = await sendRegistrationCode({ ownerEmail: OWNER_EMAIL, requesterEmail: em, name, code });
     res.json({
       ok: true,
@@ -88,11 +88,11 @@ app.post("/api/auth/resend", async (req, res) => {
   }
 });
 
-app.post("/api/auth/verify", (req, res) => {
+app.post("/api/auth/verify", async (req, res) => {
   try {
     const { email, code } = req.body || {};
-    const user = auth.verifyCode({ email, code });
-    const token = auth.createSession(user.email);
+    const user = await auth.verifyCode({ email, code });
+    const token = auth.createSession(user);
     setSessionCookie(res, token);
     res.json({ ok: true, user });
   } catch (err) {
@@ -100,11 +100,11 @@ app.post("/api/auth/verify", (req, res) => {
   }
 });
 
-app.post("/api/auth/login", (req, res) => {
+app.post("/api/auth/login", async (req, res) => {
   try {
     const { email, password } = req.body || {};
-    const user = auth.login({ email, password });
-    const token = auth.createSession(user.email);
+    const user = await auth.login({ email, password });
+    const token = auth.createSession(user);
     setSessionCookie(res, token);
     res.json({ ok: true, user });
   } catch (err) {
