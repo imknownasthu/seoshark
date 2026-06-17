@@ -36,7 +36,33 @@ function getTransporter() {
 }
 
 export function mailMode() {
+  if (process.env.RESEND_API_KEY) return "resend";
   return getTransporter() ? "smtp" : "test";
+}
+
+// Gui qua Resend (HTTPS - hoat dong tren Render). Mien phi.
+// Voi tai khoan chua xac minh domain, "from" dung onboarding@resend.dev
+// va "to" PHAI la email da dang ky Resend (= owner imknownasthu@gmail.com).
+async function sendViaResend({ to, subject, text }) {
+  const from = process.env.RESEND_FROM || "SeoShark <onboarding@resend.dev>";
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ from, to: [to], subject, text }),
+      signal: ctrl.signal,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.message || `Resend HTTP ${res.status}`);
+    return data;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 function logCode({ ownerEmail, requesterEmail, code, reason }) {
@@ -64,13 +90,24 @@ export async function sendRegistrationCode({ ownerEmail, requesterEmail, name, c
     `MA XAC NHAN: ${code}\n` +
     `(Het han sau 30 phut. Hay dua ma nay cho nguoi duoc phep tao tai khoan.)`;
 
+  // 1) Resend (uu tien - chay tot tren Render)
+  if (process.env.RESEND_API_KEY) {
+    try {
+      await sendViaResend({ to: ownerEmail, subject, text });
+      return { mode: "resend" };
+    } catch (e) {
+      logCode({ ownerEmail, requesterEmail, code, reason: "Resend loi: " + (e.message || e) });
+      return { mode: "resend-failed", error: e.message || String(e) };
+    }
+  }
+
+  // 2) SMTP (hoat dong local, BI CHAN tren Render)
   const t = getTransporter();
   if (t) {
     try {
       await t.sendMail({ from: `"SeoShark" <${process.env.SMTP_USER}>`, to: ownerEmail, subject, text });
       return { mode: "smtp" };
     } catch (e) {
-      // SMTP loi/treo -> fallback ghi log, dang ky van hoan tat
       logCode({ ownerEmail, requesterEmail, code, reason: "SMTP loi: " + (e.message || e) });
       return { mode: "smtp-failed", error: e.message || String(e) };
     }
