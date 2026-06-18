@@ -108,13 +108,11 @@
         </div>
       </div>
 
-      <!-- ===== SECTION: TỐI ƯU INTERNAL LINK ===== -->
-      <div class="section active page" data-section="internal-link">
-
-        <!-- ENGINE (dùng chung) -->
-        <section class="card">
+      <!-- ENGINE (TOÀN CỤC — kết nối 1 lần, dùng cho mọi tính năng) -->
+      <div class="page" style="padding-top:18px;padding-bottom:0">
+        <section class="card" id="engineCard" style="margin-bottom:0">
           <details id="engineBox">
-            <summary style="cursor:pointer;font-weight:700;font-size:14px;color:var(--brand-dark)">⚙️ Engine xử lý (mặc định: Local — miễn phí, không cần key)</summary>
+            <summary style="cursor:pointer;font-weight:700;font-size:14px;color:var(--brand-dark)">⚙️ Engine xử lý (kết nối 1 lần — dùng cho TẤT CẢ tính năng)</summary>
             <div class="grid cols-2" style="margin-top:12px">
               <div>
                 <label>Engine</label>
@@ -137,6 +135,10 @@
             </div>
           </details>
         </section>
+      </div>
+
+      <!-- ===== SECTION: TỐI ƯU INTERNAL LINK ===== -->
+      <div class="section active page" data-section="internal-link">
 
         <!-- SUB-TABS: Internal / Incoming -->
         <div class="tabs subtabs" id="featureTabs">

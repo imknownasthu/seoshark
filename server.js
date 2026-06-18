@@ -149,13 +149,23 @@ async function runEngine({ engine, key, model, params }) {
       eng = "local";
       fellBack = "Chua co Gemini API key -> dung engine Local (offline).";
     } else {
-      const gModel = (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim();
+      const gModel = (model || process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
       try {
         result = await optimizeWithGemini({ apiKey: gKey, model: gModel, ...params });
         engineUsed = `Gemini (${gModel})`;
       } catch (e) {
-        eng = "local";
-        fellBack = `Gemini loi (${e.message}) -> tam dung engine Local.`;
+        if (/quota|exceeded|limit: 0|RESOURCE_EXHAUSTED|429/i.test(e.message) && gModel !== "gemini-2.5-flash") {
+          try {
+            result = await optimizeWithGemini({ apiKey: gKey, model: "gemini-2.5-flash", ...params });
+            engineUsed = "Gemini 2.5 Flash (tự chuyển do model vượt quota free)";
+          } catch (e2) {
+            eng = "local";
+            fellBack = `Gemini loi (${e2.message}) -> tam dung engine Local.`;
+          }
+        } else {
+          eng = "local";
+          fellBack = `Gemini loi (${e.message}) -> tam dung engine Local.`;
+        }
       }
     }
   } else if (eng === "claude") {
@@ -447,9 +457,18 @@ async function onpageAI({ engine, key, model, system, user, schema, maxTokens })
   if (eng === "gemini") {
     const gKey = (key || process.env.GEMINI_API_KEY || "").trim();
     if (!gKey) throw new Error("Chưa có Gemini API key.");
-    const gModel = (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim();
-    const data = await geminiJson({ apiKey: gKey, model: gModel, system, user, schema, maxTokens });
-    return { data, engineUsed: `Gemini (${gModel})` };
+    const gModel = (model || process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
+    try {
+      const data = await geminiJson({ apiKey: gKey, model: gModel, system, user, schema, maxTokens });
+      return { data, engineUsed: `Gemini (${gModel})` };
+    } catch (e) {
+      // Model Pro vuot quota free -> tu chuyen sang Flash mien phi
+      if (/quota|exceeded|limit: 0|RESOURCE_EXHAUSTED|429/i.test(e.message) && gModel !== "gemini-2.5-flash") {
+        const data = await geminiJson({ apiKey: gKey, model: "gemini-2.5-flash", system, user, schema, maxTokens });
+        return { data, engineUsed: "Gemini 2.5 Flash (tự chuyển vì model bạn chọn vượt quota free)" };
+      }
+      throw e;
+    }
   }
   if (eng === "claude") {
     const cKey = (key || process.env.ANTHROPIC_API_KEY || "").trim();

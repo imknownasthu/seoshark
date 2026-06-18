@@ -17,13 +17,13 @@ const ENGINES = {
     keyPlaceholder: "AIza... (lấy free tại aistudio.google.com)",
     keyHelp: 'Lấy key MIỄN PHÍ tại <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com/app/apikey</a> — không cần thẻ, không nạp tiền.',
     models: [
-      ["gemini-3.5-flash", "Gemini 3.5 Flash (mới nhất, thông minh nhất)"],
-      ["gemini-3.1-flash-lite", "Gemini 3.1 Flash-Lite (nhanh, tiết kiệm)"],
-      ["gemini-2.5-flash", "Gemini 2.5 Flash (ổn định, cân bằng)"],
-      ["gemini-2.5-pro", "Gemini 2.5 Pro (suy luận sâu)"],
-      ["gemini-3.1-pro-preview", "Gemini 3.1 Pro (preview, mạnh nhất)"],
+      ["gemini-2.5-flash", "Gemini 2.5 Flash (FREE — khuyên dùng)"],
+      ["gemini-3.5-flash", "Gemini 3.5 Flash (FREE — mới nhất)"],
+      ["gemini-3.1-flash-lite", "Gemini 3.1 Flash-Lite (FREE — nhanh)"],
+      ["gemini-2.5-pro", "Gemini 2.5 Pro (⚠ cần bật billing)"],
+      ["gemini-3.1-pro-preview", "Gemini 3.1 Pro (⚠ cần bật billing)"],
     ],
-    hint: "Chất lượng cao, chèn link tự nhiên & tự viết thêm câu khi cần. Key free.",
+    hint: "Dùng model FREE (Flash) là đủ. Model Pro cần bật thanh toán trên Google, gói free sẽ báo lỗi quota.",
   },
   claude: {
     needKey: true,
@@ -104,6 +104,13 @@ $$("#menu .menu-item").forEach((mi) => {
 $("#sitemapUrl").value = localStorage.getItem("seoshark_sitemap") || "";
 $("#engine").value = localStorage.getItem("seoshark_engine") || "local";
 applyEngine($("#engine").value);
+
+// Bam engine pill -> mo bang cau hinh engine
+document.querySelector(".engine-pill").addEventListener("click", () => {
+  const d = $("#engineBox");
+  d.open = true;
+  d.scrollIntoView({ behavior: "smooth", block: "center" });
+});
 
 $("#engine").addEventListener("change", (e) => {
   localStorage.setItem("seoshark_engine", e.target.value);
@@ -822,52 +829,74 @@ $("#btnOpAudit").addEventListener("click", async () => {
   finally { busy(btn, false); }
 });
 
-function yn(b) { return b ? "✅" : "❌"; }
-function renderOpResult(d) {
-  const t = d.target, b = d.bench;
-  $("#opResMeta").textContent = `Engine: ${d.engineUsed} · ${b ? b.count : 0} đối thủ`;
+function opNorm(s) { return (s || "").toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/đ/g, "d"); }
+function opHasKw(text, kw) { return kw && opNorm(text).includes(opNorm(kw)); }
 
-  // Thong bao nguon SERP
+function renderOpResult(d) {
+  const t = d.target;
+  const comps = (d.competitors || []).filter((c) => c && c.ok);
+  const failed = (d.competitors || []).length - comps.length;
+  const kw = d.mainKeyword || "";
+  $("#opResMeta").textContent = `Engine: ${d.engineUsed} · ${comps.length} đối thủ`;
+
+  // Thong bao
   let alerts = "";
-  if (d.serpMode === "no-serp") alerts += alertHtml("warn", "Chưa cấu hình Google CSE nên không tự lấy đối thủ. Hãy dùng 'Dán URL thủ công' để so sánh với đối thủ.");
-  else if (String(d.serpMode).startsWith("serp-error")) alerts += alertHtml("warn", "Lấy SERP tự động lỗi: " + d.serpMode.replace("serp-error:", "") + ". Hãy dán URL đối thủ thủ công.");
+  if (d.serpMode === "no-serp") alerts += alertHtml("warn", "Chưa cấu hình Google CSE — chưa lấy đối thủ tự động. Hãy dán URL thủ công hoặc cấu hình CSE.");
+  else if (String(d.serpMode).startsWith("serp-error")) alerts += alertHtml("warn", "Lấy SERP tự động lỗi: " + esc(d.serpMode.replace("serp-error:", "")) + " — hãy dán URL thủ công.");
+  if (failed) alerts += alertHtml("warn", `${failed} URL đối thủ không đọc được (đã bỏ qua).`);
   if (d.summary) alerts += alertHtml("info", "📝 " + esc(d.summary));
   $("#opSummary").innerHTML = alerts;
 
-  // Bang so sanh
-  const bv = (f, suf = "") => (b ? b[f] + suf : "—");
-  const rows = [
-    ["Title (ký tự)", t.titleLen, bv("titleLen")],
-    ["Meta description (ký tự)", t.metaDescLen, bv("metaDescLen")],
-    ["Số thẻ H1", t.h1Count, "1 (chuẩn)"],
-    ["Số heading", t.headingCount, bv("headingCount")],
-    ["Độ dài (số từ)", t.wordCount, bv("wordCount")],
-    ["Ảnh có alt", `${t.imagesWithAlt}/${t.images}`, "đủ alt"],
-    ["Internal link", t.internalLinks, bv("internalLinks")],
-    ["External link", t.externalLinks, bv("externalLinks")],
-    ["Schema", t.hasSchema ? t.schemaTypes.join(", ") : "❌ không", b ? `${b.withSchema}/${b.count} đối thủ có` : "—"],
-    ["Breadcrumb", yn(t.breadcrumb), b ? `${b.withBreadcrumb}/${b.count} có` : "—"],
-    ["Canonical", t.canonicalSelf ? "✅ tự trỏ" : t.canonical, "tự trỏ"],
-    ["Meta robots", t.metaRobots, "index, follow"],
-    ["Rich snippet", t.richSnippet.join(", ") || "❌ không", "—"],
-  ];
-  $("#opCompareTable").innerHTML = `<table class="cmp">
-    <thead><tr><th>Tiêu chí</th><th>Trang của bạn</th><th>Đối thủ (TB)</th></tr></thead>
-    <tbody>${rows.map((r) => `<tr><td><b>${r[0]}</b></td><td>${esc(String(r[1]))}</td><td>${esc(String(r[2]))}</td></tr>`).join("")}</tbody></table>
-    ${d.competitors && d.competitors.length ? `<p class="muted" style="margin-top:8px">Đối thủ: ${d.competitors.map((c, i) => c.ok ? `<a href="${esc(c.url)}" target="_blank" rel="noopener">#${i + 1}</a>` : `#${i + 1}(lỗi)`).join(" · ")}</p>` : ""}`;
+  // Trung binh doi thu (de xet "yeu")
+  const avg = (f) => comps.length ? Math.round(comps.reduce((s, c) => s + (c[f] || 0), 0) / comps.length) : 0;
+  const someComp = (fn) => comps.some(fn);
 
-  // Khuyen nghi
-  const pill = (p) => `<span class="badge ${p === "Cao" ? "sapo" : p === "Thap" ? "ket" : "ok"}">${esc(p || "TB")}</span>`;
-  $("#opRecs").innerHTML = (d.recommendations || []).map((r, i) => `
-    <div class="rec-item">
-      <input type="checkbox" class="op-rec-check" data-criterion="${esc(r.criterion)}" id="oprec${i}" checked />
+  // [label, getter(audit)->chuoi, weak()->bool]
+  const CRIT = [
+    ["Title tag", (a) => `${a.titleLen} ký tự`, () => !t.titleTag || t.titleLen < 30 || t.titleLen > 65 || !opHasKw(t.titleTag, kw)],
+    ["Meta description", (a) => `${a.metaDescLen} ký tự`, () => !t.metaDescription || t.metaDescLen < 70 || t.metaDescLen > 165 || !opHasKw(t.metaDescription, kw)],
+    ["Thẻ H1", (a) => `${a.h1Count}`, () => t.h1Count !== 1],
+    ["Cấu trúc Heading", (a) => `${a.headingCount} heading`, () => comps.length > 0 && t.headingCount < avg("headingCount") * 0.7],
+    ["Độ dài nội dung", (a) => `${a.wordCount} từ`, () => comps.length > 0 && t.wordCount < avg("wordCount") * 0.8],
+    ["Alt hình ảnh", (a) => `${a.imagesWithAlt}/${a.images}`, () => !t.altEnough],
+    ["Internal link", (a) => `${a.internalLinks}`, () => comps.length > 0 && t.internalLinks < avg("internalLinks") * 0.6],
+    ["External link", (a) => `${a.externalLinks}`, () => t.externalLinks === 0 && someComp((c) => c.externalLinks > 0)],
+    ["Schema", (a) => a.hasSchema ? a.schemaTypes.slice(0, 3).join(", ") : "❌", () => !t.hasSchema && someComp((c) => c.hasSchema)],
+    ["Breadcrumb", (a) => a.breadcrumb ? "✅" : "❌", () => !t.breadcrumb && someComp((c) => c.breadcrumb)],
+    ["Canonical", (a) => a.canonicalSelf ? "✅ tự trỏ" : (a.canonical === "(không có)" ? "❌" : "khác"), () => !t.canonicalSelf],
+    ["Meta robots", (a) => a.metaRobots, () => /noindex/i.test(t.metaRobots)],
+    ["Rich snippet", (a) => a.richSnippet.length ? a.richSnippet.join(", ") : "❌", () => !t.richSnippet.length && someComp((c) => c.richSnippet.length)],
+  ];
+
+  // Bang so sanh CHI TIET tung doi thu (moi doi thu 1 cot)
+  const head = `<th>Tiêu chí</th><th>Trang của bạn</th>` +
+    comps.map((c, i) => `<th title="${esc(c.url)}"><a href="${esc(c.url)}" target="_blank" rel="noopener">ĐT#${i + 1}</a></th>`).join("");
+  const body = CRIT.map(([label, get, weak]) => {
+    const w = weak();
+    return `<tr><td><b>${label}</b></td><td class="${w ? "op-weak" : ""}">${esc(String(get(t)))}</td>` +
+      comps.map((c) => `<td>${esc(String(get(c)))}</td>`).join("") + `</tr>`;
+  }).join("");
+  $("#opCompareTable").innerHTML = `<table class="cmp"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
+    <p class="muted" style="margin-top:8px">Ô <span class="op-weak" style="padding:1px 5px">tô đỏ</span> = tiêu chí của bạn đang yếu hơn chuẩn/đối thủ.</p>`;
+
+  // Tieu chi cai thien = tu chinh cac dong trong bang (tick de toi uu), pre-check muc yeu
+  $("#opRecs").innerHTML = CRIT.map(([label, get, weak], i) => {
+    const w = weak();
+    return `<div class="rec-item">
+      <input type="checkbox" class="op-rec-check" data-criterion="${esc(label)}" id="oprec${i}" ${w ? "checked" : ""} />
       <div class="rec-body">
-        <label for="oprec${i}"><b>${esc(r.criterion)}</b> ${pill(r.priority)}</label>
-        <div class="rec-action">→ ${esc(r.action || "")}</div>
-        ${(r.current || r.target) ? `<div class="muted">Hiện tại: ${esc(r.current || "—")} | Mục tiêu: ${esc(r.target || "—")}</div>` : ""}
-        ${r.why ? `<div class="muted">💡 ${esc(r.why)}</div>` : ""}
-      </div>
-    </div>`).join("") || alertHtml("info", "Không có khuyến nghị — on-page đã khá tốt!");
+        <label for="oprec${i}"><b>${esc(label)}</b> ${w ? '<span class="badge sapo">Nên cải thiện</span>' : '<span class="badge ok">OK</span>'}</label>
+        <div class="muted">Của bạn: ${esc(String(get(t)))}${comps.length ? ` · Đối thủ: ${comps.map((c) => esc(String(get(c)))).join(" / ")}` : ""}</div>
+      </div></div>`;
+  }).join("");
+
+  // AI phan tich chi tiet (neu co)
+  if (d.recommendations && d.recommendations.length) {
+    const pill = (p) => `<span class="badge ${p === "Cao" ? "sapo" : p === "Thap" ? "ket" : "ok"}">${esc(p || "TB")}</span>`;
+    $("#opRecs").innerHTML += `<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--brand-dark)">💡 Phân tích chi tiết từ AI (${d.recommendations.length} điểm)</summary>` +
+      d.recommendations.map((r) => `<div class="rec-item" style="border-style:dashed;margin-top:8px"><div class="rec-body"><label><b>${esc(r.criterion)}</b> ${pill(r.priority)}</label><div class="rec-action">→ ${esc(r.action || "")}</div>${r.why ? `<div class="muted">💡 ${esc(r.why)}</div>` : ""}</div></div>`).join("") +
+      `</details>`;
+  }
 }
 
 $("#opSelectAll").addEventListener("change", (e) => {

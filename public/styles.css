@@ -93,10 +93,12 @@ body {
 .topbar .crumb { font-size: 12px; color: var(--muted); }
 .topbar .right { display: flex; align-items: center; gap: 10px; }
 .engine-pill {
+  cursor: pointer;
   display: inline-flex; align-items: center; gap: 7px;
   background: var(--brand-light); color: var(--brand-dark);
   font-size: 12px; font-weight: 700; padding: 7px 12px; border-radius: 999px;
 }
+.engine-pill:hover { filter: brightness(0.97); }
 .engine-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
 
 .page { padding: 26px 28px 80px; max-width: 1220px; }
@@ -284,6 +286,7 @@ pre.code { margin: 0; padding: 12px 14px; background: #0c2230; color: #d7eef8; m
 .rec-body label { display: inline; font-weight: 400; cursor: pointer; font-size: 14px; }
 .rec-action { font-weight: 600; color: var(--brand-dark); margin: 4px 0; font-size: 13px; }
 .rec-body .muted { display: block; margin-top: 2px; }
+.op-weak { background: var(--red-light); color: #9f1239; border-radius: 4px; font-weight: 600; }
 
 .user-chip { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); }
 .user-chip .uava { width: 28px; height: 28px; border-radius: 50%; background: var(--brand); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; text-transform: uppercase; }
