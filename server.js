@@ -8,8 +8,8 @@ import { randomUUID } from "node:crypto";
 import { extractArticle, blocksToHtml, blocksToMarkdown } from "./src/extract.js";
 import { loadTargets, rankTargets } from "./src/sitemap.js";
 import { optimizeLocally } from "./src/local.js";
-import { optimizeWithGemini, geminiJson } from "./src/gemini.js";
-import { optimizeWithClaude, claudeJson } from "./src/claude.js";
+import { optimizeWithGemini, geminiJson, geminiPing } from "./src/gemini.js";
+import { optimizeWithClaude, claudeJson, claudePing } from "./src/claude.js";
 import { auditUrl, benchmark } from "./src/onpage.js";
 import { fetchSerp, serpConfigured } from "./src/serp.js";
 import {
@@ -17,7 +17,7 @@ import {
   buildRecommendPrompt, buildOptimizePrompt, mechanicalRecommendations,
 } from "./src/onpage-prompt.js";
 import * as auth from "./src/auth.js";
-import { sendRegistrationCode, mailMode } from "./src/mailer.js";
+import { sendVerifyEmail, sendOwnerNotify, mailMode } from "./src/mailer.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -69,16 +69,18 @@ app.post("/api/auth/register", async (req, res) => {
   try {
     const { email, name, password } = req.body || {};
     const { email: em, code } = await auth.registerStart({ email, name, password });
-    const r = await sendRegistrationCode({ ownerEmail: OWNER_EMAIL, requesterEmail: em, name, code });
+    // Gui ma toi chinh nguoi dang ky; thong bao cho owner (best-effort)
+    const r = await sendVerifyEmail({ toEmail: em, name, code });
+    sendOwnerNotify({ ownerEmail: OWNER_EMAIL, requesterEmail: em, name }).catch(() => {});
     let message;
     if (r.mode === "resend" || r.mode === "smtp") {
-      message = `Đã gửi mã xác nhận tới ${OWNER_EMAIL}. Lấy mã từ hộp thư đó (kiểm tra cả Spam) để hoàn tất.`;
+      message = `Đã gửi mã xác nhận tới email ${em}. Kiểm tra hộp thư (cả mục Spam) để lấy mã.`;
     } else if (r.mode === "resend-failed") {
-      message = `⚠️ Gửi email (Resend) lỗi: ${r.error}. Mã đã ghi vào Logs server. Kiểm tra lại RESEND_API_KEY và email người nhận.`;
+      message = `⚠️ Gửi email lỗi: ${r.error}. (Kiểm tra đã xác minh tên miền gửi trong Resend chưa.) Tạm thời mã ghi ở Logs server.`;
     } else if (r.mode === "smtp-failed") {
-      message = `⚠️ Gửi email (SMTP) lỗi: ${r.error}. (Render chặn SMTP — nên dùng RESEND_API_KEY.) Mã đã ghi vào Logs server.`;
+      message = `⚠️ Gửi email lỗi: ${r.error}. Tạm thời mã ghi ở Logs server.`;
     } else {
-      message = `Đã tạo mã xác nhận (chế độ TEST). Mã hiển thị ở Logs của server (gửi tới ${OWNER_EMAIL} khi bật RESEND_API_KEY).`;
+      message = `Chưa cấu hình gửi email — mã hiển thị ở Logs server (admin). Cần RESEND_API_KEY + RESEND_FROM để gửi thật.`;
     }
     res.json({ ok: true, mode: r.mode, message });
   } catch (err) {
@@ -90,7 +92,7 @@ app.post("/api/auth/resend", async (req, res) => {
   try {
     const { email, name } = req.body || {};
     const { email: em, code } = auth.regenerateCode(email);
-    const r = await sendRegistrationCode({ ownerEmail: OWNER_EMAIL, requesterEmail: em, name, code });
+    const r = await sendVerifyEmail({ toEmail: em, name, code });
     res.json({ ok: true, mode: r.mode });
   } catch (err) {
     res.status(400).json({ error: err.message || String(err) });
@@ -125,6 +127,30 @@ app.post("/api/auth/logout", (req, res) => {
   auth.destroySession(parseCookies(req)[COOKIE]);
   res.clearCookie(COOKIE);
   res.json({ ok: true });
+});
+
+// Kiem tra ket noi engine (de UI hien "da ket noi")
+app.post("/api/engine/check", requireAuth, async (req, res) => {
+  try {
+    const { engine, apiKey } = req.body || {};
+    const eng = (engine || "local").toLowerCase();
+    if (eng === "local") return res.json({ ok: true, label: "Local — sẵn sàng (offline)" });
+    if (eng === "gemini") {
+      const k = (apiKey || process.env.GEMINI_API_KEY || "").trim();
+      if (!k) return res.json({ ok: false, error: "Chưa nhập Gemini API key." });
+      await geminiPing(k);
+      return res.json({ ok: true, label: "Gemini — đã kết nối" });
+    }
+    if (eng === "claude") {
+      const k = (apiKey || process.env.ANTHROPIC_API_KEY || "").trim();
+      if (!k) return res.json({ ok: false, error: "Chưa nhập Anthropic API key." });
+      await claudePing(k);
+      return res.json({ ok: true, label: "Claude — đã kết nối" });
+    }
+    res.json({ ok: false, error: "engine không hợp lệ" });
+  } catch (err) {
+    res.json({ ok: false, error: err.message || String(err) });
+  }
 });
 
 // Cache phien lam viec trong bo nho (don gian cho cong cu chay local)

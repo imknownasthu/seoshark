@@ -37,7 +37,7 @@
         <label>Mật khẩu (tối thiểu 6 ký tự)</label>
         <input id="regPassword" type="password" placeholder="••••••" />
         <button id="btnRegister" type="submit" style="width:100%;margin-top:8px">Gửi mã xác nhận</button>
-        <p class="muted" style="margin-top:10px">🔒 Mã xác nhận được gửi tới chủ sở hữu công cụ (imknownasthu@gmail.com). Hãy liên hệ chủ sở hữu để nhận mã tạo tài khoản.</p>
+        <p class="muted" style="margin-top:10px">📧 Mã xác nhận sẽ được gửi tới <b>chính email bạn nhập</b> ở trên. Kiểm tra cả mục Spam.</p>
       </form>
 
       <form class="auth-form" data-aform="verify" autocomplete="off">
@@ -132,6 +132,10 @@
               <label id="keyLabel">API Key</label>
               <input id="apiKey" type="password" placeholder="" />
               <p class="muted" id="keyHelp"></p>
+            </div>
+            <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+              <button class="ghost small" id="engineCheckBtn" type="button">🔌 Kiểm tra kết nối</button>
+              <span id="engineStatus" style="font-size:13px;font-weight:600"></span>
             </div>
           </details>
         </section>
@@ -350,15 +354,14 @@
             <span class="muted" id="opResMeta"></span>
           </div>
           <div id="opSummary"></div>
-          <h3 style="margin:14px 0 6px">📊 Bảng so sánh với đối thủ</h3>
+          <h3 style="margin:14px 0 4px">📊 Bảng so sánh &amp; tiêu chí cần cải thiện</h3>
+          <p class="muted" style="margin:0 0 10px">Tick tiêu chí muốn tối ưu (mục yếu đã tự tick). Bấm tên tiêu chí để <b>mở/đóng chi tiết</b> của bạn &amp; từng đối thủ.</p>
           <div id="opCompareTable" style="overflow:auto"></div>
-          <h3 style="margin:20px 0 6px">🎯 Tiêu chí cần cải thiện (ưu tiên cao → thấp)</h3>
-          <p class="muted">Tick các tiêu chí muốn công cụ tự động tối ưu khi viết lại bài.</p>
-          <div id="opRecs"></div>
           <div class="flexbar" style="margin-top:16px">
             <label style="display:flex;gap:7px;align-items:center;font-weight:600"><input type="checkbox" id="opSelectAll" style="width:17px;height:17px;accent-color:var(--brand)"> Chọn tất cả</label>
             <button id="btnOpOptimize">✍️ Tự động tối ưu (viết lại bài chuẩn SEO)</button>
           </div>
+          <div id="opRecs" style="margin-top:12px"></div>
           <div id="opOptMsg" style="margin-top:12px"></div>
         </section>
 

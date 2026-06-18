@@ -287,6 +287,14 @@ pre.code { margin: 0; padding: 12px 14px; background: #0c2230; color: #d7eef8; m
 .rec-action { font-weight: 600; color: var(--brand-dark); margin: 4px 0; font-size: 13px; }
 .rec-body .muted { display: block; margin-top: 2px; }
 .op-weak { background: var(--red-light); color: #9f1239; border-radius: 4px; font-weight: 600; }
+.op-cmp .op-critlabel { cursor: pointer; user-select: none; white-space: nowrap; }
+.op-cmp .op-critlabel:hover { color: var(--brand-dark); }
+.op-cmp .caret { display: inline-block; transition: transform .15s; color: var(--brand); font-size: 11px; }
+.op-cmp .op-row.open .caret { transform: rotate(90deg); }
+.op-cmp .op-detail > td { background: #f4fafe; font-size: 13px; line-height: 1.6; }
+.op-cmp .opd { padding: 3px 0; border-bottom: 1px dashed var(--line); word-break: break-word; }
+.op-cmp .opd:last-child { border-bottom: none; }
+.op-cmp .opd a { color: var(--brand-dark); }
 
 .user-chip { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); }
 .user-chip .uava { width: 28px; height: 28px; border-radius: 50%; background: var(--brand); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; text-transform: uppercase; }

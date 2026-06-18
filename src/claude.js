@@ -32,6 +32,13 @@ const SUBMIT_TOOL = {
   },
 };
 
+// Kiem tra key Claude con dung khong
+export async function claudePing(apiKey) {
+  const client = new Anthropic({ apiKey });
+  await client.models.list({ limit: 1 });
+  return true;
+}
+
 // Goi Claude tra ve JSON theo schema (dung cho On-page va cac tac vu khac)
 export async function claudeJson({ apiKey, model, system, user, schema, maxTokens = 8000 }) {
   const client = new Anthropic({ apiKey });

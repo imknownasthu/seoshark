@@ -65,55 +65,66 @@ async function sendViaResend({ to, subject, text }) {
   }
 }
 
-function logCode({ ownerEmail, requesterEmail, code, reason }) {
-  const line = `[${new Date().toISOString()}] TO=${ownerEmail} | dang_ky=${requesterEmail} | MA=${code}${reason ? " | " + reason : ""}\n`;
+function logMail({ to, subject, code, reason }) {
+  const line = `[${new Date().toISOString()}] TO=${to} | ${subject}${code ? " | MA=" + code : ""}${reason ? " | " + reason : ""}\n`;
   try {
     fs.mkdirSync(path.dirname(OUTBOX), { recursive: true });
     fs.appendFileSync(OUTBOX, line, "utf8");
   } catch {}
   console.log(
-    "\n========== [SEOSHARK • MA XAC NHAN] ==========\n" +
-      `Gui toi : ${ownerEmail}\n` +
-      `Dang ky : ${requesterEmail}\n` +
-      `MA XAC NHAN: ${code}\n` +
+    "\n========== [SEOSHARK • MAIL] ==========\n" +
+      `Gui toi : ${to}\n` +
+      `Tieu de : ${subject}\n` +
+      (code ? `MA XAC NHAN: ${code}\n` : "") +
       (reason ? `(${reason})\n` : "") +
-      "==============================================\n"
+      "=======================================\n"
   );
 }
 
-export async function sendRegistrationCode({ ownerEmail, requesterEmail, name, code }) {
-  const subject = `[SeoShark] Ma xac nhan dang ky: ${code}`;
-  const text =
-    `Co nguoi muon dang ky tai khoan SeoShark:\n` +
-    `- Email dang ky: ${requesterEmail}\n` +
-    `- Ten: ${name || "(khong cung cap)"}\n\n` +
-    `MA XAC NHAN: ${code}\n` +
-    `(Het han sau 30 phut. Hay dua ma nay cho nguoi duoc phep tao tai khoan.)`;
-
-  // 1) Resend (uu tien - chay tot tren Render)
+// Gui 1 email qua Resend (uu tien) -> SMTP -> log. Tra ve { mode }.
+async function deliver({ to, subject, text, code }) {
   if (process.env.RESEND_API_KEY) {
     try {
-      await sendViaResend({ to: ownerEmail, subject, text });
+      await sendViaResend({ to, subject, text });
       return { mode: "resend" };
     } catch (e) {
-      logCode({ ownerEmail, requesterEmail, code, reason: "Resend loi: " + (e.message || e) });
+      logMail({ to, subject, code, reason: "Resend loi: " + (e.message || e) });
       return { mode: "resend-failed", error: e.message || String(e) };
     }
   }
-
-  // 2) SMTP (hoat dong local, BI CHAN tren Render)
   const t = getTransporter();
   if (t) {
     try {
-      await t.sendMail({ from: `"SeoShark" <${process.env.SMTP_USER}>`, to: ownerEmail, subject, text });
+      await t.sendMail({ from: `"SeoShark" <${process.env.SMTP_USER}>`, to, subject, text });
       return { mode: "smtp" };
     } catch (e) {
-      logCode({ ownerEmail, requesterEmail, code, reason: "SMTP loi: " + (e.message || e) });
+      logMail({ to, subject, code, reason: "SMTP loi: " + (e.message || e) });
       return { mode: "smtp-failed", error: e.message || String(e) };
     }
   }
-
-  // TEST MODE (chua cau hinh SMTP)
-  logCode({ ownerEmail, requesterEmail, code });
+  logMail({ to, subject, code });
   return { mode: "test" };
+}
+
+// Gui MA XAC NHAN toi chinh email nguoi dang ky
+export async function sendVerifyEmail({ toEmail, name, code }) {
+  const subject = `Mã xác nhận đăng ký SeoShark: ${code}`;
+  const text =
+    `Xin chào ${name || ""},\n\n` +
+    `Mã xác nhận đăng ký tài khoản SeoShark của bạn là:\n\n` +
+    `    ${code}\n\n` +
+    `Nhập mã này vào công cụ để hoàn tất tạo tài khoản. Mã hết hạn sau 30 phút.\n` +
+    `Nếu bạn không yêu cầu, hãy bỏ qua email này.`;
+  return deliver({ to: toEmail, subject, text, code });
+}
+
+// Gui THONG BAO cho owner (khong kem ma)
+export async function sendOwnerNotify({ ownerEmail, requesterEmail, name }) {
+  const subject = `[SeoShark] Có người đăng ký mới: ${requesterEmail}`;
+  const text =
+    `Vừa có người đăng ký tài khoản SeoShark:\n` +
+    `- Email: ${requesterEmail}\n` +
+    `- Tên: ${name || "(không cung cấp)"}\n` +
+    `- Thời điểm: ${new Date().toISOString()}\n`;
+  return deliver({ to: ownerEmail, subject, text });
 }

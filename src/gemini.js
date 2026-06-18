@@ -28,6 +28,16 @@ const RESPONSE_SCHEMA = {
   required: ["edits"],
 };
 
+// Kiem tra key Gemini con dung khong (nhe, khong ton quota generate)
+export async function geminiPing(apiKey) {
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`);
+  if (!r.ok) {
+    const d = await r.json().catch(() => ({}));
+    throw new Error(d?.error?.message || `HTTP ${r.status}`);
+  }
+  return true;
+}
+
 // Chuyen JSON Schema (type chu thuong) -> Gemini schema (type CHU HOA)
 function toGeminiSchema(s) {
   if (!s || typeof s !== "object") return s;

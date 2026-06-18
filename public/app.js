@@ -114,16 +114,52 @@ document.querySelector(".engine-pill").addEventListener("click", () => {
   d.scrollIntoView({ behavior: "smooth", block: "center" });
 });
 
+// --- TRANG THAI KET NOI ENGINE ---
+let isAuthed = false;
+let connTimer = null;
+function setConn(state, text) {
+  const s = $("#engineStatus");
+  if (s) {
+    s.textContent = text;
+    s.style.color = state === "ok" ? "var(--green)" : state === "fail" ? "var(--red)" : "var(--muted)";
+  }
+  const dot = $("#enginePillDot");
+  if (dot) dot.style.background = state === "ok" ? "var(--green)" : state === "fail" ? "var(--red)" : "var(--amber)";
+}
+async function checkEngineConn() {
+  const engine = $("#engine").value;
+  if (engine === "local") { setConn("ok", "● Sẵn sàng (offline, không cần key)"); return; }
+  const key = $("#apiKey").value.trim();
+  if (!key) { setConn("idle", "Chưa nhập API key"); return; }
+  if (!isAuthed) { setConn("idle", "Đăng nhập để kiểm tra kết nối"); return; }
+  setConn("checking", "⏳ Đang kiểm tra kết nối...");
+  try {
+    const res = await _fetch("/api/engine/check", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ engine, apiKey: key, model: $("#model").value || undefined }),
+    });
+    const d = await res.json();
+    if (d.ok) setConn("ok", "✓ " + d.label);
+    else setConn("fail", "✗ " + (d.error || "Không kết nối được"));
+  } catch (e) { setConn("fail", "✗ " + e.message); }
+}
+function checkConnDebounced() { clearTimeout(connTimer); connTimer = setTimeout(checkEngineConn, 700); }
+$("#engineCheckBtn").addEventListener("click", checkEngineConn);
+checkEngineConn();
+
 $("#engine").addEventListener("change", (e) => {
   localStorage.setItem("seoshark_engine", e.target.value);
   applyEngine(e.target.value);
+  checkEngineConn();
 });
 $("#model").addEventListener("change", (e) =>
   localStorage.setItem("seoshark_model_" + $("#engine").value, e.target.value)
 );
-$("#apiKey").addEventListener("change", (e) =>
-  localStorage.setItem("seoshark_key_" + $("#engine").value, e.target.value.trim())
-);
+$("#apiKey").addEventListener("change", (e) => {
+  localStorage.setItem("seoshark_key_" + $("#engine").value, e.target.value.trim());
+  checkEngineConn();
+});
+$("#apiKey").addEventListener("input", checkConnDebounced);
 $("#sitemapUrl").addEventListener("change", (e) => localStorage.setItem("seoshark_sitemap", e.target.value.trim()));
 
 function toast(msg) {
@@ -641,6 +677,8 @@ function applyUser(user) {
   $("#userChip").style.display = "inline-flex";
   $("#userEmail").textContent = user.email;
   $("#userAvatar").textContent = (user.name || user.email || "U").trim().charAt(0) || "U";
+  isAuthed = true;
+  checkEngineConn();
 }
 
 async function checkAuth() {
@@ -749,6 +787,7 @@ $("#btnResend").addEventListener("click", async () => {
 $("#btnLogout").addEventListener("click", async () => {
   await _fetch("/api/auth/logout", { method: "POST" });
   $("#userChip").style.display = "none";
+  isAuthed = false;
   showAuth();
   switchAtab("login");
 });
@@ -853,53 +892,69 @@ function renderOpResult(d) {
   const avg = (f) => comps.length ? Math.round(comps.reduce((s, c) => s + (c[f] || 0), 0) / comps.length) : 0;
   const someComp = (fn) => comps.some(fn);
 
-  // [label, getter(audit)->chuoi, weak()->bool]
+  const headingsDetail = (a) => a.headings && a.headings.length
+    ? a.headings.slice(0, 25).map((h) => `H${h.level}: ${esc(h.text)}`).join("<br>")
+    : "(không có heading)";
+
+  // [label, summary(a)->chuoi, detail(a)->html, weak()->bool]
   const CRIT = [
-    ["Title tag", (a) => `${a.titleLen} ký tự`, () => !t.titleTag || t.titleLen < 30 || t.titleLen > 65 || !opHasKw(t.titleTag, kw)],
-    ["Meta description", (a) => `${a.metaDescLen} ký tự`, () => !t.metaDescription || t.metaDescLen < 70 || t.metaDescLen > 165 || !opHasKw(t.metaDescription, kw)],
-    ["Thẻ H1", (a) => `${a.h1Count}`, () => t.h1Count !== 1],
-    ["Cấu trúc Heading", (a) => `${a.headingCount} heading`, () => comps.length > 0 && t.headingCount < avg("headingCount") * 0.7],
-    ["Độ dài nội dung", (a) => `${a.wordCount} từ`, () => comps.length > 0 && t.wordCount < avg("wordCount") * 0.8],
-    ["Alt hình ảnh", (a) => `${a.imagesWithAlt}/${a.images}`, () => !t.altEnough],
-    ["Internal link", (a) => `${a.internalLinks}`, () => comps.length > 0 && t.internalLinks < avg("internalLinks") * 0.6],
-    ["External link", (a) => `${a.externalLinks}`, () => t.externalLinks === 0 && someComp((c) => c.externalLinks > 0)],
-    ["Schema", (a) => a.hasSchema ? a.schemaTypes.slice(0, 3).join(", ") : "❌", () => !t.hasSchema && someComp((c) => c.hasSchema)],
-    ["Breadcrumb", (a) => a.breadcrumb ? "✅" : "❌", () => !t.breadcrumb && someComp((c) => c.breadcrumb)],
-    ["Canonical", (a) => a.canonicalSelf ? "✅ tự trỏ" : (a.canonical === "(không có)" ? "❌" : "khác"), () => !t.canonicalSelf],
-    ["Meta robots", (a) => a.metaRobots, () => /noindex/i.test(t.metaRobots)],
-    ["Rich snippet", (a) => a.richSnippet.length ? a.richSnippet.join(", ") : "❌", () => !t.richSnippet.length && someComp((c) => c.richSnippet.length)],
+    ["Title tag", (a) => `${a.titleLen} ký tự`, (a) => `"${esc(a.titleTag || "(trống)")}"`, () => !t.titleTag || t.titleLen < 30 || t.titleLen > 65 || !opHasKw(t.titleTag, kw)],
+    ["Meta description", (a) => `${a.metaDescLen} ký tự`, (a) => `"${esc(a.metaDescription || "(trống)")}"`, () => !t.metaDescription || t.metaDescLen < 70 || t.metaDescLen > 165 || !opHasKw(t.metaDescription, kw)],
+    ["Thẻ H1", (a) => `${a.h1Count}`, (a) => `${a.h1Count} thẻ H1 trên trang`, () => t.h1Count !== 1],
+    ["Cấu trúc Heading", (a) => `${a.headingCount} heading`, headingsDetail, () => comps.length > 0 && t.headingCount < avg("headingCount") * 0.7],
+    ["Độ dài nội dung", (a) => `${a.wordCount} từ`, (a) => `${a.wordCount} từ trong phần nội dung`, () => comps.length > 0 && t.wordCount < avg("wordCount") * 0.8],
+    ["Alt hình ảnh", (a) => `${a.imagesWithAlt}/${a.images}`, (a) => `${a.imagesWithAlt}/${a.images} ảnh có alt` + (a.altEnough ? " (đủ)" : " (thiếu)"), () => !t.altEnough],
+    ["Internal link", (a) => `${a.internalLinks}`, (a) => `${a.internalLinks} liên kết nội bộ`, () => comps.length > 0 && t.internalLinks < avg("internalLinks") * 0.6],
+    ["External link", (a) => `${a.externalLinks}`, (a) => `${a.externalLinks} liên kết ra ngoài`, () => t.externalLinks === 0 && someComp((c) => c.externalLinks > 0)],
+    ["Schema", (a) => a.hasSchema ? a.schemaTypes.slice(0, 3).join(", ") : "❌", (a) => esc(a.schemaTypes.join(", ") || "không có schema"), () => !t.hasSchema && someComp((c) => c.hasSchema)],
+    ["Breadcrumb", (a) => a.breadcrumb ? "✅" : "❌", (a) => a.breadcrumb ? "Có breadcrumb" : "Không có breadcrumb", () => !t.breadcrumb && someComp((c) => c.breadcrumb)],
+    ["Canonical", (a) => a.canonicalSelf ? "✅ tự trỏ" : (a.canonical === "(không có)" ? "❌" : "khác"), (a) => esc(a.canonical), () => !t.canonicalSelf],
+    ["Meta robots", (a) => (a.metaRobots || "").slice(0, 24), (a) => esc(a.metaRobots), () => /noindex/i.test(t.metaRobots)],
+    ["Rich snippet", (a) => a.richSnippet.length ? a.richSnippet.slice(0, 2).join(", ") : "❌", (a) => esc(a.richSnippet.join(", ") || "không có"), () => !t.richSnippet.length && someComp((c) => c.richSnippet.length)],
   ];
 
-  // Bang so sanh CHI TIET tung doi thu (moi doi thu 1 cot)
-  const head = `<th>Tiêu chí</th><th>Trang của bạn</th>` +
+  // Bang so sanh: moi tieu chi 1 dong, co checkbox tick + nut mo/dong chi tiet tung doi thu
+  const colspan = 3 + comps.length;
+  const head = `<th style="width:32px"></th><th>Tiêu chí</th><th>Trang của bạn</th>` +
     comps.map((c, i) => `<th title="${esc(c.url)}"><a href="${esc(c.url)}" target="_blank" rel="noopener">ĐT#${i + 1}</a></th>`).join("");
-  const body = CRIT.map(([label, get, weak]) => {
+  const body = CRIT.map(([label, summary, detail, weak], i) => {
     const w = weak();
-    return `<tr><td><b>${label}</b></td><td class="${w ? "op-weak" : ""}">${esc(String(get(t)))}</td>` +
-      comps.map((c) => `<td>${esc(String(get(c)))}</td>`).join("") + `</tr>`;
+    const main = `<tr class="op-row">
+      <td><input type="checkbox" class="op-rec-check" data-criterion="${esc(label)}" ${w ? "checked" : ""} title="Tick để tối ưu tiêu chí này" /></td>
+      <td class="op-critlabel" data-toggle="${i}"><span class="caret">▸</span> <b>${label}</b> ${w ? '<span class="badge sapo">Nên cải thiện</span>' : '<span class="badge ok">OK</span>'}</td>
+      <td class="${w ? "op-weak" : ""}">${esc(String(summary(t)))}</td>
+      ${comps.map((c) => `<td>${esc(String(summary(c)))}</td>`).join("")}
+    </tr>`;
+    const det = `<tr class="op-detail hidden" data-detail="${i}"><td colspan="${colspan}">
+      <div class="opd"><b>📄 Trang của bạn:</b> ${detail(t)}</div>
+      ${comps.map((c, k) => `<div class="opd"><b><a href="${esc(c.url)}" target="_blank" rel="noopener">ĐT#${k + 1}</a>:</b> ${detail(c)}</div>`).join("")}
+    </td></tr>`;
+    return main + det;
   }).join("");
-  $("#opCompareTable").innerHTML = `<table class="cmp"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
-    <p class="muted" style="margin-top:8px">Ô <span class="op-weak" style="padding:1px 5px">tô đỏ</span> = tiêu chí của bạn đang yếu hơn chuẩn/đối thủ.</p>`;
+  $("#opCompareTable").innerHTML = `<table class="cmp op-cmp"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>
+    <p class="muted" style="margin-top:8px">Ô <span class="op-weak" style="padding:1px 5px">tô đỏ</span> = bạn đang yếu hơn chuẩn/đối thủ. Bấm tên tiêu chí để xem chi tiết.</p>`;
 
-  // Tieu chi cai thien = tu chinh cac dong trong bang (tick de toi uu), pre-check muc yeu
-  $("#opRecs").innerHTML = CRIT.map(([label, get, weak], i) => {
-    const w = weak();
-    return `<div class="rec-item">
-      <input type="checkbox" class="op-rec-check" data-criterion="${esc(label)}" id="oprec${i}" ${w ? "checked" : ""} />
-      <div class="rec-body">
-        <label for="oprec${i}"><b>${esc(label)}</b> ${w ? '<span class="badge sapo">Nên cải thiện</span>' : '<span class="badge ok">OK</span>'}</label>
-        <div class="muted">Của bạn: ${esc(String(get(t)))}${comps.length ? ` · Đối thủ: ${comps.map((c) => esc(String(get(c)))).join(" / ")}` : ""}</div>
-      </div></div>`;
-  }).join("");
-
-  // AI phan tich chi tiet (neu co)
+  // AI phan tich chi tiet (neu co) -> de rieng ben duoi
   if (d.recommendations && d.recommendations.length) {
     const pill = (p) => `<span class="badge ${p === "Cao" ? "sapo" : p === "Thap" ? "ket" : "ok"}">${esc(p || "TB")}</span>`;
-    $("#opRecs").innerHTML += `<details style="margin-top:12px"><summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--brand-dark)">💡 Phân tích chi tiết từ AI (${d.recommendations.length} điểm)</summary>` +
+    $("#opRecs").innerHTML = `<details><summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--brand-dark)">💡 Phân tích chi tiết từ AI (${d.recommendations.length} điểm)</summary>` +
       d.recommendations.map((r) => `<div class="rec-item" style="border-style:dashed;margin-top:8px"><div class="rec-body"><label><b>${esc(r.criterion)}</b> ${pill(r.priority)}</label><div class="rec-action">→ ${esc(r.action || "")}</div>${r.why ? `<div class="muted">💡 ${esc(r.why)}</div>` : ""}</div></div>`).join("") +
       `</details>`;
+  } else {
+    $("#opRecs").innerHTML = "";
   }
 }
+
+// Mo/dong chi tiet 1 tieu chi trong bang so sanh
+document.addEventListener("click", (e) => {
+  const lbl = e.target.closest(".op-critlabel");
+  if (!lbl) return;
+  const det = document.querySelector(`#opCompareTable [data-detail="${lbl.dataset.toggle}"]`);
+  if (det) {
+    det.classList.toggle("hidden");
+    lbl.closest("tr").classList.toggle("open");
+  }
+});
 
 $("#opSelectAll").addEventListener("change", (e) => {
   $$("#opRecs .op-rec-check").forEach((c) => { c.checked = e.target.checked; });
