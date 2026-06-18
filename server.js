@@ -137,6 +137,29 @@ function gcSessions() {
 
 const norm = (u) => (u || "").replace(/\/$/, "");
 
+// Cac model Gemini FREE (thu lan luot neu model chon bi loi/khong ton tai/quota)
+const FREE_FLASH = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
+const RECOVERABLE = /quota|exceeded|limit: 0|RESOURCE_EXHAUSTED|429|not found|404|NOT_FOUND|not supported|unavailable|is not found|does not exist/i;
+
+// Goi callFn(model) lan luot voi model chon -> cac Flash free, tra ve { result, model }
+async function geminiWithFallback(callFn, chosenModel) {
+  const chain = [chosenModel, ...FREE_FLASH].filter(Boolean);
+  const tried = new Set();
+  let lastErr;
+  for (const m of chain) {
+    if (tried.has(m)) continue;
+    tried.add(m);
+    try {
+      const result = await callFn(m);
+      return { result, model: m, switched: m !== chosenModel };
+    } catch (e) {
+      lastErr = e;
+      if (!RECOVERABLE.test(e.message || "")) throw e; // loi khac (vd sai key) -> nem ngay
+    }
+  }
+  throw lastErr;
+}
+
 // ====== HELPER: chay engine (local mac dinh, gemini/claude tuy chon, tu fallback) ======
 async function runEngine({ engine, key, model, params }) {
   let eng = (engine || "local").toLowerCase();
@@ -149,23 +172,17 @@ async function runEngine({ engine, key, model, params }) {
       eng = "local";
       fellBack = "Chua co Gemini API key -> dung engine Local (offline).";
     } else {
-      const gModel = (model || process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
+      const gModel = (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim();
       try {
-        result = await optimizeWithGemini({ apiKey: gKey, model: gModel, ...params });
-        engineUsed = `Gemini (${gModel})`;
+        const r = await geminiWithFallback(
+          (m) => optimizeWithGemini({ apiKey: gKey, model: m, ...params }),
+          gModel
+        );
+        result = r.result;
+        engineUsed = `Gemini (${r.model})${r.switched ? " — tự chuyển" : ""}`;
       } catch (e) {
-        if (/quota|exceeded|limit: 0|RESOURCE_EXHAUSTED|429/i.test(e.message) && gModel !== "gemini-2.5-flash") {
-          try {
-            result = await optimizeWithGemini({ apiKey: gKey, model: "gemini-2.5-flash", ...params });
-            engineUsed = "Gemini 2.5 Flash (tự chuyển do model vượt quota free)";
-          } catch (e2) {
-            eng = "local";
-            fellBack = `Gemini loi (${e2.message}) -> tam dung engine Local.`;
-          }
-        } else {
-          eng = "local";
-          fellBack = `Gemini loi (${e.message}) -> tam dung engine Local.`;
-        }
+        eng = "local";
+        fellBack = `Gemini loi (${e.message}) -> tam dung engine Local.`;
       }
     }
   } else if (eng === "claude") {
@@ -457,18 +474,12 @@ async function onpageAI({ engine, key, model, system, user, schema, maxTokens })
   if (eng === "gemini") {
     const gKey = (key || process.env.GEMINI_API_KEY || "").trim();
     if (!gKey) throw new Error("Chưa có Gemini API key.");
-    const gModel = (model || process.env.GEMINI_MODEL || "gemini-2.5-flash").trim();
-    try {
-      const data = await geminiJson({ apiKey: gKey, model: gModel, system, user, schema, maxTokens });
-      return { data, engineUsed: `Gemini (${gModel})` };
-    } catch (e) {
-      // Model Pro vuot quota free -> tu chuyen sang Flash mien phi
-      if (/quota|exceeded|limit: 0|RESOURCE_EXHAUSTED|429/i.test(e.message) && gModel !== "gemini-2.5-flash") {
-        const data = await geminiJson({ apiKey: gKey, model: "gemini-2.5-flash", system, user, schema, maxTokens });
-        return { data, engineUsed: "Gemini 2.5 Flash (tự chuyển vì model bạn chọn vượt quota free)" };
-      }
-      throw e;
-    }
+    const gModel = (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim();
+    const r = await geminiWithFallback(
+      (m) => geminiJson({ apiKey: gKey, model: m, system, user, schema, maxTokens }),
+      gModel
+    );
+    return { data: r.result, engineUsed: `Gemini (${r.model})${r.switched ? " — tự chuyển" : ""}` };
   }
   if (eng === "claude") {
     const cKey = (key || process.env.ANTHROPIC_API_KEY || "").trim();

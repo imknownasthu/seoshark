@@ -17,13 +17,14 @@ const ENGINES = {
     keyPlaceholder: "AIza... (lấy free tại aistudio.google.com)",
     keyHelp: 'Lấy key MIỄN PHÍ tại <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com/app/apikey</a> — không cần thẻ, không nạp tiền.',
     models: [
-      ["gemini-2.5-flash", "Gemini 2.5 Flash (FREE — khuyên dùng)"],
-      ["gemini-3.5-flash", "Gemini 3.5 Flash (FREE — mới nhất)"],
+      ["gemini-3.5-flash", "Gemini 3.5 Flash (FREE — mới nhất, khuyên dùng)"],
       ["gemini-3.1-flash-lite", "Gemini 3.1 Flash-Lite (FREE — nhanh)"],
-      ["gemini-2.5-pro", "Gemini 2.5 Pro (⚠ cần bật billing)"],
+      ["gemini-2.5-flash", "Gemini 2.5 Flash (FREE — ổn định)"],
+      ["gemini-2.5-flash-lite", "Gemini 2.5 Flash-Lite (FREE — rẻ nhất)"],
       ["gemini-3.1-pro-preview", "Gemini 3.1 Pro (⚠ cần bật billing)"],
+      ["gemini-2.5-pro", "Gemini 2.5 Pro (⚠ cần bật billing)"],
     ],
-    hint: "Dùng model FREE (Flash) là đủ. Model Pro cần bật thanh toán trên Google, gói free sẽ báo lỗi quota.",
+    hint: "Dùng model FREE (Flash) là đủ. Nếu model chọn không khả dụng/hết quota, công cụ TỰ chuyển sang Flash free khác.",
   },
   claude: {
     needKey: true,
@@ -61,7 +62,8 @@ function applyEngine(engine) {
     mw.classList.remove("hidden");
     sel.innerHTML = cfg.models.map(([v, t]) => `<option value="${v}">${t}</option>`).join("");
     const saved = localStorage.getItem("seoshark_model_" + engine);
-    if (saved) sel.value = saved;
+    // Bo qua model Pro da luu (de mac dinh Flash free)
+    if (saved && cfg.models.some(([v]) => v === saved) && !/pro/i.test(saved)) sel.value = saved;
   } else {
     mw.classList.add("hidden");
   }
