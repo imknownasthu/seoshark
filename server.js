@@ -139,7 +139,7 @@ const norm = (u) => (u || "").replace(/\/$/, "");
 
 // Cac model Gemini FREE (thu lan luot neu model chon bi loi/khong ton tai/quota)
 const FREE_FLASH = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
-const RECOVERABLE = /quota|exceeded|limit: 0|RESOURCE_EXHAUSTED|429|not found|404|NOT_FOUND|not supported|unavailable|is not found|does not exist/i;
+const RECOVERABLE = /quota|exceeded|limit: 0|RESOURCE_EXHAUSTED|429|not found|404|NOT_FOUND|not supported|unavailable|is not found|does not exist|overload|high demand|experiencing high|try again later|temporar|\b503\b|\b500\b|INTERNAL/i;
 
 // Goi callFn(model) lan luot voi model chon -> cac Flash free, tra ve { result, model }
 async function geminiWithFallback(callFn, chosenModel) {

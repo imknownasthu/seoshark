@@ -62,8 +62,8 @@ function applyEngine(engine) {
     mw.classList.remove("hidden");
     sel.innerHTML = cfg.models.map(([v, t]) => `<option value="${v}">${t}</option>`).join("");
     const saved = localStorage.getItem("seoshark_model_" + engine);
-    // Bo qua model Pro da luu (de mac dinh Flash free)
-    if (saved && cfg.models.some(([v]) => v === saved) && !/pro/i.test(saved)) sel.value = saved;
+    // Cho phep chon moi model (ke ca Pro neu user co tai khoan tra phi)
+    if (saved && cfg.models.some(([v]) => v === saved)) sel.value = saved;
   } else {
     mw.classList.add("hidden");
   }
