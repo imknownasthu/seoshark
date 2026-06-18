@@ -160,6 +160,16 @@ function gcSessions() {
 }
 
 const norm = (u) => (u || "").replace(/\/$/, "");
+// Dem so lan tu khoa xuat hien (khong dau, khong phan biet hoa thuong) + mat do %
+function normVi(s) { return (s || "").toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/đ/g, "d"); }
+function kwCount(hay, kw) { const H = normVi(hay), N = normVi(kw).trim(); return N ? H.split(N).length - 1 : 0; }
+function attachKwStats(a, mainKeyword) {
+  if (!a || !a.ok) return;
+  const cnt = kwCount(a.contentText, mainKeyword);
+  const kwWords = (mainKeyword || "").trim().split(/\s+/).filter(Boolean).length || 1;
+  a.keywordCount = cnt;
+  a.keywordDensity = a.wordCount ? +((cnt * kwWords / a.wordCount) * 100).toFixed(2) : 0;
+}
 
 // Cac model Gemini FREE (thu lan luot neu model chon bi loi/khong ton tai/quota)
 const FREE_FLASH = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
@@ -560,8 +570,12 @@ app.post("/api/onpage/audit", requireAuth, async (req, res) => {
     const okComps = competitorsAudit.filter((c) => c && c.ok);
     const bench = benchmark(okComps);
 
+    // Mat do tu khoa chinh cho trang muc tieu + tung doi thu
+    attachKwStats(target, mainKeyword.trim());
+    okComps.forEach((c) => attachKwStats(c, mainKeyword.trim()));
+
     // 4) Khuyen nghi: AI neu co; nguoc lai co hoc
-    let recommendations, summary = "", engineUsed = "Local (cơ học)";
+    let recommendations, summary = "", engineUsed = "Local (cơ học)", contentGap = [];
     try {
       const { data, engineUsed: eu } = await onpageAI({
         engine, key: apiKey, model,
@@ -571,6 +585,7 @@ app.post("/api/onpage/audit", requireAuth, async (req, res) => {
       });
       recommendations = Array.isArray(data.recommendations) ? data.recommendations : [];
       summary = data.summary || "";
+      contentGap = Array.isArray(data.contentGap) ? data.contentGap : [];
       engineUsed = eu;
     } catch (e) {
       recommendations = mechanicalRecommendations({ target, bench, mainKeyword: mainKeyword.trim() });
@@ -586,7 +601,7 @@ app.post("/api/onpage/audit", requireAuth, async (req, res) => {
 
     res.json({
       id, target, competitors: competitorsAudit, bench,
-      recommendations, summary, engineUsed, serpMode,
+      recommendations, summary, contentGap, engineUsed, serpMode,
       mainKeyword: mainKeyword.trim(), subKeywords: subs,
     });
   } catch (err) {
@@ -623,6 +638,10 @@ app.post("/api/onpage/optimize", requireAuth, async (req, res) => {
       mainKeyword, subKeywords,
       before: { title: target.titleTag, metaDescription: target.metaDescription, markdown: target.contentMarkdown || target.contentText },
       after: { title: result.title, metaDescription: result.metaDescription, markdown: result.optimizedMarkdown, slug: result.slug || "" },
+      faq: result.faq || [],
+      imageSuggestions: result.imageSuggestions || [],
+      internalLinks: result.internalLinks || [],
+      schemaJsonLd: result.schemaJsonLd || "",
       changes: result.changes || [],
       notes: result.notes || "",
       engineUsed: result.engineUsed,

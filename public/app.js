@@ -886,6 +886,10 @@ function renderOpResult(d) {
   else if (String(d.serpMode).startsWith("serp-error")) alerts += alertHtml("warn", "Lấy SERP tự động lỗi: " + esc(d.serpMode.replace("serp-error:", "")) + " — hãy dán URL thủ công.");
   if (failed) alerts += alertHtml("warn", `${failed} URL đối thủ không đọc được (đã bỏ qua).`);
   if (d.summary) alerts += alertHtml("info", "📝 " + esc(d.summary));
+  if (d.contentGap && d.contentGap.length) {
+    alerts += alertHtml("warn", "🧩 <b>Content gap</b> (đối thủ có, bạn còn thiếu):<ul style='margin:6px 0 0 18px'>" +
+      d.contentGap.map((g) => `<li>${esc(g)}</li>`).join("") + "</ul>");
+  }
   $("#opSummary").innerHTML = alerts;
 
   // Trung binh doi thu (de xet "yeu")
@@ -903,6 +907,7 @@ function renderOpResult(d) {
     ["Thẻ H1", (a) => `${a.h1Count}`, (a) => `${a.h1Count} thẻ H1 trên trang`, () => t.h1Count !== 1],
     ["Cấu trúc Heading", (a) => `${a.headingCount} heading`, headingsDetail, () => comps.length > 0 && t.headingCount < avg("headingCount") * 0.7],
     ["Độ dài nội dung", (a) => `${a.wordCount} từ`, (a) => `${a.wordCount} từ trong phần nội dung`, () => comps.length > 0 && t.wordCount < avg("wordCount") * 0.8],
+    ["Mật độ từ khóa", (a) => (a.keywordDensity != null ? a.keywordDensity + "%" : "—"), (a) => `${a.keywordCount != null ? a.keywordCount : "?"} lần / ${a.wordCount} từ = ${a.keywordDensity != null ? a.keywordDensity + "%" : "?"} (lý tưởng 1-2%)`, () => t.keywordDensity != null && (t.keywordDensity < 0.5 || t.keywordDensity > 3)],
     ["Alt hình ảnh", (a) => `${a.imagesWithAlt}/${a.images}`, (a) => `${a.imagesWithAlt}/${a.images} ảnh có alt` + (a.altEnough ? " (đủ)" : " (thiếu)"), () => !t.altEnough],
     ["Internal link", (a) => `${a.internalLinks}`, (a) => `${a.internalLinks} liên kết nội bộ`, () => comps.length > 0 && t.internalLinks < avg("internalLinks") * 0.6],
     ["External link", (a) => `${a.externalLinks}`, (a) => `${a.externalLinks} liên kết ra ngoài`, () => t.externalLinks === 0 && someComp((c) => c.externalLinks > 0)],
@@ -1021,7 +1026,33 @@ function renderOpOptimize(d) {
 
   $("#opBefore").innerHTML = mdToHtml(d.before.markdown || "(không đọc được nội dung gốc)");
   $("#opAfter").innerHTML = mdToHtml(md);
+
+  // FAQ / ảnh / internal link / schema JSON-LD
+  let ex = "";
+  if (d.faq && d.faq.length) {
+    ex += `<h3 style="margin:6px 0">❓ FAQ (chuẩn AI Overview)</h3>` +
+      d.faq.map((f) => `<div class="opd"><b>${esc(f.question)}</b><br>${esc(f.answer)}</div>`).join("");
+  }
+  if (d.internalLinks && d.internalLinks.length) {
+    ex += `<h3 style="margin:14px 0 6px">🔗 Gợi ý Internal link</h3><ul style="margin:0 0 0 18px">` +
+      d.internalLinks.map((l) => `<li><b>${esc(l.anchor)}</b> → ${esc(l.targetType)}</li>`).join("") + `</ul>`;
+  }
+  if (d.imageSuggestions && d.imageSuggestions.length) {
+    ex += `<h3 style="margin:14px 0 6px">📷 Gợi ý hình ảnh</h3>` +
+      d.imageSuggestions.map((im) => `<div class="opd">${im.position ? `<b>${esc(im.position)}</b> — ` : ""}Alt: <i>${esc(im.alt || "")}</i>${im.caption ? ` · Caption: ${esc(im.caption)}` : ""} · ${esc(im.idea || "")}</div>`).join("");
+  }
+  if (d.schemaJsonLd) {
+    ex += `<h3 style="margin:14px 0 6px">🧩 Schema JSON-LD <button class="ghost small" id="opCopySchema">Copy</button></h3><pre class="code">${esc(d.schemaJsonLd)}</pre>`;
+  }
+  $("#opExtras").innerHTML = ex;
 }
+
+// Copy schema JSON-LD
+document.addEventListener("click", (e) => {
+  if (e.target && e.target.id === "opCopySchema" && opSession.optimize) {
+    navigator.clipboard.writeText(opSession.optimize.schemaJsonLd || "").then(() => toast("Đã copy Schema JSON-LD!"));
+  }
+});
 
 // --- Xuat file ---
 function downloadFile(name, content, mime) {

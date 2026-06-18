@@ -2,26 +2,32 @@
 // Prompt + schema cho phan tich/khuyen nghi & toi uu On-page (dung Gemini/Claude),
 // va bo khuyen nghi CO HOC (fallback khi dung Local - mien phi).
 
-export const ONPAGE_SYSTEM = `Ban la chuyen gia SEO On-page nguoi Viet, nam vung tai lieu Google Search (SEO Starter Guide, Helpful Content, AI/Generative Engine Optimization) va phuong phap On-page cua Semrush/Ahrefs.
+export const ONPAGE_SYSTEM = `Bạn là chuyên gia SEO Onpage & SEO Content tiếng Việt nhiều năm kinh nghiệm audit đa lĩnh vực, nắm vững tài liệu Google (SEO Starter Guide, Helpful Content, E-E-A-T, AI Overview/GEO) và phương pháp của Semrush/Ahrefs.
 
-Nguyen tac danh gia On-page:
-- Title tag: chua tu khoa chinh, ~50-60 ky tu, hap dan, duy nhat.
-- Meta description: ~120-160 ky tu, co tu khoa chinh & loi keu goi, mo ta dung noi dung.
-- Chi 1 the H1, chua tu khoa chinh; H2/H3 chia bo cuc ro rang, logic, phu tu khoa phu.
-- Canonical tro dung trang; meta robots khong vo tinh noindex/nofollow.
-- Schema/structured data phu hop (Article, FAQPage, Breadcrumb, Product...) de co Rich Snippet.
-- Breadcrumb ro rang. Alt anh day du & mo ta dung (kem tu khoa khi hop ly).
-- Noi dung huu ich, sau, dap ung y dinh tim kiem; do dai canh tranh duoc voi doi thu.
-- Internal link hop ly tro toi trang lien quan; external link toi nguon uy tin khi can.
-- Toi uu cho ca tim kiem truyen thong va AI/GEO: tra loi truc tiep, ro rang, co cau truc, dang tin cay.
+CÁC TIÊU CHÍ ĐÁNH GIÁ ONPAGE (kèm mức quan trọng):
+- Title ⭐⭐⭐⭐⭐: 50-60 ký tự, từ khóa chính ở ĐẦU, hấp dẫn, duy nhất.
+- Meta description ⭐⭐⭐⭐: 140-160 ký tự, có từ khóa + CTA, không trùng nguyên văn H1.
+- H1 ⭐⭐⭐⭐⭐: duy nhất, chứa từ khóa chính.
+- Cấu trúc heading ⭐⭐⭐⭐: phân cấp logic, bao phủ đủ sub-topic theo search intent.
+- Sapo (intro) ⭐⭐⭐⭐: 80-120 từ, có từ khóa, trả lời ngay intent, có yếu tố E-E-A-T.
+- Mật độ từ khóa ⭐⭐⭐⭐: chính 1-2% (thiếu <0.5%, nhồi >3% là xấu); ưu tiên LSI & biến thể ngữ nghĩa.
+- Độ dài & độ đầy đủ ⭐⭐⭐⭐⭐: đủ sâu so với top SERP. CONTENT GAP = nội dung/sub-topic đối thủ có mà trang mục tiêu thiếu (chỉ ra cụ thể).
+- Schema ⭐⭐⭐⭐: nền tảng Article/WebPage + BreadcrumbList; theo lĩnh vực (y tế: MedicalWebPage/LocalBusiness/MedicalProcedure; TMĐT: Product/Review/Offer; FAQ: FAQPage; hướng dẫn: HowTo; địa phương: LocalBusiness).
+- Ảnh & alt ⭐⭐⭐: đủ ảnh, alt mô tả tự nhiên có từ khóa, tên file tối ưu, ưu tiên infographic/quy trình/so sánh.
+- Internal ⭐⭐⭐⭐ (anchor có nghĩa) / External ⭐⭐ (nguồn uy tín).
+- Video ⭐⭐⭐, URL & Breadcrumb ⭐⭐⭐, CTA/FAQ/Social proof & E-E-A-T ⭐⭐⭐⭐⭐.
 
-Luon dua tren du lieu audit thuc te cua trang nguoi dung va doi thu de khuyen nghi. Ngan gon, chinh xac, uu tien theo muc do anh huong xep hang.`;
+E-E-A-T (áp dụng mọi lĩnh vực; CỰC nghiêm với YMYL y tế/tài chính/pháp lý): Experience (số liệu/case thật), Expertise (chuyên gia đứng tên), Authoritativeness (được dẫn nguồn ngoài), Trustworthiness (chính xác, có dẫn chứng, không tuyên bố tuyệt đối).
+GEO/AIO (Google AI Overview): cấu trúc rõ (heading/bullet/bảng), câu đầu mỗi mục trả lời thẳng câu hỏi, có số liệu cụ thể, trích nguồn uy tín → để AI dễ trích dẫn.
+
+Luôn bám DỮ LIỆU AUDIT thực tế của trang mục tiêu & đối thủ. Ngắn gọn, chính xác, ưu tiên theo mức ảnh hưởng xếp hạng. KHÔNG nhồi từ khóa, KHÔNG bịa số liệu/case.`;
 
 // ---- Schema khuyen nghi (cho Gemini responseSchema / Claude tool) ----
 export const RECOMMEND_SCHEMA = {
   type: "object",
   properties: {
     summary: { type: "string", description: "Nhan xet tong quan ngan gon ve On-page cua trang so voi doi thu." },
+    contentGap: { type: "array", items: { type: "string" }, description: "Cac sub-topic/noi dung doi thu CO ma trang muc tieu THIEU (lien quan search intent). Cu the, ngan gon." },
     recommendations: {
       type: "array",
       items: {
@@ -53,8 +59,44 @@ export const OPTIMIZE_SCHEMA = {
       description:
         "Toan bo bai viet da toi uu o dang Markdown: bat dau bang # H1, dung ## H2, ### H3 hop ly; noi dung day du, tu nhien, giu dung su that & y nghia goc, bo sung chieu sau khi can, dung tu khoa tu nhien.",
     },
-    changes: { type: "array", items: { type: "string" }, description: "Danh sach thay doi chinh da thuc hien." },
-    notes: { type: "string", description: "Ghi chu them (vd goi y schema, alt anh...)." },
+    faq: {
+      type: "array",
+      description: "3-6 cau hoi FAQ lien quan tu khoa (neu phu hop loai bai). Cau tra loi ngan gon, truc tiep, chuan AIO.",
+      items: {
+        type: "object",
+        properties: { question: { type: "string" }, answer: { type: "string" } },
+        required: ["question", "answer"],
+      },
+    },
+    imageSuggestions: {
+      type: "array",
+      description: "Goi y hinh anh cho cac vi tri quan trong (dau bai, sau H2 chinh, truoc ket).",
+      items: {
+        type: "object",
+        properties: {
+          position: { type: "string", description: "Vi tri (vd: sau sapo, duoi H2 ...)." },
+          alt: { type: "string", description: "Alt text co tu khoa tu nhien, 5-10 tu." },
+          caption: { type: "string", description: "Chu thich 1 cau." },
+          idea: { type: "string", description: "Loai hinh: infographic / quy trinh / so sanh / thuc te..." },
+        },
+        required: ["alt", "idea"],
+      },
+    },
+    internalLinks: {
+      type: "array",
+      description: "Cac vi tri nen chen internal link va anchor goi y.",
+      items: {
+        type: "object",
+        properties: {
+          anchor: { type: "string", description: "Anchor text goi y." },
+          targetType: { type: "string", description: "Loai trang dich (vd: trang dich vu, bai kien thuc lien quan...)." },
+        },
+        required: ["anchor", "targetType"],
+      },
+    },
+    schemaJsonLd: { type: "string", description: "Code JSON-LD san sang chen vao <head> (BreadcrumbList + Article/WebPage + schema dac thu nganh + FAQPage neu co FAQ). Dien thong tin thuc te." },
+    changes: { type: "array", items: { type: "string" }, description: "Danh sach thay doi/cai thien chinh da thuc hien." },
+    notes: { type: "string", description: "Ghi chu them." },
   },
   required: ["title", "metaDescription", "optimizedMarkdown"],
 };
@@ -67,8 +109,8 @@ function fmtAudit(a, label) {
 - Meta robots: ${a.metaRobots} | Canonical: ${a.canonicalSelf ? "tro dung trang" : a.canonical}
 - H1: ${a.h1Count} | So heading: ${a.headingCount} | Bo cuc: ${a.headings.slice(0, 12).map((h) => "H" + h.level + ":" + h.text).join(" | ")}
 - Schema: ${a.schemaTypes.join(", ") || "khong"} | Breadcrumb: ${a.breadcrumb ? "co" : "khong"} | Rich: ${a.richSnippet.join(", ") || "khong"}
-- Anh: ${a.images} (co alt ${a.imagesWithAlt}/${a.images}) | Internal: ${a.internalLinks} | External: ${a.externalLinks}
-- Do dai (tu): ${a.wordCount}`;
+- Anh: ${a.images} (co alt ${a.imagesWithAlt}/${a.images}) | Internal: ${a.internalLinks} | External: ${a.externalLinks} | Video: ${a.hasVideo ? "co" : "khong"}
+- Do dai: ${a.wordCount} tu | Mat do tu khoa chinh: ${a.keywordDensity != null ? a.keywordDensity + "%" : "?"} (${a.keywordCount != null ? a.keywordCount : "?"} lan)`;
 }
 
 export function buildRecommendPrompt({ target, competitors, bench, mainKeyword, subKeywords }) {
@@ -84,7 +126,11 @@ ${comp || "(khong co)"}
 
 ${bench ? `TRUNG BINH DOI THU: do dai ${bench.wordCount} tu, ${bench.headingCount} heading, ${bench.internalLinks} internal, ${bench.externalLinks} external, title ${bench.titleLen} ky tu, meta ${bench.metaDescLen} ky tu, ${bench.withSchema}/${bench.count} co schema, ${bench.withBreadcrumb}/${bench.count} co breadcrumb.` : ""}
 
-YEU CAU: So sanh tung tieu chi On-page giua trang nguoi dung va doi thu. Dua ra danh sach khuyen nghi cu the de cai thien On-page va dua tu khoa "${mainKeyword}" len top. Moi khuyen nghi co priority (Cao/Trung binh/Thap), hien trang, muc tieu, hanh dong, ly do. Sap xep tu Cao den Thap.`;
+YEU CAU:
+1. So sanh tung tieu chi On-page giua trang muc tieu va doi thu (Title, Meta, H1, Heading, Sapo, mat do tu khoa, do dai, Schema, anh/alt, internal/external, video, E-E-A-T, FAQ/social proof).
+2. Liet ke CONTENT GAP: cac sub-topic/noi dung doi thu co ma trang muc tieu thieu (lien quan search intent cua "${mainKeyword}").
+3. Dua khuyen nghi cu the de dua tu khoa "${mainKeyword}" len top: moi khuyen nghi co priority (Cao/Trung binh/Thap), hien trang, muc tieu (tham chieu doi thu/chuan), hanh dong cu the co the lam ngay, ly do/loi ich. Bao gom ca goi y E-E-A-T va GEO/AIO khi phu hop.
+4. Sap xep khuyen nghi tu Cao den Thap. Ngan gon, chinh xac, khong chung chung.`;
 }
 
 export function buildOptimizePrompt({ target, mainKeyword, subKeywords, selected, bench, extra }) {
@@ -99,13 +145,36 @@ NOI DUNG GOC (Title: ${target.titleTag || "(trong)"} | Meta: ${target.metaDescri
 ${target.contentMarkdown || target.contentText || "(khong doc duoc noi dung)"}
 """
 
-YEU CAU: Viet LAI TOAN BO bai viet chuan SEO On-page nham toi uu cho tu khoa "${mainKeyword}".
-- Title tag & meta description moi hap dan, dung do dai, chua tu khoa chinh.
-- Bo cuc heading ro rang: 1 H1 chua tu khoa chinh, cac H2/H3 logic, phu tu khoa phu tu nhien.
-- Noi dung GIU NGUYEN su that & y chinh cua ban goc, viet lai mach lac, day du, sau hon, dap ung y dinh tim kiem; bo sung phan con thieu so voi doi thu neu hop ly. KHONG bia so lieu/su that moi (tru thong tin bo sung nguoi dung cung cap o tren).
-- Neu co thong tin bo sung tu nguoi dung, hay LONG GHEP day du va chinh xac vao bai.
-- Tu khoa rai tu nhien, khong nhoi nhet. Toi uu cho ca SEO truyen thong va AI/GEO (tra loi truc tiep, ro rang).
-- Tra ve title, metaDescription va optimizedMarkdown (bat dau bang # H1, dung ## / ### cho cac muc).`;
+YEU CAU: Viet LAI TOAN BO bai chuan SEO Onpage + AIO cho tu khoa "${mainKeyword}", giong nhu mot chuyen gia nguoi Viet that viet, KHONG co dau vet AI.
+
+TITLE & META:
+- Title (cung la H1): 50-60 ky tu, tu khoa chinh o DAU, hap dan, co the kem nam/con so/loi ich.
+- Meta description: 140-160 ky tu, co tu khoa chinh + CTA mem, KHONG trung nguyen van H1.
+
+SAPO: 1 doan duy nhat 80-120 tu, tu khoa chinh xuat hien dung 1 lan, neu van de/nhu cau cua nguoi doc. KHONG bat dau bang "Trong bai viet nay...", KHONG dung cau truc "X la...".
+
+BO CUC HEADING:
+- 1 H1 chua tu khoa chinh. H2/H3 logic, bao phu du sub-topic theo search intent (lap khoang trong content gap so voi doi thu neu hop ly).
+- Moi H2/H3 PHAI co it nhat 1 doan van ngay duoi (khong de heading lien heading).
+- Heading dang cau hoi: CAU DAU TIEN cua noi dung la cau tra loi truc tiep (chuan Google AI Overview), roi moi giai thich chi tiet.
+
+GIONG VAN (chong van AI cut y - QUAN TRONG):
+- Phan giai thich/ly do: cau 15-30 tu, doan >=3-4 cau, trien khai du nghia. Phan tra loi truc tiep/thong so/ket luan: cho phep cau ngan gon.
+- Da dang do dai cau; KHONG viet chuoi nhieu cau cuc ngan lien tiep.
+- KHONG dung dau "-" de giai thich y giua cau. Tranh lap "quan trong la / dac biet la / nhin chung / tuy nhien". Khong mo dau nhieu cau lien tiep bang "Ban co the".
+
+MAT DO TU KHOA: tu khoa chinh ~1-2% (sapo 1 lan, giua bai 1-2 lan tu nhien, ket 1 lan); rai tu khoa phu & bien the LSI tu nhien; KHONG nhoi nhet, khong in dam tu khoa moi lan xuat hien.
+
+E-E-A-T & noi dung: giu nguyen su that & y chinh ban goc, viet sau hon, mach lac, day du; chi dung so lieu/case CO THAT (ban goc hoac thong tin bo sung nguoi dung). KHONG bia. Voi YMYL (y te/tai chinh/phap ly): khong tuyen bo tuyet doi, them khuyen cao tham khao chuyen gia.
+
+TRA VE:
+- optimizedMarkdown: toan bai (bat dau # H1, dung ##/### hop ly, co sapo, co khoi FAQ neu phu hop).
+- title, metaDescription, slug.
+- faq: 3-6 Q&A chuan AIO (neu phu hop loai bai).
+- imageSuggestions: vi tri + alt + caption + loai hinh.
+- internalLinks: anchor + loai trang dich goi y.
+- schemaJsonLd: code JSON-LD san sang (BreadcrumbList + Article/WebPage + schema dac thu nganh + FAQPage neu co FAQ).
+- changes: cac cai thien chinh.`;
 }
 
 // ====== Khuyen nghi CO HOC (Local - khong AI) ======
