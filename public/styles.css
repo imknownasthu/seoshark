@@ -277,6 +277,14 @@ pre.code { margin: 0; padding: 12px 14px; background: #0c2230; color: #d7eef8; m
 @keyframes flashmark { 0% { background: #ffd54a; } 100% { background: transparent; } }
 .render a.jumped { animation: flashmark 1.8s ease-out; border-radius: 3px; padding: 0 2px; }
 
+/* On-page recommendations */
+.rec-item { display: flex; gap: 10px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 10px; margin-bottom: 8px; background: #fbfdfe; }
+.rec-item input[type=checkbox] { width: 18px; height: 18px; flex: 0 0 auto; margin-top: 2px; accent-color: var(--brand); }
+.rec-body { flex: 1; min-width: 0; }
+.rec-body label { display: inline; font-weight: 400; cursor: pointer; font-size: 14px; }
+.rec-action { font-weight: 600; color: var(--brand-dark); margin: 4px 0; font-size: 13px; }
+.rec-body .muted { display: block; margin-top: 2px; }
+
 .user-chip { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); }
 .user-chip .uava { width: 28px; height: 28px; border-radius: 50%; background: var(--brand); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; text-transform: uppercase; }
 @media (max-width: 600px) { .user-chip #userEmail { display: none; } }

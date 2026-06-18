@@ -1,8 +1,16 @@
 # 🦈 SeoShark
 
-Bộ công cụ hỗ trợ SEO. Hiện có 2 tính năng (2 tab trong giao diện):
-- **🔗 Internal Link** — chèn liên kết nội bộ *trong* một bài viết.
-- **🔁 Incoming Link** — chèn liên kết từ *các bài khác trỏ về* một URL đích.
+Bộ công cụ hỗ trợ SEO (menu bên trái):
+- **🔗 Tối ưu Internal link** — gồm 2 tab: *Internal Link* (chèn link trong bài) và *Incoming Link* (bài khác trỏ về URL đích).
+- **🩺 Tối ưu Onpage** — audit on-page trang của bạn, so sánh với top đối thủ SERP, đưa khuyến nghị ưu tiên và tự động viết lại bài chuẩn SEO (trước/sau).
+
+## Tính năng Tối ưu Onpage
+1. Nhập **URL + từ khóa chính + từ khóa phụ**.
+2. Công cụ đọc source trang bạn: Title, Meta description, Meta robots, Canonical, Schema/Breadcrumb, cấu trúc Heading, alt ảnh, internal/external link, độ dài, Rich snippet.
+3. Lấy **đối thủ top SERP**: tự động (Google CSE — cần `GOOGLE_CSE_KEY` + `GOOGLE_CSE_CX`) hoặc **dán URL thủ công (1–6)**.
+4. Audit đối thủ tương tự → **bảng so sánh** từng tiêu chí.
+5. **Khuyến nghị cải thiện** xếp theo ưu tiên (Cao→Thấp). Engine Local cho khuyến nghị cơ học (free); Gemini/Claude cho phân tích chuyên sâu.
+6. Tick chọn tiêu chí → **viết lại toàn bài chuẩn SEO** (cần Gemini/Claude), xuất **trước/sau** (Title, Meta, nội dung Markdown).
 
 ## Tính năng Internal Link
 

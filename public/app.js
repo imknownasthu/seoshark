@@ -84,16 +84,18 @@ function showSection(section, title) {
   if (el) el.classList.add("active");
   $("#sectionTitle").textContent = title;
 }
+const SECTION_TITLES = { "internal-link": "Tối ưu Internal link", "onpage": "Tối ưu Onpage" };
 $$("#menu .menu-item").forEach((mi) => {
   mi.addEventListener("click", () => {
     $$("#menu .menu-item").forEach((x) => x.classList.remove("active"));
     mi.classList.add("active");
-    if (mi.dataset.section === "soon") {
+    const sec = mi.dataset.section;
+    if (sec === "soon") {
       const name = mi.dataset.name || "Tính năng sắp ra mắt";
       $("#soonName").textContent = name;
       showSection("soon", name);
     } else {
-      showSection("internal-link", "Tối ưu Internal link");
+      showSection(sec, SECTION_TITLES[sec] || sec);
     }
   });
 });
@@ -743,3 +745,177 @@ $("#btnLogout").addEventListener("click", async () => {
 });
 
 checkAuth();
+
+// ==================== ON-PAGE ====================
+let opSession = { id: null, data: null, optimize: null };
+
+// Markdown -> HTML toi gian (de xem ban toi uu)
+function mdToHtml(md) {
+  if (!md) return "";
+  const e2 = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const inline = (s) => e2(s)
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  let html = "", inList = false;
+  for (const raw of md.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) { if (inList) { html += "</ul>"; inList = false; } continue; }
+    let m;
+    if ((m = line.match(/^(#{1,6})\s+(.*)/))) { if (inList) { html += "</ul>"; inList = false; } html += `<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`; }
+    else if ((m = line.match(/^[-*]\s+(.*)/)) || (m = line.match(/^\d+\.\s+(.*)/))) { if (!inList) { html += "<ul>"; inList = true; } html += `<li>${inline(m[1])}</li>`; }
+    else { if (inList) { html += "</ul>"; inList = false; } html += `<p>${inline(line)}</p>`; }
+  }
+  if (inList) html += "</ul>";
+  return html;
+}
+
+// Comp tabs (auto / manual)
+$$("#opCompTabs .tab").forEach((t) => t.addEventListener("click", () => {
+  $$("#opCompTabs .tab").forEach((x) => x.classList.toggle("active", x === t));
+  const manual = t.dataset.comp === "manual";
+  $("#opCompManual").classList.toggle("hidden", !manual);
+  $("#opCompAuto").classList.toggle("hidden", manual);
+}));
+
+function addOpCompRow(url = "") {
+  const div = document.createElement("div");
+  div.className = "kw-row";
+  div.innerHTML = `<input type="text" class="op-comp-url" placeholder="https://doi-thu.com/bai-viet" style="flex:1" value="${esc(url)}" /><button class="ghost small grow0" type="button" title="Xóa">✕</button>`;
+  div.querySelector("button").addEventListener("click", () => div.remove());
+  $("#opCompRows").appendChild(div);
+}
+$("#opAddComp").addEventListener("click", () => addOpCompRow());
+addOpCompRow();
+
+// Buoc 1: Audit
+$("#btnOpAudit").addEventListener("click", async () => {
+  const url = $("#opUrl").value.trim();
+  const mainKeyword = $("#opMainKw").value.trim();
+  const subKeywords = $("#opSubKw").value.trim();
+  const msg = $("#opAuditMsg"); msg.innerHTML = "";
+  if (!url) { msg.innerHTML = alertHtml("err", "Hãy nhập URL bài viết."); return; }
+  if (!mainKeyword) { msg.innerHTML = alertHtml("err", "Hãy nhập từ khóa chính."); return; }
+
+  const manualMode = $("#opCompTabs .tab.active").dataset.comp === "manual";
+  const competitors = manualMode
+    ? $$("#opCompRows .op-comp-url").map((i) => i.value.trim()).filter((v) => /^https?:\/\//i.test(v))
+    : [];
+
+  const btn = $("#btnOpAudit");
+  busy(btn, true, "Đang đọc on-page của bạn & đối thủ (có thể mất 20-40s)...");
+  try {
+    const res = await fetch("/api/onpage/audit", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url, mainKeyword, subKeywords, competitors,
+        engine: $("#engine").value, apiKey: $("#apiKey").value.trim() || undefined, model: $("#model").value || undefined,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Lỗi không xác định");
+    opSession.id = data.id; opSession.data = data;
+    renderOpResult(data);
+    $("#opResultCard").classList.remove("hidden");
+    $("#opOptResultCard").classList.add("hidden");
+    $("#opResultCard").scrollIntoView({ behavior: "smooth" });
+  } catch (e) { msg.innerHTML = alertHtml("err", "❌ " + e.message); }
+  finally { busy(btn, false); }
+});
+
+function yn(b) { return b ? "✅" : "❌"; }
+function renderOpResult(d) {
+  const t = d.target, b = d.bench;
+  $("#opResMeta").textContent = `Engine: ${d.engineUsed} · ${b ? b.count : 0} đối thủ`;
+
+  // Thong bao nguon SERP
+  let alerts = "";
+  if (d.serpMode === "no-serp") alerts += alertHtml("warn", "Chưa cấu hình Google CSE nên không tự lấy đối thủ. Hãy dùng 'Dán URL thủ công' để so sánh với đối thủ.");
+  else if (String(d.serpMode).startsWith("serp-error")) alerts += alertHtml("warn", "Lấy SERP tự động lỗi: " + d.serpMode.replace("serp-error:", "") + ". Hãy dán URL đối thủ thủ công.");
+  if (d.summary) alerts += alertHtml("info", "📝 " + esc(d.summary));
+  $("#opSummary").innerHTML = alerts;
+
+  // Bang so sanh
+  const bv = (f, suf = "") => (b ? b[f] + suf : "—");
+  const rows = [
+    ["Title (ký tự)", t.titleLen, bv("titleLen")],
+    ["Meta description (ký tự)", t.metaDescLen, bv("metaDescLen")],
+    ["Số thẻ H1", t.h1Count, "1 (chuẩn)"],
+    ["Số heading", t.headingCount, bv("headingCount")],
+    ["Độ dài (số từ)", t.wordCount, bv("wordCount")],
+    ["Ảnh có alt", `${t.imagesWithAlt}/${t.images}`, "đủ alt"],
+    ["Internal link", t.internalLinks, bv("internalLinks")],
+    ["External link", t.externalLinks, bv("externalLinks")],
+    ["Schema", t.hasSchema ? t.schemaTypes.join(", ") : "❌ không", b ? `${b.withSchema}/${b.count} đối thủ có` : "—"],
+    ["Breadcrumb", yn(t.breadcrumb), b ? `${b.withBreadcrumb}/${b.count} có` : "—"],
+    ["Canonical", t.canonicalSelf ? "✅ tự trỏ" : t.canonical, "tự trỏ"],
+    ["Meta robots", t.metaRobots, "index, follow"],
+    ["Rich snippet", t.richSnippet.join(", ") || "❌ không", "—"],
+  ];
+  $("#opCompareTable").innerHTML = `<table class="cmp">
+    <thead><tr><th>Tiêu chí</th><th>Trang của bạn</th><th>Đối thủ (TB)</th></tr></thead>
+    <tbody>${rows.map((r) => `<tr><td><b>${r[0]}</b></td><td>${esc(String(r[1]))}</td><td>${esc(String(r[2]))}</td></tr>`).join("")}</tbody></table>
+    ${d.competitors && d.competitors.length ? `<p class="muted" style="margin-top:8px">Đối thủ: ${d.competitors.map((c, i) => c.ok ? `<a href="${esc(c.url)}" target="_blank" rel="noopener">#${i + 1}</a>` : `#${i + 1}(lỗi)`).join(" · ")}</p>` : ""}`;
+
+  // Khuyen nghi
+  const pill = (p) => `<span class="badge ${p === "Cao" ? "sapo" : p === "Thap" ? "ket" : "ok"}">${esc(p || "TB")}</span>`;
+  $("#opRecs").innerHTML = (d.recommendations || []).map((r, i) => `
+    <div class="rec-item">
+      <input type="checkbox" class="op-rec-check" data-criterion="${esc(r.criterion)}" id="oprec${i}" checked />
+      <div class="rec-body">
+        <label for="oprec${i}"><b>${esc(r.criterion)}</b> ${pill(r.priority)}</label>
+        <div class="rec-action">→ ${esc(r.action || "")}</div>
+        ${(r.current || r.target) ? `<div class="muted">Hiện tại: ${esc(r.current || "—")} | Mục tiêu: ${esc(r.target || "—")}</div>` : ""}
+        ${r.why ? `<div class="muted">💡 ${esc(r.why)}</div>` : ""}
+      </div>
+    </div>`).join("") || alertHtml("info", "Không có khuyến nghị — on-page đã khá tốt!");
+}
+
+$("#opSelectAll").addEventListener("change", (e) => {
+  $$("#opRecs .op-rec-check").forEach((c) => { c.checked = e.target.checked; });
+});
+
+// Buoc 2: Toi uu (viet lai)
+$("#btnOpOptimize").addEventListener("click", async () => {
+  const msg = $("#opOptMsg"); msg.innerHTML = "";
+  if (!opSession.id) { msg.innerHTML = alertHtml("err", "Hãy phân tích trước."); return; }
+  const selected = $$("#opRecs .op-rec-check:checked").map((c) => c.dataset.criterion);
+
+  const btn = $("#btnOpOptimize");
+  busy(btn, true, "AI đang viết lại bài chuẩn SEO...");
+  try {
+    const res = await fetch("/api/onpage/optimize", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: opSession.id, selected,
+        engine: $("#engine").value, apiKey: $("#apiKey").value.trim() || undefined, model: $("#model").value || undefined,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Lỗi không xác định");
+    opSession.optimize = data;
+    renderOpOptimize(data);
+    $("#opOptResultCard").classList.remove("hidden");
+    $("#opOptResultCard").scrollIntoView({ behavior: "smooth" });
+  } catch (e) { msg.innerHTML = alertHtml("err", "❌ " + e.message); }
+  finally { busy(btn, false); }
+});
+
+function renderOpOptimize(d) {
+  $("#opOptMeta").textContent = `Engine: ${d.engineUsed}`;
+  $("#opChanges").innerHTML = (d.changes && d.changes.length)
+    ? alertHtml("info", "✅ Đã tối ưu:<ul style='margin:6px 0 0 18px'>" + d.changes.map((c) => `<li>${esc(c)}</li>`).join("") + "</ul>")
+    : "";
+  $("#opMeta2").innerHTML = `<table class="cmp">
+    <thead><tr><th>Yếu tố</th><th>TRƯỚC</th><th>SAU</th></tr></thead>
+    <tbody>
+      <tr><td><b>Title</b></td><td>${esc(d.before.title || "(trống)")}</td><td class="snip-after">${esc(d.after.title || "")}</td></tr>
+      <tr><td><b>Meta description</b></td><td>${esc(d.before.metaDescription || "(trống)")}</td><td class="snip-after">${esc(d.after.metaDescription || "")}</td></tr>
+      ${d.after.slug ? `<tr><td><b>Slug gợi ý</b></td><td>—</td><td class="snip-after">${esc(d.after.slug)}</td></tr>` : ""}
+    </tbody></table>`;
+  $("#opBefore").innerHTML = `<p>${esc(d.before.markdown || "(không đọc được nội dung gốc)").replace(/\n/g, "<br>")}</p>`;
+  $("#opAfter").innerHTML = mdToHtml(d.after.markdown);
+}
+
+$("#opCopyMd").addEventListener("click", () => {
+  if (opSession.optimize) navigator.clipboard.writeText(opSession.optimize.after.markdown || "").then(() => toast("Đã copy Markdown!"));
+});

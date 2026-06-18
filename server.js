@@ -8,8 +8,14 @@ import { randomUUID } from "node:crypto";
 import { extractArticle, blocksToHtml, blocksToMarkdown } from "./src/extract.js";
 import { loadTargets, rankTargets } from "./src/sitemap.js";
 import { optimizeLocally } from "./src/local.js";
-import { optimizeWithGemini } from "./src/gemini.js";
-import { optimizeWithClaude } from "./src/claude.js";
+import { optimizeWithGemini, geminiJson } from "./src/gemini.js";
+import { optimizeWithClaude, claudeJson } from "./src/claude.js";
+import { auditUrl, benchmark } from "./src/onpage.js";
+import { fetchSerp, serpConfigured } from "./src/serp.js";
+import {
+  ONPAGE_SYSTEM, RECOMMEND_SCHEMA, OPTIMIZE_SCHEMA,
+  buildRecommendPrompt, buildOptimizePrompt, mechanicalRecommendations,
+} from "./src/onpage-prompt.js";
 import * as auth from "./src/auth.js";
 import { sendRegistrationCode, mailMode } from "./src/mailer.js";
 
@@ -427,6 +433,144 @@ app.post("/api/incoming/insert", requireAuth, async (req, res) => {
       processed: results.length,
       truncated,
       results,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
+// ==================== ON-PAGE ====================
+
+// Goi AI JSON theo engine (gemini/claude). Tra ve {data, engineUsed}. Throw neu khong dung duoc AI.
+async function onpageAI({ engine, key, model, system, user, schema, maxTokens }) {
+  const eng = (engine || "local").toLowerCase();
+  if (eng === "gemini") {
+    const gKey = (key || process.env.GEMINI_API_KEY || "").trim();
+    if (!gKey) throw new Error("Chưa có Gemini API key.");
+    const gModel = (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim();
+    const data = await geminiJson({ apiKey: gKey, model: gModel, system, user, schema, maxTokens });
+    return { data, engineUsed: `Gemini (${gModel})` };
+  }
+  if (eng === "claude") {
+    const cKey = (key || process.env.ANTHROPIC_API_KEY || "").trim();
+    if (!cKey) throw new Error("Chưa có Anthropic API key.");
+    const cModel = (model || process.env.SEOSHARK_MODEL || "claude-sonnet-4-6").trim();
+    const data = await claudeJson({ apiKey: cKey, model: cModel, system, user, schema, maxTokens });
+    return { data, engineUsed: `Claude (${cModel})` };
+  }
+  throw new Error("local");
+}
+
+// --- POST /api/onpage/audit : audit trang + doi thu + khuyen nghi ---
+app.post("/api/onpage/audit", requireAuth, async (req, res) => {
+  try {
+    const { url, mainKeyword, subKeywords, competitors, engine, model, apiKey } = req.body || {};
+    if (!url || !/^https?:\/\//i.test(url)) {
+      return res.status(400).json({ error: "Vui lòng nhập URL hợp lệ." });
+    }
+    if (!mainKeyword || !mainKeyword.trim()) {
+      return res.status(400).json({ error: "Vui lòng nhập từ khóa chính." });
+    }
+    const subs = (Array.isArray(subKeywords) ? subKeywords : String(subKeywords || "").split(","))
+      .map((s) => s.trim()).filter(Boolean);
+
+    // 1) Audit trang nguoi dung
+    const target = await auditUrl(url);
+
+    // 2) Lay URL doi thu: thu cong (uu tien) hoac tu dong qua CSE
+    let compUrls = [];
+    let serpMode = "manual";
+    const manual = (Array.isArray(competitors) ? competitors : [])
+      .map((c) => (c || "").trim()).filter((c) => /^https?:\/\//i.test(c));
+    if (manual.length) {
+      compUrls = manual.slice(0, 6);
+      serpMode = "manual";
+    } else if (serpConfigured()) {
+      try {
+        const serp = await fetchSerp(mainKeyword.trim(), { num: 6, excludeHost: target.host });
+        compUrls = serp.map((s) => s.url);
+        serpMode = "auto";
+      } catch (e) {
+        serpMode = "serp-error:" + (e.message || "");
+      }
+    } else {
+      serpMode = "no-serp";
+    }
+
+    // 3) Audit doi thu (song song, bo qua loi tung URL)
+    const competitorsAudit = (
+      await Promise.all(
+        compUrls.map((cu) => auditUrl(cu).catch((e) => ({ ok: false, url: cu, error: e.message })))
+      )
+    );
+    const okComps = competitorsAudit.filter((c) => c && c.ok);
+    const bench = benchmark(okComps);
+
+    // 4) Khuyen nghi: AI neu co; nguoc lai co hoc
+    let recommendations, summary = "", engineUsed = "Local (cơ học)";
+    try {
+      const { data, engineUsed: eu } = await onpageAI({
+        engine, key: apiKey, model,
+        system: ONPAGE_SYSTEM,
+        user: buildRecommendPrompt({ target, competitors: okComps, bench, mainKeyword: mainKeyword.trim(), subKeywords: subs }),
+        schema: RECOMMEND_SCHEMA, maxTokens: 4096,
+      });
+      recommendations = Array.isArray(data.recommendations) ? data.recommendations : [];
+      summary = data.summary || "";
+      engineUsed = eu;
+    } catch (e) {
+      recommendations = mechanicalRecommendations({ target, bench, mainKeyword: mainKeyword.trim() });
+      if (e.message && e.message !== "local") summary = `(AI lỗi: ${e.message} — dùng phân tích cơ học)`;
+    }
+
+    gcSessions();
+    const id = randomUUID();
+    sessions.set(id, {
+      type: "onpage", createdAt: Date.now(),
+      target, mainKeyword: mainKeyword.trim(), subKeywords: subs, bench,
+    });
+
+    res.json({
+      id, target, competitors: competitorsAudit, bench,
+      recommendations, summary, engineUsed, serpMode,
+      mainKeyword: mainKeyword.trim(), subKeywords: subs,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
+// --- POST /api/onpage/optimize : viet lai bai chuan SEO (truoc/sau) ---
+app.post("/api/onpage/optimize", requireAuth, async (req, res) => {
+  try {
+    const { id, selected, engine, model, apiKey } = req.body || {};
+    const session = sessions.get(id);
+    if (!session || session.type !== "onpage") {
+      return res.status(400).json({ error: "Phiên hết hạn. Hãy phân tích On-page lại." });
+    }
+    const { target, mainKeyword, subKeywords, bench } = session;
+
+    let result;
+    try {
+      const { data, engineUsed } = await onpageAI({
+        engine, key: apiKey, model,
+        system: ONPAGE_SYSTEM,
+        user: buildOptimizePrompt({ target, mainKeyword, subKeywords, selected, bench }),
+        schema: OPTIMIZE_SCHEMA, maxTokens: 8192,
+      });
+      result = { ...data, engineUsed };
+    } catch (e) {
+      if (e.message === "local")
+        return res.status(400).json({ error: "Bước tối ưu cần engine Gemini hoặc Claude (Local không viết lại được). Hãy chọn Gemini ở ⚙️." });
+      return res.status(400).json({ error: "AI lỗi: " + e.message });
+    }
+
+    res.json({
+      before: { title: target.titleTag, metaDescription: target.metaDescription, markdown: target.contentText },
+      after: { title: result.title, metaDescription: result.metaDescription, markdown: result.optimizedMarkdown, slug: result.slug || "" },
+      changes: result.changes || [],
+      notes: result.notes || "",
+      engineUsed: result.engineUsed,
     });
   } catch (err) {
     res.status(500).json({ error: err.message || String(err) });

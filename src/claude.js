@@ -32,6 +32,23 @@ const SUBMIT_TOOL = {
   },
 };
 
+// Goi Claude tra ve JSON theo schema (dung cho On-page va cac tac vu khac)
+export async function claudeJson({ apiKey, model, system, user, schema, maxTokens = 8000 }) {
+  const client = new Anthropic({ apiKey });
+  const tool = { name: "respond", description: "Tra ve ket qua co cau truc.", input_schema: schema };
+  const response = await client.messages.create({
+    model: model || "claude-sonnet-4-6",
+    max_tokens: maxTokens,
+    system,
+    tools: [tool],
+    tool_choice: { type: "tool", name: "respond" },
+    messages: [{ role: "user", content: user }],
+  });
+  const toolUse = response.content.find((c) => c.type === "tool_use");
+  if (!toolUse) throw new Error("Claude khong tra ve ket qua hop le.");
+  return toolUse.input || {};
+}
+
 export async function optimizeWithClaude({ apiKey, model, article, mode, count, keywords, targets }) {
   const client = new Anthropic({ apiKey });
   const userContent = buildUserPrompt({ article, mode, count, keywords, targets });

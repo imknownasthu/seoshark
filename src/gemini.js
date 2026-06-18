@@ -28,6 +28,47 @@ const RESPONSE_SCHEMA = {
   required: ["edits"],
 };
 
+// Chuyen JSON Schema (type chu thuong) -> Gemini schema (type CHU HOA)
+function toGeminiSchema(s) {
+  if (!s || typeof s !== "object") return s;
+  const out = {};
+  for (const [k, v] of Object.entries(s)) {
+    if (k === "type" && typeof v === "string") out[k] = v.toUpperCase();
+    else if (k === "properties") {
+      out.properties = {};
+      for (const [pk, pv] of Object.entries(v)) out.properties[pk] = toGeminiSchema(pv);
+    } else if (k === "items") out.items = toGeminiSchema(v);
+    else out[k] = v;
+  }
+  return out;
+}
+
+// Goi Gemini tra ve JSON theo schema (dung cho On-page va cac tac vu khac)
+export async function geminiJson({ apiKey, model, system, user, schema, maxTokens = 8192 }) {
+  const mdl = model || "gemini-3.5-flash";
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${mdl}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const body = {
+    systemInstruction: { parts: [{ text: system }] },
+    contents: [{ role: "user", parts: [{ text: user }] }],
+    generationConfig: {
+      temperature: 0.4,
+      maxOutputTokens: maxTokens,
+      responseMimeType: "application/json",
+      responseSchema: toGeminiSchema(schema),
+    },
+  };
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(`Gemini loi: ${data?.error?.message || res.status}`);
+  const text = data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") || "";
+  if (!text) throw new Error(`Gemini khong tra ve noi dung (${data?.candidates?.[0]?.finishReason || "?"}).`);
+  return JSON.parse(text);
+}
+
 export async function optimizeWithGemini({ apiKey, model, article, mode, count, keywords, targets }) {
   const mdl = model || "gemini-3.5-flash";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${mdl}:generateContent?key=${encodeURIComponent(
