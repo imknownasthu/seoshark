@@ -101,6 +101,46 @@ export const OPTIMIZE_SCHEMA = {
   required: ["title", "metaDescription", "optimizedMarkdown"],
 };
 
+// ---- Schema CHE DO 3 (de xuat 3 phuong an cho moi tieu chi da tick) ----
+export const SUGGEST_SCHEMA = {
+  type: "object",
+  properties: {
+    suggestions: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          criterion: { type: "string", description: "Ten tieu chi (dung ten nguoi dung da tick)." },
+          options: {
+            type: "array",
+            description: "Toi da 3 phuong an toi uu tot nhat cho tieu chi nay (cu the, dung chuan SEO). Vd Title -> 3 title; Heading -> 3 dan y H1/H2/H3 (moi option nhieu dong); Meta -> 3 meta...",
+            items: { type: "string" },
+          },
+          note: { type: "string", description: "Ghi chu ngan (vi sao/luu y)." },
+        },
+        required: ["criterion", "options"],
+      },
+    },
+  },
+  required: ["suggestions"],
+};
+
+export function buildSuggestPrompt({ target, mainKeyword, subKeywords, selected, bench, extra }) {
+  return `TU KHOA CHINH: ${mainKeyword}
+TU KHOA PHU: ${(subKeywords || []).join(", ") || "(khong co)"}
+${bench ? `Doi thu trung binh ~${bench.wordCount} tu, ${bench.headingCount} heading.` : ""}
+${extra && extra.trim() ? `THONG TIN BO SUNG TU NGUOI DUNG:\n"""${extra.trim()}"""\n` : ""}
+HIEN TRANG TRANG (Title: ${target.titleTag || "(trong)"} | Meta: ${target.metaDescription || "(trong)"} | H1: ${target.h1Count} | ${target.headingCount} heading | ${target.wordCount} tu | Bo cuc: ${(target.headings || []).slice(0, 15).map((h) => "H" + h.level + ":" + h.text).join(" | ")}):
+
+YEU CAU: CHI cho cac tieu chi nguoi dung da chon: ${(selected && selected.length ? selected.join("; ") : "Title tag; Meta description; Cau truc Heading")}.
+Voi MOI tieu chi, dua ra TOI DA 3 PHUONG AN toi uu tot nhat (cu the, san sang dung, dung chuan SEO On-page + AIO, chua tu khoa chinh hop ly, tu nhien tieng Viet, khong van AI).
+- Title: 3 title 50-60 ky tu, tu khoa chinh o dau.
+- Meta description: 3 meta 140-160 ky tu co CTA.
+- Cau truc Heading: 3 dan y heading (H1/H2/H3, moi phuong an la 1 chuoi nhieu dong) bao phu du sub-topic theo intent.
+- Cac tieu chi khac: 3 cach lam/giai phap cu the.
+KHONG bia so lieu. Tra ve dung schema (suggestions[].options la mang chuoi).`;
+}
+
 function fmtAudit(a, label) {
   if (!a || !a.ok) return `${label}: (khong doc duoc)`;
   return `${label}: ${a.url}
@@ -170,7 +210,7 @@ GIONG VAN (chong van AI cut y - QUAN TRONG):
 - Da dang do dai cau; KHONG viet chuoi nhieu cau cuc ngan lien tiep.
 - KHONG dung dau "-" de giai thich y giua cau. Tranh lap "quan trong la / dac biet la / nhin chung / tuy nhien". Khong mo dau nhieu cau lien tiep bang "Ban co the".
 
-MAT DO TU KHOA: tu khoa chinh ~1-2% (sapo 1 lan, giua bai 1-2 lan tu nhien, ket 1 lan); rai tu khoa phu & bien the LSI tu nhien; KHONG nhoi nhet, khong in dam tu khoa moi lan xuat hien.
+MAT DO TU KHOA: tu khoa chinh ~1-2% (sapo 1 lan, giua bai 1-2 lan tu nhien, ket 1 lan). MOI tu khoa phu (${(subKeywords || []).join(", ") || "khong co"}) BAT BUOC xuat hien IT NHAT 1 lan trong bai mot cach tu nhien. Dung them bien the LSI; KHONG nhoi nhet, khong in dam tu khoa moi lan xuat hien.
 
 E-E-A-T & noi dung: giu nguyen su that & y chinh ban goc, viet sau hon, mach lac, day du; chi dung so lieu/case CO THAT (ban goc hoac thong tin bo sung nguoi dung). KHONG bia. Voi YMYL (y te/tai chinh/phap ly): khong tuyen bo tuyet doi, them khuyen cao tham khao chuyen gia.
 

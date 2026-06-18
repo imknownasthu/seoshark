@@ -370,9 +370,10 @@
 
           <div style="margin-top:16px">
             <label style="font-weight:600;font-size:13px">Phạm vi tối ưu:</label>
-            <div style="display:flex;gap:18px;margin-top:6px;flex-wrap:wrap">
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">
               <label style="display:flex;gap:6px;align-items:flex-start;font-weight:400;cursor:pointer"><input type="radio" name="opMode" value="full" checked style="margin-top:3px;accent-color:var(--brand)"> <span>Tối ưu <b>toàn bộ bài</b> (gồm tiêu chí đã tick + viết lại nội dung chuẩn SEO hơn)</span></label>
-              <label style="display:flex;gap:6px;align-items:flex-start;font-weight:400;cursor:pointer"><input type="radio" name="opMode" value="criteria" style="margin-top:3px;accent-color:var(--brand)"> <span>Chỉ tối ưu <b>đúng các tiêu chí đã tick</b> (giữ nguyên phần còn lại)</span></label>
+              <label style="display:flex;gap:6px;align-items:flex-start;font-weight:400;cursor:pointer"><input type="radio" name="opMode" value="criteria" style="margin-top:3px;accent-color:var(--brand)"> <span>Viết lại bài nhưng <b>chỉ tối ưu đúng các tiêu chí đã tick</b> (giữ nguyên phần còn lại)</span></label>
+              <label style="display:flex;gap:6px;align-items:flex-start;font-weight:400;cursor:pointer"><input type="radio" name="opMode" value="suggest" style="margin-top:3px;accent-color:var(--brand)"> <span>Chỉ các tiêu chí đã tick — <b>đề xuất tối đa 3 phương án/tiêu chí</b> để bạn chọn (không viết lại cả bài)</span></label>
             </div>
           </div>
           <div class="flexbar" style="margin-top:14px">
@@ -389,6 +390,8 @@
             <span class="muted" id="opOptMeta"></span>
           </div>
           <div id="opChanges"></div>
+          <div id="opSuggestResult" class="hidden"></div>
+          <div id="opFullResult">
           <div id="opMeta2" style="margin:14px 0"></div>
           <div class="stats" id="opAfterStats"></div>
           <h3 style="margin:10px 0 6px">Nội dung (Heading + bài viết) trước / sau</h3>
@@ -406,6 +409,7 @@
             </div>
           </div>
           <div id="opExtras" style="margin-top:18px"></div>
+          </div>
         </section>
       </div>
 

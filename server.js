@@ -13,8 +13,8 @@ import { optimizeWithClaude, claudeJson, claudePing } from "./src/claude.js";
 import { auditUrl, benchmark } from "./src/onpage.js";
 import { fetchSerp, serpConfigured } from "./src/serp.js";
 import {
-  ONPAGE_SYSTEM, RECOMMEND_SCHEMA, OPTIMIZE_SCHEMA,
-  buildRecommendPrompt, buildOptimizePrompt, mechanicalRecommendations,
+  ONPAGE_SYSTEM, RECOMMEND_SCHEMA, OPTIMIZE_SCHEMA, SUGGEST_SCHEMA,
+  buildRecommendPrompt, buildOptimizePrompt, buildSuggestPrompt, mechanicalRecommendations,
 } from "./src/onpage-prompt.js";
 import * as auth from "./src/auth.js";
 import { sendVerifyEmail, sendOwnerNotify, mailMode } from "./src/mailer.js";
@@ -618,6 +618,23 @@ app.post("/api/onpage/optimize", requireAuth, async (req, res) => {
       return res.status(400).json({ error: "Phiên hết hạn. Hãy phân tích On-page lại." });
     }
     const { target, mainKeyword, subKeywords, bench } = session;
+
+    // CHE DO 3: de xuat 3 phuong an cho moi tieu chi da tick
+    if (optimizeMode === "suggest") {
+      try {
+        const { data, engineUsed } = await onpageAI({
+          engine, key: apiKey, model,
+          system: ONPAGE_SYSTEM,
+          user: buildSuggestPrompt({ target, mainKeyword, subKeywords, selected, bench, extra }),
+          schema: SUGGEST_SCHEMA, maxTokens: 4096,
+        });
+        return res.json({ mode: "suggest", suggestions: Array.isArray(data.suggestions) ? data.suggestions : [], engineUsed });
+      } catch (e) {
+        if (e.message === "local")
+          return res.status(400).json({ error: "Chế độ đề xuất cần engine Gemini hoặc Claude. Hãy chọn Gemini ở ⚙️." });
+        return res.status(400).json({ error: "AI lỗi: " + e.message });
+      }
+    }
 
     let result;
     try {

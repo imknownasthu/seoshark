@@ -988,7 +988,8 @@ $("#btnOpOptimize").addEventListener("click", async () => {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Lỗi không xác định");
     opSession.optimize = data;
-    renderOpOptimize(data);
+    if (data.mode === "suggest") renderOpSuggest(data);
+    else renderOpOptimize(data);
     $("#opOptResultCard").classList.remove("hidden");
     $("#opOptResultCard").scrollIntoView({ behavior: "smooth" });
   } catch (e) { msg.innerHTML = alertHtml("err", "❌ " + e.message); }
@@ -1004,7 +1005,24 @@ function opCountOccur(hay, needle) {
   return H.split(N).length - 1;
 }
 
+function renderOpSuggest(d) {
+  $("#opFullResult").classList.add("hidden");
+  $("#opSuggestResult").classList.remove("hidden");
+  $("#opOptMeta").textContent = `Engine: ${d.engineUsed}`;
+  $("#opChanges").innerHTML = alertHtml("info", "💡 Mỗi tiêu chí đã tick có tối đa 3 phương án — chọn cái phù hợp rồi bấm <b>Copy</b> để dùng.");
+  const html = (d.suggestions || []).map((s, si) => `
+    <div class="src-card">
+      <div class="src-head"><div class="stitle">${esc(s.criterion)}</div>${s.note ? `<div class="surl">${esc(s.note)}</div>` : ""}</div>
+      <div class="src-body">${(s.options || []).map((o, oi) =>
+        `<div class="opd"><b>Phương án ${oi + 1}</b> <button class="ghost small" data-sc="${si}|${oi}">Copy</button><div style="white-space:pre-wrap;margin-top:4px">${esc(o)}</div></div>`
+      ).join("") || "(không có phương án)"}</div>
+    </div>`).join("");
+  $("#opSuggestResult").innerHTML = html || alertHtml("warn", "Không có đề xuất.");
+}
+
 function renderOpOptimize(d) {
+  $("#opFullResult").classList.remove("hidden");
+  $("#opSuggestResult").classList.add("hidden");
   $("#opOptMeta").textContent = `Engine: ${d.engineUsed}`;
   const legend = `<div style="margin-top:6px">🟢 <span class="opnew" style="padding:1px 5px">Phần tô xanh</span> ở bản SAU là nội dung mới / đã tối ưu so với bản gốc.</div>`;
   $("#opChanges").innerHTML = alertHtml("info",
@@ -1060,6 +1078,16 @@ document.addEventListener("click", (e) => {
   if (e.target && e.target.id === "opCopySchema" && opSession.optimize) {
     navigator.clipboard.writeText(opSession.optimize.schemaJsonLd || "").then(() => toast("Đã copy Schema JSON-LD!"));
   }
+});
+
+// Copy 1 phương án đề xuất (chế độ suggest)
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-sc]");
+  if (!b || !opSession.optimize) return;
+  const [i, j] = b.dataset.sc.split("|");
+  const s = (opSession.optimize.suggestions || [])[+i];
+  const o = s && (s.options || [])[+j];
+  if (o != null) navigator.clipboard.writeText(o).then(() => toast("Đã copy phương án!"));
 });
 
 // --- Xuat file ---

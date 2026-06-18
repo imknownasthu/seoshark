@@ -49,6 +49,32 @@ function hasBreadcrumb(doc, schemaTypes) {
 
 const RICH_TYPES = /Article|NewsArticle|BlogPosting|FAQPage|QAPage|HowTo|Product|Review|AggregateRating|Recipe|VideoObject|Event|BreadcrumbList|Organization|LocalBusiness|Medical|Dentist/i;
 
+// Trich heading tu toan trang nhung loai bo menu/header/footer/sidebar... (chinh xac hon Readability)
+function extractHeadings(doc) {
+  // Chi loai heading nam trong <nav> hoac <footer> (an toan, khong dung class de tranh
+  // bo sot voi cac theme nhu Elementor dung class 'widget' o khap noi).
+  const SKIP_TAG = new Set(["nav", "footer"]);
+  const inNonContent = (el) => {
+    let p = el.parentElement;
+    while (p && p.tagName) {
+      if (SKIP_TAG.has(p.tagName.toLowerCase())) return true;
+      p = p.parentElement;
+    }
+    return false;
+  };
+  const out = [];
+  const seen = new Set();
+  doc.querySelectorAll("h1,h2,h3,h4,h5,h6").forEach((h) => {
+    const text = (h.textContent || "").replace(/\s+/g, " ").trim();
+    if (!text || inNonContent(h)) return;
+    const key = h.tagName + "|" + text.toLowerCase();
+    if (seen.has(key)) return; // bo trung lap
+    seen.add(key);
+    out.push({ level: Number(h.tagName[1]), text });
+  });
+  return out;
+}
+
 // DOM noi dung -> Markdown (giu cau truc heading) de hien thi "truoc khi toi uu"
 function domToMarkdown(body) {
   const out = [];
@@ -101,12 +127,8 @@ export async function auditUrl(url) {
   const cdom = new JSDOM(`<body>${contentHtml}</body>`);
   const cbody = cdom.window.document.body;
 
-  // Headings trong content
-  const headings = [];
-  cbody.querySelectorAll("h1,h2,h3,h4,h5,h6").forEach((h) => {
-    const text = (h.textContent || "").replace(/\s+/g, " ").trim();
-    if (text) headings.push({ level: Number(h.tagName[1]), text });
-  });
+  // Headings: lay tu toan trang (tru menu/header/footer) de khong bo sot
+  const headings = extractHeadings(doc);
   const pageH1Count = doc.querySelectorAll("h1").length;
 
   // Anh + alt trong content
