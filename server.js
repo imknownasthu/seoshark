@@ -73,14 +73,12 @@ app.post("/api/auth/register", async (req, res) => {
     const r = await sendVerifyEmail({ toEmail: em, name, code });
     sendOwnerNotify({ ownerEmail: OWNER_EMAIL, requesterEmail: em, name }).catch(() => {});
     let message;
-    if (r.mode === "resend" || r.mode === "smtp") {
+    if (["brevo", "resend", "smtp"].includes(r.mode)) {
       message = `Đã gửi mã xác nhận tới email ${em}. Kiểm tra hộp thư (cả mục Spam) để lấy mã.`;
-    } else if (r.mode === "resend-failed") {
-      message = `⚠️ Gửi email lỗi: ${r.error}. (Kiểm tra đã xác minh tên miền gửi trong Resend chưa.) Tạm thời mã ghi ở Logs server.`;
-    } else if (r.mode === "smtp-failed") {
-      message = `⚠️ Gửi email lỗi: ${r.error}. Tạm thời mã ghi ở Logs server.`;
+    } else if (String(r.mode).endsWith("-failed")) {
+      message = `⚠️ Gửi email lỗi: ${r.error}. Tạm thời mã ghi ở Logs server (kiểm tra lại cấu hình email service).`;
     } else {
-      message = `Chưa cấu hình gửi email — mã hiển thị ở Logs server (admin). Cần RESEND_API_KEY + RESEND_FROM để gửi thật.`;
+      message = `Chưa cấu hình gửi email — mã hiển thị ở Logs server (admin). Cần BREVO_API_KEY + BREVO_SENDER để gửi thật.`;
     }
     res.json({ ok: true, mode: r.mode, message });
   } catch (err) {

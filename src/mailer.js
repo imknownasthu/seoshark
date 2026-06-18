@@ -36,8 +36,40 @@ function getTransporter() {
 }
 
 export function mailMode() {
+  if (process.env.BREVO_API_KEY && process.env.BREVO_SENDER) return "brevo";
   if (process.env.RESEND_API_KEY) return "resend";
   return getTransporter() ? "smtp" : "test";
+}
+
+// Gui qua Brevo (HTTPS, free, chi can xac minh 1 email nguoi gui - khong can domain).
+// Can: BREVO_API_KEY + BREVO_SENDER (email nguoi gui da xac minh).
+async function sendViaBrevo({ to, subject, text }) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        "api-key": process.env.BREVO_API_KEY,
+        "Content-Type": "application/json",
+        accept: "application/json",
+      },
+      body: JSON.stringify({
+        sender: { name: process.env.BREVO_SENDER_NAME || "SeoShark", email: process.env.BREVO_SENDER },
+        to: [{ email: to }],
+        subject,
+        textContent: text,
+      }),
+      signal: ctrl.signal,
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      throw new Error(d?.message || `Brevo HTTP ${res.status}`);
+    }
+    return true;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // Gui qua Resend (HTTPS - hoat dong tren Render). Mien phi.
@@ -83,6 +115,16 @@ function logMail({ to, subject, code, reason }) {
 
 // Gui 1 email qua Resend (uu tien) -> SMTP -> log. Tra ve { mode }.
 async function deliver({ to, subject, text, code }) {
+  // 1) Brevo (uu tien - free, khong can domain, chi xac minh 1 email nguoi gui)
+  if (process.env.BREVO_API_KEY && process.env.BREVO_SENDER) {
+    try {
+      await sendViaBrevo({ to, subject, text });
+      return { mode: "brevo" };
+    } catch (e) {
+      logMail({ to, subject, code, reason: "Brevo loi: " + (e.message || e) });
+      return { mode: "brevo-failed", error: e.message || String(e) };
+    }
+  }
   if (process.env.RESEND_API_KEY) {
     try {
       await sendViaResend({ to, subject, text });
