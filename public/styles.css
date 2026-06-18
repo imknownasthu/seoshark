@@ -295,6 +295,7 @@ pre.code { margin: 0; padding: 12px 14px; background: #0c2230; color: #d7eef8; m
 .op-cmp .opd { padding: 3px 0; border-bottom: 1px dashed var(--line); word-break: break-word; }
 .op-cmp .opd:last-child { border-bottom: none; }
 .op-cmp .opd a { color: var(--brand-dark); }
+.render .opnew { background: #d7f6e3; box-shadow: inset 0 0 0 1px #86efac; border-radius: 3px; padding: 0 2px; }
 
 .user-chip { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); }
 .user-chip .uava { width: 28px; height: 28px; border-radius: 50%; background: var(--brand); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; text-transform: uppercase; }

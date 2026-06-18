@@ -268,7 +268,7 @@ $("#btnAuto").addEventListener("click", async () => {
 
 // --- PHUONG AN 2: TU KHOA ---
 $("#btnKw").addEventListener("click", async () => {
-  const keywords = $$(".kw-row").map((r) => ({
+  const keywords = $$("#kwRows .kw-row").map((r) => ({
     keyword: r.querySelector(".kw").value.trim(),
     url: r.querySelector(".kwurl").value.trim(),
   })).filter((k) => k.keyword);
@@ -798,20 +798,21 @@ checkAuth();
 let opSession = { id: null, data: null, optimize: null };
 
 // Markdown -> HTML toi gian (de xem ban toi uu)
-function mdToHtml(md) {
+function mdToHtml(md, markFn) {
   if (!md) return "";
   const e2 = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const inline = (s) => e2(s)
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  const wrap = (txt, inner) => (markFn && markFn(txt)) ? `<span class="opnew">${inner}</span>` : inner;
   let html = "", inList = false;
   for (const raw of md.split(/\r?\n/)) {
     const line = raw.trim();
     if (!line) { if (inList) { html += "</ul>"; inList = false; } continue; }
     let m;
-    if ((m = line.match(/^(#{1,6})\s+(.*)/))) { if (inList) { html += "</ul>"; inList = false; } html += `<h${m[1].length}>${inline(m[2])}</h${m[1].length}>`; }
-    else if ((m = line.match(/^[-*]\s+(.*)/)) || (m = line.match(/^\d+\.\s+(.*)/))) { if (!inList) { html += "<ul>"; inList = true; } html += `<li>${inline(m[1])}</li>`; }
-    else { if (inList) { html += "</ul>"; inList = false; } html += `<p>${inline(line)}</p>`; }
+    if ((m = line.match(/^(#{1,6})\s+(.*)/))) { if (inList) { html += "</ul>"; inList = false; } html += `<h${m[1].length}>${wrap(m[2], inline(m[2]))}</h${m[1].length}>`; }
+    else if ((m = line.match(/^[-*]\s+(.*)/)) || (m = line.match(/^\d+\.\s+(.*)/))) { if (!inList) { html += "<ul>"; inList = true; } html += `<li>${wrap(m[1], inline(m[1]))}</li>`; }
+    else { if (inList) { html += "</ul>"; inList = false; } html += `<p>${wrap(line, inline(line))}</p>`; }
   }
   if (inList) html += "</ul>";
   return html;
@@ -980,6 +981,7 @@ $("#btnOpOptimize").addEventListener("click", async () => {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         id: opSession.id, selected, extra: $("#opExtra").value.trim() || undefined,
+        optimizeMode: (document.querySelector('input[name="opMode"]:checked') || {}).value || "full",
         engine: $("#engine").value, apiKey: $("#apiKey").value.trim() || undefined, model: $("#model").value || undefined,
       }),
     });
@@ -1004,9 +1006,9 @@ function opCountOccur(hay, needle) {
 
 function renderOpOptimize(d) {
   $("#opOptMeta").textContent = `Engine: ${d.engineUsed}`;
-  $("#opChanges").innerHTML = (d.changes && d.changes.length)
-    ? alertHtml("info", "✅ Đã tối ưu:<ul style='margin:6px 0 0 18px'>" + d.changes.map((c) => `<li>${esc(c)}</li>`).join("") + "</ul>")
-    : "";
+  const legend = `<div style="margin-top:6px">🟢 <span class="opnew" style="padding:1px 5px">Phần tô xanh</span> ở bản SAU là nội dung mới / đã tối ưu so với bản gốc.</div>`;
+  $("#opChanges").innerHTML = alertHtml("info",
+    (d.changes && d.changes.length ? "✅ Đã tối ưu:<ul style='margin:6px 0 0 18px'>" + d.changes.map((c) => `<li>${esc(c)}</li>`).join("") + "</ul>" : "Đã tối ưu xong.") + legend);
   $("#opMeta2").innerHTML = `<table class="cmp">
     <thead><tr><th>Yếu tố</th><th>TRƯỚC</th><th>SAU</th></tr></thead>
     <tbody>
@@ -1024,8 +1026,14 @@ function renderOpOptimize(d) {
   stats += subs.map((s) => `<div class="stat"><b>${opCountOccur(md, s)}</b><span>KW phụ: "${esc(s)}"</span></div>`).join("");
   $("#opAfterStats").innerHTML = stats;
 
+  // To mau phan da toi uu/them moi (so voi ban truoc)
+  const beforeNorm = opNorm(d.before.markdown || "");
+  const markNew = (text) => {
+    const n = opNorm(text).trim();
+    return n.length > 8 && !beforeNorm.includes(n.slice(0, 40));
+  };
   $("#opBefore").innerHTML = mdToHtml(d.before.markdown || "(không đọc được nội dung gốc)");
-  $("#opAfter").innerHTML = mdToHtml(md);
+  $("#opAfter").innerHTML = mdToHtml(md, markNew);
 
   // FAQ / ảnh / internal link / schema JSON-LD
   let ex = "";

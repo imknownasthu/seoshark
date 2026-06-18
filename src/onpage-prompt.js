@@ -133,10 +133,17 @@ YEU CAU:
 4. Sap xep khuyen nghi tu Cao den Thap. Ngan gon, chinh xac, khong chung chung.`;
 }
 
-export function buildOptimizePrompt({ target, mainKeyword, subKeywords, selected, bench, extra }) {
+export function buildOptimizePrompt({ target, mainKeyword, subKeywords, selected, bench, extra, optimizeMode }) {
+  const minWords = bench && bench.wordCount ? Math.max(bench.wordCount, target.wordCount || 0) : (target.wordCount || 800);
+  const modeLine = optimizeMode === "criteria"
+    ? `CHE DO TOI UU: CHI sua/toi uu DUNG cac tieu chi nguoi dung da chon ben duoi. GIU NGUYEN cang nhieu cang tot phan con lai cua bai (khong viet lai cac phan khong lien quan).`
+    : `CHE DO TOI UU: Viet lai TOAN BO bai chuan SEO + ap dung cac tieu chi da chon, lam noi dung tot hon, day du va sau hon.`;
   return `TU KHOA CHINH: ${mainKeyword}
 TU KHOA PHU: ${(subKeywords || []).join(", ") || "(khong co)"}
 ${bench ? `Doi thu trung binh ~${bench.wordCount} tu, ${bench.headingCount} heading.` : ""}
+DO DAI YEU CAU: bai MOI phai co IT NHAT ${minWords} tu (bang hoac NHIEU HON trung binh doi thu de chiem uu the thong tin). TUYET DOI khong rut gon noi dung; neu thieu thi bo sung sub-topic/chieu sau co gia tri (lap content gap), khong viet lan man sao rong.
+
+${modeLine}
 
 TIEU CHI CAN TOI UU (nguoi dung chon): ${(selected && selected.length ? selected.join("; ") : "Tat ca tieu chi On-page quan trong")}
 ${extra && extra.trim() ? `\nTHONG TIN/SO LIEU/YEU CAU BO SUNG TU NGUOI DUNG (BAT BUOC dua vao bai mot cach tu nhien, chinh xac, dung su that nay):\n"""\n${extra.trim()}\n"""\n` : ""}

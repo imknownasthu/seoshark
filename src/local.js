@@ -100,7 +100,11 @@ function scoreTargetForKeyword(target, keyword) {
 
 function eligibleBlocks(article) {
   return article.blocks.filter(
-    (b) => !b.isSapo && !b.isConclusion && (b.tag === "p" || b.tag === "li")
+    (b) =>
+      !b.isSapo &&
+      !b.isConclusion &&
+      (b.tag === "p" || b.tag === "li") &&
+      ((b.html || "").match(/<a\s/gi) || []).length < 2 // bo qua block da co >=2 link cu
   );
 }
 
@@ -150,7 +154,7 @@ export function optimizeLocally({ article, mode, count, keywords, targets, allTa
       if (s > bestScore) { bestScore = s; best = b; }
     }
     if (!best) return false;
-    const sentence = ` Tìm hiểu thêm về <a href="${url}">${anchor}</a> để có lựa chọn phù hợp.`;
+    const sentence = ` Xem thêm: <a href="${url}">${anchor}</a>.`;
     edits.push({
       blockIndex: best.i,
       newHtml: best.html + sentence,

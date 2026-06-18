@@ -13,11 +13,15 @@ QUY TAC BAT BUOC:
    - Neu cum co san khong muot, DUOC PHEP chinh nhe cach dien dat cua DUNG CAU do (them/bot vai tu noi, doi trat tu tu, dung dong nghia) MIEN LA giu nguyen y nghia, su that, so lieu va sac thai. KHONG duoc xoa thong tin, khong doi nghia.
    - Cau sau khi chinh phai doc tron chay, lien mach voi cau truoc va sau.
 4. Tranh nhoi nhet: khong chen 2 link sat nhau; moi URL dich chi 1 lan; anchor da dang, khong lap.
-5. Neu ca doan khong co cho nao chen duoc tu nhien: VIET THEM 1 cau moi dung ngu canh, lien mach (dat addedContent=true) - cau them phai co gia tri thong tin that, khong sao rong.
-6. Giu nguyen dinh dang inline cu (<strong>, <em>...). Chi tra ve <a href="URL">anchor</a> voi DUNG URL dich da cho, khong bia URL.
-7. Chat luong hon so luong: tha it link that muot con hon nhieu link guong ep.
+5. KHONG dung block da co san san tu 2 link cu tro len (block co nhan [DA-CO-Nx-LINK] voi N>=2) - hay chon block khac.
+6. KHONG duoc thay doi/ghi de anchor text cua cac link CU da co trong bai. Chi them link MOI, giu nguyen toan bo link cu.
+7. Neu KHONG tim duoc cho chen tu nhien trong ca bai (du da doc & hieu het noi dung): them mot cau dieu huong dang "Xem them: <a href=URL>anchor</a>." vao CUOI block lien quan nhat (dat addedContent=true), thay vi nhet anchor go bo vao giua cau.
+8. Giu nguyen dinh dang inline cu (<strong>, <em>...). Chi tra ve <a href="URL">anchor</a> voi DUNG URL dich da cho, khong bia URL.
+9. Chat luong hon so luong: tha it link that muot con hon nhieu link guong ep.
 
-ĐUNG lam: chen kieu "Tham khao [tu khoa] de biet them." mot cach co hoc, hoac nhet anchor vao giua cau lam cau gay.
+DOC HIEU TRUOC KHI CHEN: phai doc & hieu noi dung + tu khoa cua bai goc VA cua trang dich (qua tieu de/URL) de anchor dung NGU NGHIA va dung NGU CANH. Anchor phai lien quan that su toi noi dung trang dich.
+
+ĐUNG lam: chen kieu "Tham khao [tu khoa] de biet them." giua cau mot cach co hoc, hoac nhet anchor vao giua cau lam cau gay, hoac doi anchor cua link cu.
 NEN lam: dien dat lai cau tu nhien quanh anchor, vd: "Khi nieng rang, viec ve sinh dung cach giup han che mang bam" -> "Khi <a href=...>nieng rang</a>, ve sinh dung cach giup han che mang bam".
 
 Chi tra ve nhung block ban thuc su chinh sua.`;
@@ -28,6 +32,9 @@ export function buildBlocksView(blocks) {
       const flags = [];
       if (b.isSapo) flags.push("SAPO-CAM");
       if (b.isConclusion) flags.push("KETBAI-CAM");
+      const oldLinks = ((b.html || "").match(/<a\s/gi) || []).length;
+      if (oldLinks >= 2) flags.push(`DA-CO-${oldLinks}x-LINK`);
+      else if (oldLinks === 1) flags.push("DA-CO-1-LINK");
       const flagStr = flags.length ? ` [${flags.join(",")}]` : "";
       return `#${b.i} <${b.tag}>${flagStr}: ${b.text}`;
     })

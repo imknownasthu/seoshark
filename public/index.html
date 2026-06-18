@@ -368,9 +368,16 @@
             </div>
           </details>
 
-          <div class="flexbar" style="margin-top:16px">
-            <label style="display:flex;gap:7px;align-items:center;font-weight:600"><input type="checkbox" id="opSelectAll" style="width:17px;height:17px;accent-color:var(--brand)"> Chọn tất cả</label>
-            <button id="btnOpOptimize">✍️ Tự động tối ưu (viết lại bài chuẩn SEO)</button>
+          <div style="margin-top:16px">
+            <label style="font-weight:600;font-size:13px">Phạm vi tối ưu:</label>
+            <div style="display:flex;gap:18px;margin-top:6px;flex-wrap:wrap">
+              <label style="display:flex;gap:6px;align-items:flex-start;font-weight:400;cursor:pointer"><input type="radio" name="opMode" value="full" checked style="margin-top:3px;accent-color:var(--brand)"> <span>Tối ưu <b>toàn bộ bài</b> (gồm tiêu chí đã tick + viết lại nội dung chuẩn SEO hơn)</span></label>
+              <label style="display:flex;gap:6px;align-items:flex-start;font-weight:400;cursor:pointer"><input type="radio" name="opMode" value="criteria" style="margin-top:3px;accent-color:var(--brand)"> <span>Chỉ tối ưu <b>đúng các tiêu chí đã tick</b> (giữ nguyên phần còn lại)</span></label>
+            </div>
+          </div>
+          <div class="flexbar" style="margin-top:14px">
+            <label style="display:flex;gap:7px;align-items:center;font-weight:600"><input type="checkbox" id="opSelectAll" style="width:17px;height:17px;accent-color:var(--brand)"> Chọn tất cả tiêu chí</label>
+            <button id="btnOpOptimize">✍️ Tự động tối ưu</button>
           </div>
           <div id="opRecs" style="margin-top:12px"></div>
           <div id="opOptMsg" style="margin-top:12px"></div>

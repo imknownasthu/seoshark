@@ -612,7 +612,7 @@ app.post("/api/onpage/audit", requireAuth, async (req, res) => {
 // --- POST /api/onpage/optimize : viet lai bai chuan SEO (truoc/sau) ---
 app.post("/api/onpage/optimize", requireAuth, async (req, res) => {
   try {
-    const { id, selected, extra, engine, model, apiKey } = req.body || {};
+    const { id, selected, extra, optimizeMode, engine, model, apiKey } = req.body || {};
     const session = sessions.get(id);
     if (!session || session.type !== "onpage") {
       return res.status(400).json({ error: "Phiên hết hạn. Hãy phân tích On-page lại." });
@@ -624,7 +624,7 @@ app.post("/api/onpage/optimize", requireAuth, async (req, res) => {
       const { data, engineUsed } = await onpageAI({
         engine, key: apiKey, model,
         system: ONPAGE_SYSTEM,
-        user: buildOptimizePrompt({ target, mainKeyword, subKeywords, selected, bench, extra }),
+        user: buildOptimizePrompt({ target, mainKeyword, subKeywords, selected, bench, extra, optimizeMode }),
         schema: OPTIMIZE_SCHEMA, maxTokens: 8192,
       });
       result = { ...data, engineUsed };
