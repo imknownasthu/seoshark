@@ -357,6 +357,17 @@
           <h3 style="margin:14px 0 4px">📊 Bảng so sánh &amp; tiêu chí cần cải thiện</h3>
           <p class="muted" style="margin:0 0 10px">Tick tiêu chí muốn tối ưu (mục yếu đã tự tick). Bấm tên tiêu chí để <b>mở/đóng chi tiết</b> của bạn &amp; từng đối thủ.</p>
           <div id="opCompareTable" style="overflow:auto"></div>
+
+          <details style="margin-top:16px" id="opExtraBox">
+            <summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--brand-dark)">➕ Thông tin / số liệu / yêu cầu bổ sung (tùy chọn — giúp AI viết đúng &amp; sâu hơn)</summary>
+            <textarea id="opExtra" rows="4" style="margin-top:8px" placeholder="VD: Phòng khám 10 năm kinh nghiệm; giá bọc răng sứ từ 2 triệu/răng; bảo hành 15 năm; cần thêm phần FAQ; nhấn mạnh bác sĩ chuyên môn cao..."></textarea>
+            <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <button class="ghost small" id="opSaveSkill" type="button">💾 Lưu để dùng lần sau</button>
+              <button class="ghost small" id="opClearSkill" type="button">Xóa</button>
+              <span class="muted" id="opSkillMsg"></span>
+            </div>
+          </details>
+
           <div class="flexbar" style="margin-top:16px">
             <label style="display:flex;gap:7px;align-items:center;font-weight:600"><input type="checkbox" id="opSelectAll" style="width:17px;height:17px;accent-color:var(--brand)"> Chọn tất cả</label>
             <button id="btnOpOptimize">✍️ Tự động tối ưu (viết lại bài chuẩn SEO)</button>
@@ -372,10 +383,20 @@
           </div>
           <div id="opChanges"></div>
           <div id="opMeta2" style="margin:14px 0"></div>
-          <h3 style="margin:6px 0">Nội dung bài viết</h3>
+          <div class="stats" id="opAfterStats"></div>
+          <h3 style="margin:10px 0 6px">Nội dung (Heading + bài viết) trước / sau</h3>
           <div class="split">
             <div class="pane"><div class="ph">TRƯỚC (bản gốc)</div><div class="render" id="opBefore"></div></div>
-            <div class="pane after"><div class="ph">SAU (đã tối ưu) <button class="ghost small" id="opCopyMd">Copy Markdown</button></div><div class="render" id="opAfter"></div></div>
+            <div class="pane after">
+              <div class="ph">SAU (đã tối ưu)
+                <span style="display:flex;gap:6px;flex-wrap:wrap">
+                  <button class="ghost small" id="opCopyMd">Copy MD</button>
+                  <button class="ghost small" id="opDownHtml">⬇ HTML</button>
+                  <button class="ghost small" id="opDownDoc">⬇ Word</button>
+                </span>
+              </div>
+              <div class="render" id="opAfter"></div>
+            </div>
           </div>
         </section>
       </div>

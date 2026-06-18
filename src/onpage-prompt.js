@@ -87,24 +87,25 @@ ${bench ? `TRUNG BINH DOI THU: do dai ${bench.wordCount} tu, ${bench.headingCoun
 YEU CAU: So sanh tung tieu chi On-page giua trang nguoi dung va doi thu. Dua ra danh sach khuyen nghi cu the de cai thien On-page va dua tu khoa "${mainKeyword}" len top. Moi khuyen nghi co priority (Cao/Trung binh/Thap), hien trang, muc tieu, hanh dong, ly do. Sap xep tu Cao den Thap.`;
 }
 
-export function buildOptimizePrompt({ target, mainKeyword, subKeywords, selected, bench }) {
+export function buildOptimizePrompt({ target, mainKeyword, subKeywords, selected, bench, extra }) {
   return `TU KHOA CHINH: ${mainKeyword}
 TU KHOA PHU: ${(subKeywords || []).join(", ") || "(khong co)"}
 ${bench ? `Doi thu trung binh ~${bench.wordCount} tu, ${bench.headingCount} heading.` : ""}
 
 TIEU CHI CAN TOI UU (nguoi dung chon): ${(selected && selected.length ? selected.join("; ") : "Tat ca tieu chi On-page quan trong")}
-
+${extra && extra.trim() ? `\nTHONG TIN/SO LIEU/YEU CAU BO SUNG TU NGUOI DUNG (BAT BUOC dua vao bai mot cach tu nhien, chinh xac, dung su that nay):\n"""\n${extra.trim()}\n"""\n` : ""}
 NOI DUNG GOC (Title: ${target.titleTag || "(trong)"} | Meta: ${target.metaDescription || "(trong)"}):
 """
-${target.contentText || "(khong doc duoc noi dung)"}
+${target.contentMarkdown || target.contentText || "(khong doc duoc noi dung)"}
 """
 
 YEU CAU: Viet LAI TOAN BO bai viet chuan SEO On-page nham toi uu cho tu khoa "${mainKeyword}".
 - Title tag & meta description moi hap dan, dung do dai, chua tu khoa chinh.
 - Bo cuc heading ro rang: 1 H1 chua tu khoa chinh, cac H2/H3 logic, phu tu khoa phu tu nhien.
-- Noi dung GIU NGUYEN su that & y chinh cua ban goc, viet lai mach lac, day du, sau hon, dap ung y dinh tim kiem; bo sung phan con thieu so voi doi thu neu hop ly. KHONG bia so lieu/su that moi.
+- Noi dung GIU NGUYEN su that & y chinh cua ban goc, viet lai mach lac, day du, sau hon, dap ung y dinh tim kiem; bo sung phan con thieu so voi doi thu neu hop ly. KHONG bia so lieu/su that moi (tru thong tin bo sung nguoi dung cung cap o tren).
+- Neu co thong tin bo sung tu nguoi dung, hay LONG GHEP day du va chinh xac vao bai.
 - Tu khoa rai tu nhien, khong nhoi nhet. Toi uu cho ca SEO truyen thong va AI/GEO (tra loi truc tiep, ro rang).
-- Tra ve title, metaDescription va optimizedMarkdown (bat dau bang # H1).`;
+- Tra ve title, metaDescription va optimizedMarkdown (bat dau bang # H1, dung ## / ### cho cac muc).`;
 }
 
 // ====== Khuyen nghi CO HOC (Local - khong AI) ======

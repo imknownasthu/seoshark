@@ -49,6 +49,22 @@ function hasBreadcrumb(doc, schemaTypes) {
 
 const RICH_TYPES = /Article|NewsArticle|BlogPosting|FAQPage|QAPage|HowTo|Product|Review|AggregateRating|Recipe|VideoObject|Event|BreadcrumbList|Organization|LocalBusiness|Medical|Dentist/i;
 
+// DOM noi dung -> Markdown (giu cau truc heading) de hien thi "truoc khi toi uu"
+function domToMarkdown(body) {
+  const out = [];
+  body.querySelectorAll("h1,h2,h3,h4,h5,h6,p,li,blockquote").forEach((el) => {
+    const tag = el.tagName.toLowerCase();
+    if (tag === "li" && el.querySelector("p,ul,ol,li")) return;
+    const text = (el.textContent || "").replace(/\s+/g, " ").trim();
+    if (!text) return;
+    if (/^h[1-6]$/.test(tag)) out.push("#".repeat(Number(tag[1])) + " " + text);
+    else if (tag === "li") out.push("- " + text);
+    else if (tag === "blockquote") out.push("> " + text);
+    else out.push(text);
+  });
+  return out.join("\n\n");
+}
+
 export async function auditUrl(url) {
   const html = await fetchHtml(url);
   const dom = new JSDOM(html, { url });
@@ -108,10 +124,21 @@ export async function auditUrl(url) {
 
   const wordCount = contentText.trim().split(/\s+/).filter(Boolean).length;
 
+  // Video: <video> hoac iframe nhung (youtube/vimeo...) hoac schema VideoObject
+  const hasVideo = !!(
+    cbody.querySelector("video, iframe[src*='youtube'], iframe[src*='youtu.be'], iframe[src*='vimeo'], iframe[src*='dailymotion'], iframe[src*='player.']") ||
+    doc.querySelector("video, iframe[src*='youtube'], iframe[src*='youtu.be'], iframe[src*='vimeo']") ||
+    schemaTypes.some((t) => /VideoObject/i.test(t))
+  );
+
+  const contentMarkdown = domToMarkdown(cbody).slice(0, 16000);
+
   return {
     ok: true,
     url,
     host,
+    hasVideo,
+    contentMarkdown,
     breadcrumb,
     schemaTypes,
     hasSchema: schemaTypes.length > 0,

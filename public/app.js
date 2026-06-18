@@ -911,12 +911,14 @@ function renderOpResult(d) {
     ["Canonical", (a) => a.canonicalSelf ? "✅ tự trỏ" : (a.canonical === "(không có)" ? "❌" : "khác"), (a) => esc(a.canonical), () => !t.canonicalSelf],
     ["Meta robots", (a) => (a.metaRobots || "").slice(0, 24), (a) => esc(a.metaRobots), () => /noindex/i.test(t.metaRobots)],
     ["Rich snippet", (a) => a.richSnippet.length ? a.richSnippet.slice(0, 2).join(", ") : "❌", (a) => esc(a.richSnippet.join(", ") || "không có"), () => !t.richSnippet.length && someComp((c) => c.richSnippet.length)],
+    ["Video", (a) => a.hasVideo ? "✅ có" : "❌ không", (a) => a.hasVideo ? "Có video/iframe nhúng (YouTube/Vimeo...) hoặc schema VideoObject" : "Không có video", () => !t.hasVideo && someComp((c) => c.hasVideo)],
   ];
 
   // Bang so sanh: moi tieu chi 1 dong, co checkbox tick + nut mo/dong chi tiet tung doi thu
   const colspan = 3 + comps.length;
-  const head = `<th style="width:32px"></th><th>Tiêu chí</th><th>Trang của bạn</th>` +
-    comps.map((c, i) => `<th title="${esc(c.url)}"><a href="${esc(c.url)}" target="_blank" rel="noopener">ĐT#${i + 1}</a></th>`).join("");
+  const yourHdr = `<a href="${esc(t.url)}" target="_blank" rel="noopener" title="${esc(t.url)}">${esc(t.host)}</a><br><span class="muted">(trang của bạn)</span>`;
+  const head = `<th style="width:32px"></th><th>Tiêu chí</th><th>${yourHdr}</th>` +
+    comps.map((c) => `<th title="${esc(c.url)}"><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.host)}</a></th>`).join("");
   const body = CRIT.map(([label, summary, detail, weak], i) => {
     const w = weak();
     const main = `<tr class="op-row">
@@ -926,8 +928,8 @@ function renderOpResult(d) {
       ${comps.map((c) => `<td>${esc(String(summary(c)))}</td>`).join("")}
     </tr>`;
     const det = `<tr class="op-detail hidden" data-detail="${i}"><td colspan="${colspan}">
-      <div class="opd"><b>📄 Trang của bạn:</b> ${detail(t)}</div>
-      ${comps.map((c, k) => `<div class="opd"><b><a href="${esc(c.url)}" target="_blank" rel="noopener">ĐT#${k + 1}</a>:</b> ${detail(c)}</div>`).join("")}
+      <div class="opd"><b>📄 ${esc(t.host)} (bạn):</b> ${detail(t)}</div>
+      ${comps.map((c) => `<div class="opd"><b><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.host)}</a>:</b> ${detail(c)}</div>`).join("")}
     </td></tr>`;
     return main + det;
   }).join("");
@@ -957,14 +959,14 @@ document.addEventListener("click", (e) => {
 });
 
 $("#opSelectAll").addEventListener("change", (e) => {
-  $$("#opRecs .op-rec-check").forEach((c) => { c.checked = e.target.checked; });
+  $$("#opCompareTable .op-rec-check").forEach((c) => { c.checked = e.target.checked; });
 });
 
 // Buoc 2: Toi uu (viet lai)
 $("#btnOpOptimize").addEventListener("click", async () => {
   const msg = $("#opOptMsg"); msg.innerHTML = "";
   if (!opSession.id) { msg.innerHTML = alertHtml("err", "Hãy phân tích trước."); return; }
-  const selected = $$("#opRecs .op-rec-check:checked").map((c) => c.dataset.criterion);
+  const selected = $$("#opCompareTable .op-rec-check:checked").map((c) => c.dataset.criterion);
 
   const btn = $("#btnOpOptimize");
   busy(btn, true, "AI đang viết lại bài chuẩn SEO...");
@@ -972,7 +974,7 @@ $("#btnOpOptimize").addEventListener("click", async () => {
     const res = await fetch("/api/onpage/optimize", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        id: opSession.id, selected,
+        id: opSession.id, selected, extra: $("#opExtra").value.trim() || undefined,
         engine: $("#engine").value, apiKey: $("#apiKey").value.trim() || undefined, model: $("#model").value || undefined,
       }),
     });
@@ -986,6 +988,15 @@ $("#btnOpOptimize").addEventListener("click", async () => {
   finally { busy(btn, false); }
 });
 
+function opCountWords(md) {
+  return (md || "").replace(/[#>*_`~\[\]()-]/g, " ").replace(/\s+/g, " ").trim().split(" ").filter(Boolean).length;
+}
+function opCountOccur(hay, needle) {
+  const H = opNorm(hay), N = opNorm(needle).trim();
+  if (!N) return 0;
+  return H.split(N).length - 1;
+}
+
 function renderOpOptimize(d) {
   $("#opOptMeta").textContent = `Engine: ${d.engineUsed}`;
   $("#opChanges").innerHTML = (d.changes && d.changes.length)
@@ -998,10 +1009,60 @@ function renderOpOptimize(d) {
       <tr><td><b>Meta description</b></td><td>${esc(d.before.metaDescription || "(trống)")}</td><td class="snip-after">${esc(d.after.metaDescription || "")}</td></tr>
       ${d.after.slug ? `<tr><td><b>Slug gợi ý</b></td><td>—</td><td class="snip-after">${esc(d.after.slug)}</td></tr>` : ""}
     </tbody></table>`;
-  $("#opBefore").innerHTML = `<p>${esc(d.before.markdown || "(không đọc được nội dung gốc)").replace(/\n/g, "<br>")}</p>`;
-  $("#opAfter").innerHTML = mdToHtml(d.after.markdown);
+
+  // So lieu ban SAU: so tu + so lan xuat hien tu khoa chinh/phu
+  const md = d.after.markdown || "";
+  const mk = d.mainKeyword || "";
+  const subs = d.subKeywords || [];
+  let stats = `<div class="stat"><b>${opCountWords(md).toLocaleString("vi")}</b><span>Số từ (sau)</span></div>`;
+  if (mk) stats += `<div class="stat"><b>${opCountOccur(md, mk)}</b><span>KW chính: "${esc(mk)}"</span></div>`;
+  stats += subs.map((s) => `<div class="stat"><b>${opCountOccur(md, s)}</b><span>KW phụ: "${esc(s)}"</span></div>`).join("");
+  $("#opAfterStats").innerHTML = stats;
+
+  $("#opBefore").innerHTML = mdToHtml(d.before.markdown || "(không đọc được nội dung gốc)");
+  $("#opAfter").innerHTML = mdToHtml(md);
 }
 
+// --- Xuat file ---
+function downloadFile(name, content, mime) {
+  const blob = new Blob([content], { type: mime });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+}
+function opAfterHtmlDoc(wordMode) {
+  const o = opSession.optimize; if (!o) return "";
+  const head = `<meta charset="utf-8"><title>${esc(o.after.title || "SeoShark")}</title>` +
+    (o.after.metaDescription ? `<meta name="description" content="${esc(o.after.metaDescription)}">` : "");
+  const body = mdToHtml(o.after.markdown || "");
+  if (wordMode) {
+    return `<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head>${head}</head><body>${body}</body></html>`;
+  }
+  return `<!DOCTYPE html><html lang="vi"><head>${head}</head><body>${body}</body></html>`;
+}
 $("#opCopyMd").addEventListener("click", () => {
   if (opSession.optimize) navigator.clipboard.writeText(opSession.optimize.after.markdown || "").then(() => toast("Đã copy Markdown!"));
+});
+$("#opDownHtml").addEventListener("click", () => {
+  if (opSession.optimize) downloadFile("seoshark-toi-uu.html", opAfterHtmlDoc(false), "text/html;charset=utf-8");
+});
+$("#opDownDoc").addEventListener("click", () => {
+  if (opSession.optimize) downloadFile("seoshark-toi-uu.doc", opAfterHtmlDoc(true), "application/msword");
+});
+
+// --- Skill / thong tin bo sung: luu & khoi phuc ---
+$("#opExtra").value = localStorage.getItem("seoshark_onpage_skill") || "";
+$("#opSaveSkill").addEventListener("click", () => {
+  localStorage.setItem("seoshark_onpage_skill", $("#opExtra").value);
+  $("#opSkillMsg").textContent = "✓ Đã lưu, lần sau tự điền lại";
+  setTimeout(() => ($("#opSkillMsg").textContent = ""), 2500);
+});
+$("#opClearSkill").addEventListener("click", () => {
+  $("#opExtra").value = "";
+  localStorage.removeItem("seoshark_onpage_skill");
+  $("#opSkillMsg").textContent = "Đã xóa";
+  setTimeout(() => ($("#opSkillMsg").textContent = ""), 2000);
 });

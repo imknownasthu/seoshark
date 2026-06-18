@@ -597,7 +597,7 @@ app.post("/api/onpage/audit", requireAuth, async (req, res) => {
 // --- POST /api/onpage/optimize : viet lai bai chuan SEO (truoc/sau) ---
 app.post("/api/onpage/optimize", requireAuth, async (req, res) => {
   try {
-    const { id, selected, engine, model, apiKey } = req.body || {};
+    const { id, selected, extra, engine, model, apiKey } = req.body || {};
     const session = sessions.get(id);
     if (!session || session.type !== "onpage") {
       return res.status(400).json({ error: "Phiên hết hạn. Hãy phân tích On-page lại." });
@@ -609,7 +609,7 @@ app.post("/api/onpage/optimize", requireAuth, async (req, res) => {
       const { data, engineUsed } = await onpageAI({
         engine, key: apiKey, model,
         system: ONPAGE_SYSTEM,
-        user: buildOptimizePrompt({ target, mainKeyword, subKeywords, selected, bench }),
+        user: buildOptimizePrompt({ target, mainKeyword, subKeywords, selected, bench, extra }),
         schema: OPTIMIZE_SCHEMA, maxTokens: 8192,
       });
       result = { ...data, engineUsed };
@@ -620,7 +620,8 @@ app.post("/api/onpage/optimize", requireAuth, async (req, res) => {
     }
 
     res.json({
-      before: { title: target.titleTag, metaDescription: target.metaDescription, markdown: target.contentText },
+      mainKeyword, subKeywords,
+      before: { title: target.titleTag, metaDescription: target.metaDescription, markdown: target.contentMarkdown || target.contentText },
       after: { title: result.title, metaDescription: result.metaDescription, markdown: result.optimizedMarkdown, slug: result.slug || "" },
       changes: result.changes || [],
       notes: result.notes || "",
