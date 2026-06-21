@@ -34,9 +34,11 @@ export async function initStore() {
   if (url) {
     try {
       const { default: pg } = await import("pg");
+      // Postgres local (localhost) thuong KHONG bat SSL -> chi bat SSL cho DB tu xa (Neon/Supabase)
+      const needSsl = !/localhost|127\.0\.0\.1|sslmode=disable/i.test(url);
       pool = new pg.Pool({
         connectionString: url,
-        ssl: { rejectUnauthorized: false },
+        ssl: needSsl ? { rejectUnauthorized: false } : false,
         connectionTimeoutMillis: 10000,
         max: 5,
       });
