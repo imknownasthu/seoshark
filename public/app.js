@@ -1136,8 +1136,9 @@ $("#opClearSkill").addEventListener("click", () => {
 
 /* ===================== CHECK INDEX & THỨ HẠNG (Serper.dev) ===================== */
 (function () {
-  const keyEl = $("#serperKey"), glEl = $("#serpGl"), hlEl = $("#serpHl"), domainEl = $("#rkDomain");
+  const keyEl = $("#serperKey"), glEl = $("#serpGl"), hlEl = $("#serpHl"), domainEl = $("#rkDomain"), depthEl = $("#rkDepth");
   if (!keyEl) return;
+  let lastDepth = 50;
 
   // Khôi phục & lưu cấu hình
   keyEl.value = localStorage.getItem("seoshark_serper_key") || "";
@@ -1148,6 +1149,10 @@ $("#opClearSkill").addEventListener("click", () => {
   glEl.addEventListener("change", () => localStorage.setItem("seoshark_serp_gl", glEl.value));
   hlEl.addEventListener("change", () => localStorage.setItem("seoshark_serp_hl", hlEl.value));
   domainEl.addEventListener("change", () => localStorage.setItem("seoshark_serp_domain", domainEl.value.trim()));
+  if (depthEl) {
+    depthEl.value = localStorage.getItem("seoshark_serp_depth") || "50";
+    depthEl.addEventListener("change", () => localStorage.setItem("seoshark_serp_depth", depthEl.value));
+  }
 
   // Chuyển tab Index / Thứ hạng
   $$("#serpTabs .tab").forEach((tab) => {
@@ -1302,6 +1307,8 @@ $("#opClearSkill").addEventListener("click", () => {
     if (!kws.length) return toast("Hãy nhập ít nhất 1 từ khóa.");
     const key = requireKey("#rkMsg"); if (!key) return;
     localStorage.setItem("seoshark_serp_domain", domain);
+    const depth = Number(depthEl && depthEl.value) || 50;
+    lastDepth = depth;
     const gl = glEl.value, hl = hlEl.value;
     const btn = $("#rkRun"); btn.disabled = true;
     $("#rkResultCard").classList.add("hidden");
@@ -1310,7 +1317,7 @@ $("#opClearSkill").addEventListener("click", () => {
     setProg(0, kws.length);
     const res = await runChunks(kws, 5, async (chunk) => {
       try {
-        const r = await fetch("/api/serp/rank", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ keywords: chunk, domain, key, gl, hl, depth: 10 }) });
+        const r = await fetch("/api/serp/rank", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ keywords: chunk, domain, key, gl, hl, depth }) });
         const d = await r.json();
         if (d.needAuth) return { stop: true, reason: "Phiên đăng nhập hết hạn, hãy tải lại trang.", results: [] };
         if (d.badKey) return { stop: true, reason: d.error, results: [] };
@@ -1335,14 +1342,14 @@ $("#opClearSkill").addEventListener("click", () => {
     const errs = rkResults.filter((r) => r.error).length;
     $("#rkStats").innerHTML =
       `<div class="stat"><b>${rkResults.length}</b><span>Tổng từ khóa</span></div>` +
-      `<div class="stat"><b>${ranked}</b><span>Có thứ hạng (top 10)</span></div>` +
-      `<div class="stat"><b>${out}</b><span>Ngoài top 10</span></div>` +
+      `<div class="stat"><b>${ranked}</b><span>Có thứ hạng (top ${lastDepth})</span></div>` +
+      `<div class="stat"><b>${out}</b><span>Ngoài top ${lastDepth}</span></div>` +
       `<div class="stat"><b>${errs}</b><span>Lỗi</span></div>`;
     $("#rkTable").innerHTML = `<table class="cmp"><thead><tr><th>#</th><th>Từ khóa</th><th>Thứ hạng</th><th>URL tìm thấy</th></tr></thead><tbody>${
       rkResults.map((r, i) => `<tr><td>${i + 1}</td><td><b>${esc(r.keyword)}</b></td><td>${
         r.error ? `<span class="badge" style="background:var(--red-light);color:#9c3049">⚠ Lỗi</span>`
         : r.rank ? `<span class="badge ok">#${r.rank}</span>`
-        : `<span class="badge" style="background:var(--amber-light);color:#8a6310">Ngoài top 10</span>`
+        : `<span class="badge" style="background:var(--amber-light);color:#8a6310">Ngoài top ${lastDepth}</span>`
       }</td><td>${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title || r.url)}</a>` : '<span class="muted">—</span>'}</td></tr>`).join("")
     }</tbody></table>`;
     $("#rkResultCard").classList.remove("hidden");
@@ -1350,7 +1357,7 @@ $("#opClearSkill").addEventListener("click", () => {
   $("#rkExport").addEventListener("click", () => {
     if (!rkResults.length) return toast("Chưa có kết quả.");
     const aoa = [["Từ khóa", "Thứ hạng", "URL tìm thấy", "Tiêu đề"]].concat(
-      rkResults.map((r) => [r.keyword, r.error ? "Lỗi" : r.rank ? r.rank : "Ngoài top 10", r.url || "", r.title || ""])
+      rkResults.map((r) => [r.keyword, r.error ? "Lỗi" : r.rank ? r.rank : ("Ngoài top " + lastDepth), r.url || "", r.title || ""])
     );
     exportXlsx(aoa, "seoshark-check-thu-hang.xlsx", "ThuHang");
   });

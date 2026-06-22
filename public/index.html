@@ -498,7 +498,19 @@
               <button class="ghost small" id="rkClear" type="button">Xóa</button>
               <span class="muted" id="rkCount"></span>
             </div>
-            <div style="margin-top:14px"><button id="rkRun">📈 Kiểm tra Thứ hạng (Top 10)</button></div>
+            <div style="margin-top:14px;display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+              <div style="max-width:220px">
+                <label>Độ sâu kiểm tra</label>
+                <select id="rkDepth">
+                  <option value="10">Top 10 (trang 1)</option>
+                  <option value="20">Top 20 (2 trang)</option>
+                  <option value="30">Top 30 (3 trang)</option>
+                  <option value="50">Top 50 (5 trang)</option>
+                  <option value="100">Top 100 (10 trang)</option>
+                </select>
+              </div>
+              <button id="rkRun">📈 Kiểm tra Thứ hạng</button>
+            </div>
             <div id="rkProgress" style="margin-top:12px"></div>
             <div id="rkMsg"></div>
           </section>
