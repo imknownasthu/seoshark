@@ -15,6 +15,7 @@ import { auditUrl, benchmark } from "./src/onpage.js";
 import { fetchSerp, serpConfigured } from "./src/serp.js";
 import { serperIndex, serperRank } from "./src/serper.js";
 import { fetchOgMeta } from "./src/sharekit.js";
+import { telegraphPublish, telegramPost } from "./src/autopost.js";
 import {
   ONPAGE_SYSTEM, RECOMMEND_SCHEMA, OPTIMIZE_SCHEMA, SUGGEST_SCHEMA,
   buildRecommendPrompt, buildOptimizePrompt, buildSuggestPrompt, mechanicalRecommendations,
@@ -784,6 +785,24 @@ app.post("/api/share/upload", requireAuth, async (req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message || "Lỗi upload" });
   }
+});
+
+// ====== AUTO-POST THAT (Telegra.ph khong can login; Telegram qua Bot) ======
+app.post("/api/autopost/telegraph", requireAuth, async (req, res) => {
+  try {
+    const { title, caption, url, image, authorName } = req.body || {};
+    if (!url) return res.status(400).json({ error: "Thiếu URL bài viết." });
+    const r = await telegraphPublish({ title, caption, url, image, authorName });
+    res.json(r);
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi Telegra.ph" }); }
+});
+app.post("/api/autopost/telegram", requireAuth, async (req, res) => {
+  try {
+    const { token, chatId, caption, image } = req.body || {};
+    if (!token || !chatId) return res.status(400).json({ error: "Thiếu Bot token hoặc Chat ID kênh." });
+    const r = await telegramPost({ token, chatId, caption, image });
+    res.json(r);
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi Telegram" }); }
 });
 
 const PORT = process.env.PORT || 5173;

@@ -1590,6 +1590,8 @@ $("#opClearSkill").addEventListener("click", () => {
       captionMap = {};
       (d.captions || []).forEach((c) => { if (c && c.id) captionMap[c.id] = c.caption || ""; });
       selAll.forEach((p) => { if (!(p.id in captionMap)) captionMap[p.id] = base; });
+      $("#shAutoCaption").value = captionMap["telegram"] || base;
+      $("#shAutoResult").innerHTML = "";
       $("#shTitle").textContent = d.title ? "📄 " + d.title : "";
       $("#shEngine").textContent = "Caption bởi: " + (d.engineUsed || "Local");
       const img = $("#shThumb"), none = $("#shThumbNone"), cur = curImage();
@@ -1603,5 +1605,57 @@ $("#opClearSkill").addEventListener("click", () => {
     } finally {
       btn.disabled = false;
     }
+  });
+
+  // ----- TỰ ĐỘNG ĐĂNG THẬT: Telegra.ph + Telegram -----
+  const tgTok = $("#shTgToken"), tgChat = $("#shTgChat");
+  if (tgTok) {
+    tgTok.value = localStorage.getItem("seoshark_tg_token") || "";
+    tgChat.value = localStorage.getItem("seoshark_tg_chat") || "";
+    tgTok.addEventListener("change", () => localStorage.setItem("seoshark_tg_token", tgTok.value.trim()));
+    tgChat.addEventListener("change", () => localStorage.setItem("seoshark_tg_chat", tgChat.value.trim()));
+  }
+  function autoLinkRow(name, link) {
+    const row = document.createElement("div");
+    row.className = "alert";
+    row.style.cssText = "background:var(--green-light);color:var(--brand-darker);display:flex;gap:8px;align-items:center;flex-wrap:wrap";
+    row.innerHTML = `✅ Đã đăng <b>${esc(name)}</b>: <a href="${esc(link)}" target="_blank" rel="noopener">${esc(link)}</a>`;
+    const cp = document.createElement("button"); cp.className = "ghost small"; cp.textContent = "Copy link";
+    cp.addEventListener("click", () => { copyText(link); toast("Đã copy link"); });
+    row.appendChild(cp);
+    $("#shAutoResult").appendChild(row);
+  }
+  function autoErr(msg) {
+    const row = document.createElement("div"); row.className = "alert err"; row.innerHTML = msg;
+    $("#shAutoResult").appendChild(row);
+  }
+
+  $("#shAutoTelegraph").addEventListener("click", async () => {
+    if (!share) return toast("Hãy bấm 'Tạo nội dung share' trước.");
+    const cap = $("#shAutoCaption").value.trim();
+    const btn = $("#shAutoTelegraph"); btn.disabled = true; toast("Đang đăng Telegra.ph...");
+    try {
+      const r = await fetch("/api/autopost/telegraph", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: share.title, caption: cap, url: share.url, image: curImage() }) });
+      const d = await r.json();
+      if (d.needAuth) return autoErr("Phiên hết hạn, tải lại trang.");
+      if (!r.ok || !d.url) return autoErr("❌ Telegra.ph: " + esc(d.error || "thất bại"));
+      autoLinkRow("Telegra.ph", d.url);
+    } catch (e) { autoErr("❌ " + esc(e.message || e)); } finally { btn.disabled = false; }
+  });
+
+  $("#shAutoTelegram").addEventListener("click", async () => {
+    if (!share) return toast("Hãy bấm 'Tạo nội dung share' trước.");
+    const token = (tgTok.value || "").trim(), chatId = (tgChat.value || "").trim();
+    if (!token || !chatId) return autoErr("❌ Chưa cấu hình Telegram — mở mục ⚡ Cấu hình tự động đăng (Telegram) ở phần 1.");
+    const cap = $("#shAutoCaption").value.trim() + "\n" + share.url;
+    const btn = $("#shAutoTelegram"); btn.disabled = true; toast("Đang đăng Telegram...");
+    try {
+      const r = await fetch("/api/autopost/telegram", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, chatId, caption: cap, image: curImage() }) });
+      const d = await r.json();
+      if (d.needAuth) return autoErr("Phiên hết hạn, tải lại trang.");
+      if (!r.ok) return autoErr("❌ Telegram: " + esc(d.error || "thất bại"));
+      if (d.link) autoLinkRow("Telegram", d.link);
+      else { const row = document.createElement("div"); row.className = "alert"; row.style.cssText = "background:var(--green-light);color:var(--brand-darker)"; row.textContent = "✅ Đã đăng Telegram (kênh không có @username nên không có link web công khai)."; $("#shAutoResult").appendChild(row); }
+    } catch (e) { autoErr("❌ " + esc(e.message || e)); } finally { btn.disabled = false; }
   });
 })();

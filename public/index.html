@@ -558,6 +558,15 @@
             <p class="muted" style="margin-top:8px">Mỗi site: bấm nút → tự copy caption + mở trang submit để bạn dán &amp; đăng. Lựa chọn được lưu cho lần sau.</p>
           </details>
 
+          <details style="margin-top:10px">
+            <summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--brand-dark)">⚡ Cấu hình TỰ ĐỘNG ĐĂNG (Telegram) — tùy chọn</summary>
+            <p class="muted" style="margin:8px 0">Telegra.ph tự đăng không cần cấu hình. Để tự đăng <b>Telegram</b>: nhắn <b>@BotFather</b> tạo bot lấy <b>token</b>, tạo 1 kênh, thêm bot làm admin, rồi điền <b>@tên_kênh</b> bên dưới.</p>
+            <div class="grid cols-2">
+              <div><label>Telegram Bot Token</label><input id="shTgToken" type="password" placeholder="123456:ABC-..." /></div>
+              <div><label>Chat ID / @kênh</label><input id="shTgChat" type="text" placeholder="@kenh_cua_ban" /></div>
+            </div>
+          </details>
+
           <label style="margin-top:14px">Ảnh thumbnail (tùy chọn — dùng chung cho mọi nền)</label>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
             <button class="ghost small" id="shImgUploadBtn" type="button">📁 Upload ảnh</button>
@@ -583,6 +592,16 @@
               <p class="muted" id="shTitle" style="margin:0 0 8px"></p>
             </div>
           </div>
+          <div style="border:1.5px solid var(--brand);border-radius:12px;padding:14px;margin-bottom:16px;background:var(--brand-light)">
+            <b>⚡ Tự động đăng THẬT (0 thao tác — cho luôn link đã đăng)</b>
+            <textarea id="shAutoCaption" rows="3" style="margin-top:8px"></textarea>
+            <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+              <button class="small" id="shAutoTelegraph">📝 Đăng Telegra.ph</button>
+              <button class="small" id="shAutoTelegram">✈️ Đăng Telegram</button>
+            </div>
+            <div id="shAutoResult" style="margin-top:10px"></div>
+          </div>
+
           <p class="muted" style="margin:6px 0 12px">🔓 = điền sẵn, chỉ bấm Đăng. 📋 = tự copy caption rồi mở trang để bạn dán. Mỗi nền có caption riêng — sửa thoải mái trước khi đăng.</p>
           <div id="shCards"></div>
         </section>
