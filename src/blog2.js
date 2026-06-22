@@ -58,13 +58,24 @@ export function insertImage(md, imageUrl, alt) {
 // ===== Dang bai =====
 export async function postWordPress({ site, user, appPassword, title, html, slug }) {
   const base = String(site).replace(/\/+$/, "");
+  // WordPress.com (hosted) khong ho tro Application Password + REST kieu nay -> bao ro
+  if (/(^|\.)wordpress\.com$/i.test(new URL(base).host)) {
+    throw new Error('Đây là WordPress.com (hosted) — KHÔNG hỗ trợ Application Password. Hãy dùng WordPress TỰ HOST (domain riêng), hoặc đăng qua Dev.to / Hashnode / Telegra.ph.');
+  }
   const auth = Buffer.from(`${user}:${appPassword}`).toString("base64");
-  const res = await fetch(`${base}/wp-json/wp/v2/posts`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Basic ${auth}` },
-    body: JSON.stringify({ title, content: html, status: "publish", slug }),
-  });
+  let res;
+  try {
+    res = await fetch(`${base}/wp-json/wp/v2/posts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Basic ${auth}` },
+      body: JSON.stringify({ title, content: html, status: "publish", slug }),
+    });
+  } catch (e) {
+    throw new Error("Không kết nối được tới site: " + (e.message || e));
+  }
   const d = await res.json().catch(() => ({}));
+  if (res.status === 404) throw new Error("Không tìm thấy REST API (/wp-json). Kiểm tra: đúng URL site WordPress tự host, đã bật permalink 'đẹp', REST API không bị chặn/khoá.");
+  if (res.status === 401) throw new Error("Sai Username hoặc Application Password (lưu ý App Password có dấu cách).");
   if (!res.ok) throw new Error(d?.message || `WordPress HTTP ${res.status}`);
   return { link: d.link || `${base}/?p=${d.id}` };
 }
