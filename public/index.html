@@ -83,6 +83,9 @@
         <div class="menu-item" data-section="share">
           <span class="mi-ic">📣</span> Tự động Share Link
         </div>
+        <div class="menu-item" data-section="blog2">
+          <span class="mi-ic">📝</span> Tự động đăng Blog 2.0
+        </div>
         <div class="menu-item disabled" data-section="soon" data-name="Nghiên cứu từ khóa">
           <span class="mi-ic">🔑</span> Nghiên cứu từ khóa <span class="soon">Sắp ra mắt</span>
         </div>
@@ -590,6 +593,48 @@
 
           <p class="muted" style="margin:6px 0 12px">🔓 = điền sẵn, chỉ bấm Đăng. 📋 = tự copy (tiêu đề + nội dung + link) rồi mở trang để bạn dán. Mỗi nền 1 tiêu đề + nội dung riêng — sửa thoải mái trước khi đăng.</p>
           <div id="shCards"></div>
+        </section>
+      </div>
+
+      <!-- ===== SECTION: TỰ ĐỘNG ĐĂNG BLOG 2.0 ===== -->
+      <div class="section page" data-section="blog2">
+        <section class="card">
+          <h2>1. Quản lý nền Blog 2.0</h2>
+          <p class="hint">Kết nối blog qua <b>API</b> (không lưu mật khẩu đăng nhập). Lưu lại để lần sau chỉ cần tick chọn. Tự đăng: <b>WordPress</b> (App Password), <b>Dev.to</b>, <b>Hashnode</b>. "Khác" = chỉ xuất bài để bạn dán tay.</p>
+          <div class="grid cols-2">
+            <div>
+              <label>Loại nền</label>
+              <select id="blogType">
+                <option value="wordpress">WordPress (tự host — App Password)</option>
+                <option value="devto">Dev.to (API key)</option>
+                <option value="hashnode">Hashnode (token + publicationId)</option>
+                <option value="other">Khác (chỉ xuất bài, dán tay)</option>
+              </select>
+            </div>
+            <div><label>Tên gợi nhớ</label><input id="blogName" type="text" placeholder="vd: WP Chính, Dev.to A..." /></div>
+          </div>
+          <div id="blogFields" class="grid cols-2" style="margin-top:6px"></div>
+          <div style="margin-top:12px"><button class="ghost small" id="blogAdd" type="button">+ Lưu blog</button></div>
+          <label style="margin-top:14px">Blog đã lưu (tick để đăng)</label>
+          <div id="blogList" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+        </section>
+
+        <section class="card">
+          <h2>2. Từ khóa + URL (anchor chèn vào bài)</h2>
+          <p class="hint">Mỗi dòng: từ khóa (anchor) + URL đích. Bỏ trống từ khóa (hoặc dán link trần) → anchor sẽ là chính URL. Mỗi blog được AI viết 1 bài RIÊNG 100% chèn các anchor này tự nhiên.</p>
+          <div id="blogKwRows"></div>
+          <button class="ghost small" id="blogAddKw" type="button">+ Thêm dòng</button>
+          <div class="grid cols-2" style="margin-top:14px">
+            <div><label>Độ dài mỗi bài (từ)</label><input id="blogWords" type="number" min="400" max="2000" value="1000" /></div>
+          </div>
+          <div style="margin-top:14px"><button id="blogGen">✍️ Tạo bài cho các blog đã tick</button></div>
+          <div id="blogMsg" style="margin-top:10px"></div>
+        </section>
+
+        <section class="card hidden" id="blogResultCard">
+          <h2>3. Bài viết &amp; đăng</h2>
+          <p class="muted" style="margin:0 0 12px">Mỗi blog 1 bài riêng. Kiểm tra anchor/link/ảnh rồi bấm <b>Đăng</b> — bài lên blog, trả về link (slug sạch không dấu không số theo tiêu đề).</p>
+          <div id="blogResults"></div>
         </section>
       </div>
 

@@ -16,6 +16,7 @@ import { fetchSerp, serpConfigured } from "./src/serp.js";
 import { serperIndex, serperRank } from "./src/serper.js";
 import { fetchOgMeta } from "./src/sharekit.js";
 import { telegraphPublish, telegramPost } from "./src/autopost.js";
+import { slugify, mdToHtml, pollinationsImage, insertImage, postWordPress, postDevto, postHashnode } from "./src/blog2.js";
 import {
   ONPAGE_SYSTEM, RECOMMEND_SCHEMA, OPTIMIZE_SCHEMA, SUGGEST_SCHEMA,
   buildRecommendPrompt, buildOptimizePrompt, buildSuggestPrompt, mechanicalRecommendations,
@@ -802,6 +803,64 @@ app.post("/api/autopost/telegram", requireAuth, async (req, res) => {
     const r = await telegramPost({ token, chatId, caption, image });
     res.json(r);
   } catch (e) { res.status(500).json({ error: e.message || "Lỗi Telegram" }); }
+});
+
+// ====== BLOG 2.0: sinh bai (AI) + dang tu dong (WordPress/Dev.to/Hashnode) ======
+app.post("/api/blog/generate", requireAuth, async (req, res) => {
+  try {
+    const { items, blogName, engine, model, apiKey, words } = req.body || {};
+    const list = (Array.isArray(items) ? items : [])
+      .map((it) => ({ keyword: String(it.keyword || "").trim(), url: String(it.url || "").trim() }))
+      .filter((it) => it.url).slice(0, 20);
+    if (!list.length) return res.status(400).json({ error: "Cần ít nhất 1 cặp từ khóa + URL." });
+    const anchors = list.map((it) => ({ url: it.url, anchor: it.keyword && !/^https?:\/\//i.test(it.keyword) ? it.keyword : it.url }));
+    const wc = Math.min(2000, Math.max(400, Number(words) || 1000));
+    const eng = (engine || "local").toLowerCase();
+    const anchorLines = anchors.map((a) => `- [${a.anchor}](${a.url})`).join("\n");
+    const sys =
+      `Bạn là chuyên gia content SEO tiếng Việt. Viết MỘT bài blog chuẩn SEO khoảng ${wc} từ, văn phong tự nhiên, hữu ích, E-E-A-T, có tiêu đề hấp dẫn; dùng markdown với H2 (##) và H3 (###); đủ mở bài - thân bài - kết bài. ` +
+      `BẮT BUỘC chèn TỰ NHIÊN các liên kết sau, MỖI liên kết đúng 1 lần, dạng markdown [anchor](url), đặt anchor trong câu hợp ngữ cảnh (KHÔNG liệt kê thô, KHÔNG nhồi nhét, KHÔNG để ở mục tham khảo). Nếu anchor là một URL thì giữ nguyên URL làm anchor. KHÔNG tự chèn ảnh. Trả JSON {title, markdown}.`;
+    const user = `Các liên kết cần chèn:\n${anchorLines}\n\nViết RIÊNG cho blog "${blogName || "blog"}" với góc tiếp cận, bố cục, ví dụ KHÁC BIỆT 100% so với các bản khác.`;
+    const schema = { type: "object", properties: { title: { type: "string" }, markdown: { type: "string" } }, required: ["title", "markdown"] };
+    let out = null, engineUsed = "";
+    try {
+      if (eng === "gemini") {
+        const k = (apiKey || process.env.GEMINI_API_KEY || "").trim();
+        if (k) { out = await geminiJson({ apiKey: k, model: (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim(), system: sys, user, schema, maxTokens: 4096 }); engineUsed = "Gemini"; }
+      } else if (eng === "claude") {
+        const k = (apiKey || process.env.ANTHROPIC_API_KEY || "").trim();
+        if (k) { out = await claudeJson({ apiKey: k, model: (model || process.env.SEOSHARK_MODEL || "claude-sonnet-4-6").trim(), system: sys, user, schema, maxTokens: 4096 }); engineUsed = "Claude"; }
+      }
+    } catch (e) { return res.status(400).json({ error: "AI lỗi: " + (e.message || e) }); }
+    if (!out || !out.markdown) return res.status(400).json({ error: "Tính năng này cần engine Gemini hoặc Claude (Local không viết bài được). Hãy chọn Gemini ở ⚙️ và nhập key." });
+    const title = String(out.title || anchors[0].anchor || "Bài viết").trim();
+    let markdown = String(out.markdown);
+    anchors.forEach((a) => { if (!markdown.includes(`(${a.url})`)) markdown += `\n\nXem thêm: [${a.anchor}](${a.url})`; });
+    const imageUrl = pollinationsImage(`${title}, nha khoa, minh hoa chuyen nghiep, sach se, hien dai`);
+    markdown = insertImage(markdown, imageUrl, title);
+    res.json({ title, slug: slugify(title), markdown, html: mdToHtml(markdown), imageUrl, engineUsed });
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
+});
+
+app.post("/api/blog/post", requireAuth, async (req, res) => {
+  try {
+    const { platform, creds, title, slug, markdown, html, imageUrl } = req.body || {};
+    const c = creds || {};
+    let r;
+    if (platform === "wordpress") {
+      if (!c.site || !c.user || !c.appPassword) return res.status(400).json({ error: "Thiếu site / user / Application Password." });
+      r = await postWordPress({ site: c.site, user: c.user, appPassword: c.appPassword, title, html, slug });
+    } else if (platform === "devto") {
+      if (!c.apiKey) return res.status(400).json({ error: "Thiếu Dev.to API key." });
+      r = await postDevto({ apiKey: c.apiKey, title, markdown, mainImage: imageUrl });
+    } else if (platform === "hashnode") {
+      if (!c.token || !c.publicationId) return res.status(400).json({ error: "Thiếu Hashnode token / publicationId." });
+      r = await postHashnode({ token: c.token, publicationId: c.publicationId, title, markdown });
+    } else {
+      return res.status(400).json({ error: "Nền này không hỗ trợ tự đăng — hãy copy bài để dán tay." });
+    }
+    res.json(r);
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi đăng bài" }); }
 });
 
 const PORT = process.env.PORT || 5173;

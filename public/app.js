@@ -86,7 +86,7 @@ function showSection(section, title) {
   if (el) el.classList.add("active");
   $("#sectionTitle").textContent = title;
 }
-const SECTION_TITLES = { "internal-link": "Tối ưu Internal link", "onpage": "Tối ưu Onpage", "serp": "Check Index & Thứ hạng", "share": "Tự động Share Link" };
+const SECTION_TITLES = { "internal-link": "Tối ưu Internal link", "onpage": "Tối ưu Onpage", "serp": "Check Index & Thứ hạng", "share": "Tự động Share Link", "blog2": "Tự động đăng Blog 2.0" };
 $$("#menu .menu-item").forEach((mi) => {
   mi.addEventListener("click", () => {
     $$("#menu .menu-item").forEach((x) => x.classList.remove("active"));
@@ -1623,4 +1623,123 @@ $("#opClearSkill").addEventListener("click", () => {
       row.appendChild(cp); box.appendChild(row);
     } catch (e) { $("#shAutoResult").innerHTML = `<div class="alert err">❌ ${esc(e.message || e)}</div>`; } finally { btn.disabled = false; }
   });
+})();
+
+/* ===================== TỰ ĐỘNG ĐĂNG BLOG 2.0 ===================== */
+(function () {
+  const typeEl = $("#blogType");
+  if (!typeEl) return;
+  async function copyText(t) { try { await navigator.clipboard.writeText(t); } catch { const ta = document.createElement("textarea"); ta.value = t; document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); } catch {} ta.remove(); } }
+
+  const FIELDS = {
+    wordpress: [["site", "URL site (vd https://blog.com)", "text"], ["user", "Username", "text"], ["appPassword", "Application Password", "password"]],
+    devto: [["apiKey", "Dev.to API key", "password"]],
+    hashnode: [["token", "Hashnode token", "password"], ["publicationId", "Publication ID", "text"]],
+    other: [["url", "URL trang đăng (tùy chọn)", "text"]],
+  };
+  function renderFields() {
+    const t = typeEl.value;
+    $("#blogFields").innerHTML = (FIELDS[t] || []).map(([k, label, type]) => `<div><label>${esc(label)}</label><input data-bf="${k}" type="${type}" /></div>`).join("");
+  }
+  typeEl.addEventListener("change", renderFields);
+  renderFields();
+
+  let blogs = [];
+  try { blogs = JSON.parse(localStorage.getItem("seoshark_blogs") || "[]") || []; } catch {}
+  const saveBlogs = () => localStorage.setItem("seoshark_blogs", JSON.stringify(blogs));
+
+  function renderBlogList() {
+    const wrap = $("#blogList");
+    if (!blogs.length) { wrap.innerHTML = `<span class="muted">Chưa có blog nào — thêm ở trên.</span>`; return; }
+    wrap.innerHTML = "";
+    blogs.forEach((b) => {
+      const l = document.createElement("label");
+      l.style.cssText = "display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:13px;background:var(--card-soft);border:1px solid var(--line);padding:7px 12px;border-radius:999px;cursor:pointer";
+      l.innerHTML = `<input type="checkbox" data-blog="${b.id}" checked style="width:16px;height:16px;accent-color:var(--brand-bright)"> ${esc(b.name)} <span class="muted">(${esc(b.type)})</span> <span data-delblog="${b.id}" title="Xóa" style="color:var(--red);cursor:pointer;font-weight:700">✕</span>`;
+      wrap.appendChild(l);
+    });
+    $$('#blogList [data-delblog]').forEach((x) => x.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); blogs = blogs.filter((b) => b.id !== x.dataset.delblog); saveBlogs(); renderBlogList(); }));
+  }
+  renderBlogList();
+
+  $("#blogAdd").addEventListener("click", () => {
+    const type = typeEl.value, name = $("#blogName").value.trim();
+    if (!name) return toast("Nhập tên gợi nhớ.");
+    const creds = {};
+    (FIELDS[type] || []).forEach(([k]) => { const el = $(`#blogFields [data-bf="${k}"]`); creds[k] = el ? el.value.trim() : ""; });
+    if (type === "wordpress" && (!creds.site || !creds.user || !creds.appPassword)) return toast("WordPress cần đủ site / user / App Password.");
+    if (type === "devto" && !creds.apiKey) return toast("Dev.to cần API key.");
+    if (type === "hashnode" && (!creds.token || !creds.publicationId)) return toast("Hashnode cần token + publicationId.");
+    blogs.push({ id: "blog_" + Math.abs(Date.now()), type, name, creds });
+    saveBlogs(); renderBlogList();
+    $("#blogName").value = ""; renderFields();
+    toast("Đã lưu blog: " + name);
+  });
+
+  function addKwRow(kw, url) {
+    const row = document.createElement("div"); row.className = "kw-row";
+    row.innerHTML = `<input type="text" placeholder="Từ khóa (anchor) — bỏ trống nếu dùng link trần" value="${esc(kw || "")}" data-bk="kw" /><input type="text" placeholder="https://nhakhoashark.vn/..." value="${esc(url || "")}" data-bk="url" /><button class="ghost small grow0" type="button" data-bkdel>✕</button>`;
+    $("#blogKwRows").appendChild(row);
+    row.querySelector("[data-bkdel]").addEventListener("click", () => row.remove());
+  }
+  $("#blogAddKw").addEventListener("click", () => addKwRow());
+  addKwRow();
+
+  const collectItems = () => $$("#blogKwRows .kw-row").map((r) => ({ keyword: r.querySelector('[data-bk="kw"]').value.trim(), url: r.querySelector('[data-bk="url"]').value.trim() })).filter((it) => it.url);
+
+  $("#blogGen").addEventListener("click", async () => {
+    const items = collectItems();
+    if (!items.length) return toast("Nhập ít nhất 1 URL.");
+    const ticked = $$('#blogList input[data-blog]:checked').map((cb) => blogs.find((b) => b.id === cb.dataset.blog)).filter(Boolean);
+    if (!ticked.length) return toast("Tick ít nhất 1 blog.");
+    const engine = $("#engine").value, model = $("#model").value, apiKey = $("#apiKey").value.trim();
+    if (engine !== "gemini" && engine !== "claude") { $("#blogMsg").innerHTML = `<div class="alert err">Viết bài cần engine <b>Gemini</b> (free) hoặc Claude. Mở ⚙️ Engine ở trên, chọn Gemini + nhập key.</div>`; return; }
+    const words = Number($("#blogWords").value) || 1000;
+    const btn = $("#blogGen"); btn.disabled = true;
+    $("#blogResults").innerHTML = ""; $("#blogResultCard").classList.remove("hidden");
+    $("#blogMsg").innerHTML = `<div class="alert info"><span class="spinner" style="border-color:var(--brand-bright);border-top-color:transparent"></span>Đang viết ${ticked.length} bài (mỗi blog 1 bài riêng)...</div>`;
+    for (const b of ticked) {
+      const card = document.createElement("section"); card.className = "card";
+      card.innerHTML = `<div class="flexbar"><h3 style="margin:0">${esc(b.name)} <span class="muted">(${esc(b.type)})</span></h3><span class="muted">⏳ Đang viết...</span></div>`;
+      $("#blogResults").appendChild(card);
+      try {
+        const r = await fetch("/api/blog/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items, blogName: b.name, engine, model, apiKey, words }) });
+        const d = await r.json();
+        if (d.needAuth) { card.innerHTML = `<div class="alert err">Phiên hết hạn, tải lại trang.</div>`; break; }
+        if (!r.ok) { card.innerHTML = `<div class="flexbar"><h3 style="margin:0">${esc(b.name)}</h3></div><div class="alert err">❌ ${esc(d.error || "lỗi")}</div>`; continue; }
+        renderArticleCard(card, b, d);
+      } catch (e) { card.innerHTML = `<div class="flexbar"><h3 style="margin:0">${esc(b.name)}</h3></div><div class="alert err">❌ ${esc(e.message || e)}</div>`; }
+    }
+    btn.disabled = false; $("#blogMsg").innerHTML = "";
+  });
+
+  function renderArticleCard(card, blog, d) {
+    const art = { title: d.title, slug: d.slug, markdown: d.markdown, html: d.html, imageUrl: d.imageUrl };
+    const canPost = blog.type !== "other";
+    card.innerHTML = `
+      <div class="flexbar"><h3 style="margin:0">${esc(blog.name)} <span class="muted">(${esc(blog.type)})</span></h3>
+        <span style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="ghost small" data-act="copy">📋 Copy bài</button>
+          ${canPost ? `<button class="small" data-act="post">🚀 Đăng</button>` : `<span class="muted">(loại "Khác" — chỉ copy dán tay)</span>`}
+        </span></div>
+      <div style="margin:8px 0"><b>Tiêu đề:</b> ${esc(art.title)} &nbsp; <span class="muted">slug: /${esc(art.slug)}</span></div>
+      <div class="render" style="max-height:360px">${art.html}</div>
+      <div data-postresult style="margin-top:10px"></div>`;
+    card.querySelector('[data-act="copy"]').addEventListener("click", () => { copyText(`${art.title}\n\n${art.markdown}`); toast("Đã copy bài (markdown)"); });
+    const pb = card.querySelector('[data-act="post"]');
+    if (pb) pb.addEventListener("click", () => postArticle(card, blog, art, pb));
+  }
+
+  async function postArticle(card, blog, art, pb) {
+    const box = card.querySelector("[data-postresult]");
+    pb.disabled = true;
+    box.innerHTML = `<div class="alert info"><span class="spinner" style="border-color:var(--brand-bright);border-top-color:transparent"></span>Đang đăng lên ${esc(blog.name)}...</div>`;
+    try {
+      const r = await fetch("/api/blog/post", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ platform: blog.type, creds: blog.creds, title: art.title, slug: art.slug, markdown: art.markdown, html: art.html, imageUrl: art.imageUrl }) });
+      const d = await r.json();
+      if (d.needAuth) { box.innerHTML = `<div class="alert err">Phiên hết hạn, tải lại trang.</div>`; pb.disabled = false; return; }
+      if (!r.ok || !d.link) { box.innerHTML = `<div class="alert err">❌ ${esc(d.error || "đăng thất bại")}</div>`; pb.disabled = false; return; }
+      box.innerHTML = `<div class="alert" style="background:var(--green-light);color:var(--green)">✅ Đã đăng: <a href="${esc(d.link)}" target="_blank" rel="noopener">${esc(d.link)}</a></div>`;
+    } catch (e) { box.innerHTML = `<div class="alert err">❌ ${esc(e.message || e)}</div>`; pb.disabled = false; }
+  }
 })();
