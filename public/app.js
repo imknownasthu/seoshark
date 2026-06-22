@@ -86,7 +86,7 @@ function showSection(section, title) {
   if (el) el.classList.add("active");
   $("#sectionTitle").textContent = title;
 }
-const SECTION_TITLES = { "internal-link": "Tối ưu Internal link", "onpage": "Tối ưu Onpage" };
+const SECTION_TITLES = { "internal-link": "Tối ưu Internal link", "onpage": "Tối ưu Onpage", "serp": "Check Index & Thứ hạng" };
 $$("#menu .menu-item").forEach((mi) => {
   mi.addEventListener("click", () => {
     $$("#menu .menu-item").forEach((x) => x.classList.remove("active"));
@@ -1133,3 +1133,225 @@ $("#opClearSkill").addEventListener("click", () => {
   $("#opSkillMsg").textContent = "Đã xóa";
   setTimeout(() => ($("#opSkillMsg").textContent = ""), 2000);
 });
+
+/* ===================== CHECK INDEX & THỨ HẠNG (Serper.dev) ===================== */
+(function () {
+  const keyEl = $("#serperKey"), glEl = $("#serpGl"), hlEl = $("#serpHl"), domainEl = $("#rkDomain");
+  if (!keyEl) return;
+
+  // Khôi phục & lưu cấu hình
+  keyEl.value = localStorage.getItem("seoshark_serper_key") || "";
+  glEl.value = localStorage.getItem("seoshark_serp_gl") || "vn";
+  hlEl.value = localStorage.getItem("seoshark_serp_hl") || "vi";
+  domainEl.value = localStorage.getItem("seoshark_serp_domain") || "";
+  keyEl.addEventListener("change", () => localStorage.setItem("seoshark_serper_key", keyEl.value.trim()));
+  glEl.addEventListener("change", () => localStorage.setItem("seoshark_serp_gl", glEl.value));
+  hlEl.addEventListener("change", () => localStorage.setItem("seoshark_serp_hl", hlEl.value));
+  domainEl.addEventListener("change", () => localStorage.setItem("seoshark_serp_domain", domainEl.value.trim()));
+
+  // Chuyển tab Index / Thứ hạng
+  $$("#serpTabs .tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      $$("#serpTabs .tab").forEach((t) => t.classList.remove("active"));
+      tab.classList.add("active");
+      $$("[data-serppane]").forEach((p) => p.classList.toggle("active", p.dataset.serppane === tab.dataset.serp));
+    });
+  });
+
+  const parseLines = (text) =>
+    Array.from(new Set(String(text || "").split(/[\r\n]+/).map((s) => s.trim()).filter(Boolean)));
+
+  function updateCounts() {
+    $("#idxCount").textContent = parseLines($("#idxInput").value).length + " URL";
+    $("#rkCount").textContent = parseLines($("#rkInput").value).length + " từ khóa";
+  }
+  $("#idxInput").addEventListener("input", updateCounts);
+  $("#rkInput").addEventListener("input", updateCounts);
+  $("#idxClear").addEventListener("click", () => { $("#idxInput").value = ""; updateCounts(); });
+  $("#rkClear").addEventListener("click", () => { $("#rkInput").value = ""; updateCounts(); });
+  updateCounts();
+
+  // Đọc cột đầu của Excel/CSV
+  function readSheet(file, cb) {
+    if (typeof XLSX === "undefined") return toast("Thư viện Excel chưa tải xong, đợi vài giây rồi thử lại.");
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const wb = XLSX.read(e.target.result, { type: "array" });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+        const vals = [];
+        rows.forEach((r) => { if (r && r[0] != null && String(r[0]).trim()) vals.push(String(r[0]).trim()); });
+        cb(vals);
+      } catch (err) { toast("Lỗi đọc file: " + (err.message || err)); }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+  function wireUpload(btnId, fileId, areaId) {
+    $(btnId).addEventListener("click", () => $(fileId).click());
+    $(fileId).addEventListener("change", (e) => {
+      const f = e.target.files[0]; if (!f) return;
+      readSheet(f, (vals) => {
+        const cur = parseLines($(areaId).value);
+        $(areaId).value = Array.from(new Set(cur.concat(vals))).join("\n");
+        updateCounts();
+        toast(`Đã nạp ${vals.length} dòng từ file`);
+      });
+      e.target.value = "";
+    });
+  }
+  wireUpload("#idxUploadBtn", "#idxFile", "#idxInput");
+  wireUpload("#rkUploadBtn", "#rkFile", "#rkInput");
+
+  function exportXlsx(aoa, filename, sheet) {
+    if (typeof XLSX === "undefined") return toast("Thư viện Excel chưa tải xong.");
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, sheet || "Sheet1");
+    XLSX.writeFile(wb, filename);
+  }
+
+  // Chạy theo lô: items -> doChunk(chunk) trả {results, stop, reason}
+  async function runChunks(items, size, doChunk, onProgress) {
+    const out = [];
+    for (let i = 0; i < items.length; i += size) {
+      const chunk = items.slice(i, i + size);
+      const r = await doChunk(chunk);
+      out.push(...(r.results || []));
+      if (r.stop) return { results: out, stopped: r.reason };
+      onProgress(Math.min(i + size, items.length), items.length);
+    }
+    return { results: out };
+  }
+
+  function requireKey(msgId) {
+    const key = keyEl.value.trim();
+    if (!key) {
+      $(msgId).innerHTML = `<div class="alert err">Chưa có Serper API key. Lấy FREE tại <a href="https://serper.dev" target="_blank" rel="noopener">serper.dev</a> rồi dán vào mục <b>⚙️ Kết nối Serper.dev</b> ở trên.</div>`;
+      return null;
+    }
+    $(msgId).innerHTML = "";
+    return key;
+  }
+
+  // ---------- CHECK INDEX ----------
+  let idxResults = [];
+  $("#idxRun").addEventListener("click", async () => {
+    const urls = parseLines($("#idxInput").value);
+    if (!urls.length) return toast("Hãy nhập ít nhất 1 URL.");
+    const key = requireKey("#idxMsg"); if (!key) return;
+    const gl = glEl.value, hl = hlEl.value;
+    const btn = $("#idxRun"); btn.disabled = true;
+    $("#idxResultCard").classList.add("hidden");
+    const prog = $("#idxProgress");
+    const setProg = (d, t) => (prog.innerHTML = `<div class="alert info"><span class="spinner" style="border-color:var(--brand);border-top-color:transparent"></span>Đang kiểm tra index... ${d}/${t}</div>`);
+    setProg(0, urls.length);
+    const res = await runChunks(urls, 5, async (chunk) => {
+      try {
+        const r = await fetch("/api/serp/index", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ urls: chunk, key, gl, hl }) });
+        const d = await r.json();
+        if (d.needAuth) return { stop: true, reason: "Phiên đăng nhập hết hạn, hãy tải lại trang.", results: [] };
+        if (d.badKey) return { stop: true, reason: d.error, results: [] };
+        if (d.quota) return { stop: true, reason: d.error, results: d.results || [] };
+        if (!r.ok) return { stop: true, reason: d.error || "Lỗi server", results: [] };
+        return { results: d.results || [] };
+      } catch (e) { return { stop: true, reason: e.message || "Lỗi mạng", results: [] }; }
+    }, setProg);
+    idxResults = res.results || [];
+    prog.innerHTML = "";
+    btn.disabled = false;
+    $("#idxMsg").innerHTML = res.stopped
+      ? `<div class="alert warn">⚠ Đã dừng: ${esc(res.stopped)} — đã có ${idxResults.length} kết quả bên dưới.</div>`
+      : `<div class="alert info">✓ Hoàn tất ${idxResults.length} URL.</div>`;
+    renderIdx();
+  });
+
+  function renderIdx() {
+    if (!idxResults.length) { $("#idxResultCard").classList.add("hidden"); return; }
+    const indexed = idxResults.filter((r) => r.indexed && !r.error).length;
+    const not = idxResults.filter((r) => !r.indexed && !r.error).length;
+    const errs = idxResults.filter((r) => r.error).length;
+    $("#idxStats").innerHTML =
+      `<div class="stat"><b>${idxResults.length}</b><span>Tổng URL</span></div>` +
+      `<div class="stat"><b>${indexed}</b><span>Đã index</span></div>` +
+      `<div class="stat"><b>${not}</b><span>Chưa index</span></div>` +
+      `<div class="stat"><b>${errs}</b><span>Lỗi</span></div>`;
+    $("#idxTable").innerHTML = `<table class="cmp"><thead><tr><th>#</th><th>URL</th><th>Trạng thái</th></tr></thead><tbody>${
+      idxResults.map((r, i) => `<tr><td>${i + 1}</td><td><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.url)}</a></td><td>${
+        r.error ? `<span class="badge" style="background:var(--red-light);color:#9c3049">⚠ Lỗi</span>`
+        : r.indexed ? `<span class="badge ok">✅ Đã index</span>`
+        : `<span class="badge" style="background:var(--amber-light);color:#8a6310">❌ Chưa index</span>`
+      }</td></tr>`).join("")
+    }</tbody></table>`;
+    $("#idxResultCard").classList.remove("hidden");
+  }
+  $("#idxExport").addEventListener("click", () => {
+    if (!idxResults.length) return toast("Chưa có kết quả.");
+    const aoa = [["URL", "Trạng thái", "Kết quả tìm thấy"]].concat(
+      idxResults.map((r) => [r.url, r.error ? "Lỗi: " + r.error : r.indexed ? "Đã index" : "Chưa index", r.found || ""])
+    );
+    exportXlsx(aoa, "seoshark-check-index.xlsx", "Index");
+  });
+
+  // ---------- CHECK THỨ HẠNG ----------
+  let rkResults = [];
+  $("#rkRun").addEventListener("click", async () => {
+    const kws = parseLines($("#rkInput").value);
+    const domain = domainEl.value.trim();
+    if (!domain) return toast("Hãy nhập domain website (vd: https://nhakhoashark.vn/).");
+    if (!kws.length) return toast("Hãy nhập ít nhất 1 từ khóa.");
+    const key = requireKey("#rkMsg"); if (!key) return;
+    localStorage.setItem("seoshark_serp_domain", domain);
+    const gl = glEl.value, hl = hlEl.value;
+    const btn = $("#rkRun"); btn.disabled = true;
+    $("#rkResultCard").classList.add("hidden");
+    const prog = $("#rkProgress");
+    const setProg = (d, t) => (prog.innerHTML = `<div class="alert info"><span class="spinner" style="border-color:var(--brand);border-top-color:transparent"></span>Đang kiểm tra thứ hạng... ${d}/${t}</div>`);
+    setProg(0, kws.length);
+    const res = await runChunks(kws, 5, async (chunk) => {
+      try {
+        const r = await fetch("/api/serp/rank", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ keywords: chunk, domain, key, gl, hl, depth: 10 }) });
+        const d = await r.json();
+        if (d.needAuth) return { stop: true, reason: "Phiên đăng nhập hết hạn, hãy tải lại trang.", results: [] };
+        if (d.badKey) return { stop: true, reason: d.error, results: [] };
+        if (d.quota) return { stop: true, reason: d.error, results: d.results || [] };
+        if (!r.ok) return { stop: true, reason: d.error || "Lỗi server", results: [] };
+        return { results: d.results || [] };
+      } catch (e) { return { stop: true, reason: e.message || "Lỗi mạng", results: [] }; }
+    }, setProg);
+    rkResults = res.results || [];
+    prog.innerHTML = "";
+    btn.disabled = false;
+    $("#rkMsg").innerHTML = res.stopped
+      ? `<div class="alert warn">⚠ Đã dừng: ${esc(res.stopped)} — đã có ${rkResults.length} kết quả bên dưới.</div>`
+      : `<div class="alert info">✓ Hoàn tất ${rkResults.length} từ khóa.</div>`;
+    renderRk();
+  });
+
+  function renderRk() {
+    if (!rkResults.length) { $("#rkResultCard").classList.add("hidden"); return; }
+    const ranked = rkResults.filter((r) => r.rank).length;
+    const out = rkResults.filter((r) => !r.rank && !r.error).length;
+    const errs = rkResults.filter((r) => r.error).length;
+    $("#rkStats").innerHTML =
+      `<div class="stat"><b>${rkResults.length}</b><span>Tổng từ khóa</span></div>` +
+      `<div class="stat"><b>${ranked}</b><span>Có thứ hạng (top 10)</span></div>` +
+      `<div class="stat"><b>${out}</b><span>Ngoài top 10</span></div>` +
+      `<div class="stat"><b>${errs}</b><span>Lỗi</span></div>`;
+    $("#rkTable").innerHTML = `<table class="cmp"><thead><tr><th>#</th><th>Từ khóa</th><th>Thứ hạng</th><th>URL tìm thấy</th></tr></thead><tbody>${
+      rkResults.map((r, i) => `<tr><td>${i + 1}</td><td><b>${esc(r.keyword)}</b></td><td>${
+        r.error ? `<span class="badge" style="background:var(--red-light);color:#9c3049">⚠ Lỗi</span>`
+        : r.rank ? `<span class="badge ok">#${r.rank}</span>`
+        : `<span class="badge" style="background:var(--amber-light);color:#8a6310">Ngoài top 10</span>`
+      }</td><td>${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title || r.url)}</a>` : '<span class="muted">—</span>'}</td></tr>`).join("")
+    }</tbody></table>`;
+    $("#rkResultCard").classList.remove("hidden");
+  }
+  $("#rkExport").addEventListener("click", () => {
+    if (!rkResults.length) return toast("Chưa có kết quả.");
+    const aoa = [["Từ khóa", "Thứ hạng", "URL tìm thấy", "Tiêu đề"]].concat(
+      rkResults.map((r) => [r.keyword, r.error ? "Lỗi" : r.rank ? r.rank : "Ngoài top 10", r.url || "", r.title || ""])
+    );
+    exportXlsx(aoa, "seoshark-check-thu-hang.xlsx", "ThuHang");
+  });
+})();

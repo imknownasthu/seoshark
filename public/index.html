@@ -77,6 +77,9 @@
         <div class="menu-item" data-section="onpage">
           <span class="mi-ic">🩺</span> Tối ưu Onpage
         </div>
+        <div class="menu-item" data-section="serp">
+          <span class="mi-ic">📑</span> Check Index &amp; Thứ hạng
+        </div>
         <div class="menu-item disabled" data-section="soon" data-name="Nghiên cứu từ khóa">
           <span class="mi-ic">🔑</span> Nghiên cứu từ khóa <span class="soon">Sắp ra mắt</span>
         </div>
@@ -413,6 +416,103 @@
         </section>
       </div>
 
+      <!-- ===== SECTION: CHECK INDEX & THU HANG ===== -->
+      <div class="section page" data-section="serp">
+        <section class="card">
+          <h2>⚙️ Kết nối Serper.dev</h2>
+          <p class="hint">Công cụ lấy SERP Google thật qua <a href="https://serper.dev" target="_blank" rel="noopener">serper.dev</a> — đăng ký <b>FREE 2.500 lượt</b>, vào Dashboard → API Key → copy. Hết lượt free, công cụ sẽ <b>tự dừng</b> (không trừ tiền).</p>
+          <label>Serper API Key</label>
+          <input id="serperKey" type="password" placeholder="dán API key từ serper.dev" />
+          <div class="grid cols-2" style="margin-top:12px">
+            <div>
+              <label>Quốc gia (Google)</label>
+              <select id="serpGl">
+                <option value="vn">Việt Nam</option>
+                <option value="us">Hoa Kỳ</option>
+                <option value="gb">Anh</option>
+                <option value="sg">Singapore</option>
+                <option value="th">Thái Lan</option>
+                <option value="jp">Nhật Bản</option>
+                <option value="kr">Hàn Quốc</option>
+                <option value="au">Úc</option>
+                <option value="in">Ấn Độ</option>
+              </select>
+            </div>
+            <div>
+              <label>Ngôn ngữ</label>
+              <select id="serpHl">
+                <option value="vi">Tiếng Việt</option>
+                <option value="en">English</option>
+                <option value="zh-cn">中文</option>
+                <option value="ja">日本語</option>
+                <option value="ko">한국어</option>
+                <option value="th">ไทย</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <div class="tabs subtabs" id="serpTabs">
+          <div class="tab active" data-serp="index">📑 Check Index</div>
+          <div class="tab" data-serp="rank">📈 Check Thứ hạng từ khóa</div>
+        </div>
+
+        <!-- ---- CHECK INDEX ---- -->
+        <div class="featpane active" data-serppane="index">
+          <section class="card">
+            <h2>1. Nhập danh sách URL</h2>
+            <p class="hint">Mỗi URL một dòng (nhập 1 hoặc dán hàng loạt). Hoặc tải file Excel/CSV (URL ở cột đầu). Mỗi lần tối đa ~200 URL.</p>
+            <textarea id="idxInput" rows="7" placeholder="https://nhakhoashark.vn/bai-viet-1&#10;https://nhakhoashark.vn/bai-viet-2"></textarea>
+            <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <button class="ghost small" id="idxUploadBtn" type="button">📁 Tải Excel/CSV</button>
+              <input id="idxFile" type="file" accept=".xlsx,.xls,.csv" class="hidden" />
+              <button class="ghost small" id="idxClear" type="button">Xóa</button>
+              <span class="muted" id="idxCount"></span>
+            </div>
+            <div style="margin-top:14px"><button id="idxRun">🔍 Kiểm tra Index</button></div>
+            <div id="idxProgress" style="margin-top:12px"></div>
+            <div id="idxMsg"></div>
+          </section>
+          <section class="card hidden" id="idxResultCard">
+            <div class="flexbar">
+              <h2 style="margin:0">2. Kết quả Index</h2>
+              <button class="ghost small" id="idxExport">⬇ Xuất Excel</button>
+            </div>
+            <div class="stats" id="idxStats"></div>
+            <div id="idxTable" style="overflow:auto"></div>
+          </section>
+        </div>
+
+        <!-- ---- CHECK THU HANG ---- -->
+        <div class="featpane" data-serppane="rank">
+          <section class="card">
+            <h2>1. Nhập domain &amp; từ khóa</h2>
+            <p class="hint">Nhập domain website của bạn, rồi danh sách từ khóa (mỗi dòng một từ khóa) hoặc tải Excel/CSV. Công cụ tìm vị trí bài viết thuộc domain này trên SERP.</p>
+            <label>Domain website cần check thứ hạng *</label>
+            <input id="rkDomain" type="text" placeholder="https://nhakhoashark.vn/" />
+            <label style="margin-top:12px">Danh sách từ khóa</label>
+            <textarea id="rkInput" rows="7" placeholder="bọc răng sứ&#10;niềng răng thẩm mỹ&#10;trồng răng implant"></textarea>
+            <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <button class="ghost small" id="rkUploadBtn" type="button">📁 Tải Excel/CSV</button>
+              <input id="rkFile" type="file" accept=".xlsx,.xls,.csv" class="hidden" />
+              <button class="ghost small" id="rkClear" type="button">Xóa</button>
+              <span class="muted" id="rkCount"></span>
+            </div>
+            <div style="margin-top:14px"><button id="rkRun">📈 Kiểm tra Thứ hạng (Top 10)</button></div>
+            <div id="rkProgress" style="margin-top:12px"></div>
+            <div id="rkMsg"></div>
+          </section>
+          <section class="card hidden" id="rkResultCard">
+            <div class="flexbar">
+              <h2 style="margin:0">2. Kết quả Thứ hạng</h2>
+              <button class="ghost small" id="rkExport">⬇ Xuất Excel</button>
+            </div>
+            <div class="stats" id="rkStats"></div>
+            <div id="rkTable" style="overflow:auto"></div>
+          </section>
+        </div>
+      </div>
+
       <!-- ===== SECTION: COMING SOON ===== -->
       <div class="section page" data-section="soon">
         <div class="coming">
@@ -426,6 +526,7 @@
   </div>
 
   <div class="toast" id="toast"></div>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -12,6 +12,7 @@ import { optimizeWithGemini, geminiJson, geminiPing } from "./src/gemini.js";
 import { optimizeWithClaude, claudeJson, claudePing } from "./src/claude.js";
 import { auditUrl, benchmark } from "./src/onpage.js";
 import { fetchSerp, serpConfigured } from "./src/serp.js";
+import { serperIndex, serperRank } from "./src/serper.js";
 import {
   ONPAGE_SYSTEM, RECOMMEND_SCHEMA, OPTIMIZE_SCHEMA, SUGGEST_SCHEMA,
   buildRecommendPrompt, buildOptimizePrompt, buildSuggestPrompt, mechanicalRecommendations,
@@ -665,6 +666,54 @@ app.post("/api/onpage/optimize", requireAuth, async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
+// ====== SERP: CHECK INDEX + CHECK THU HANG (Serper.dev) ======
+// Frontend gui tung "lo" nho (chunk) de co tien trinh + dung duoc khi het luot.
+app.post("/api/serp/index", requireAuth, async (req, res) => {
+  try {
+    const { urls, key, gl, hl } = req.body || {};
+    const list = (Array.isArray(urls) ? urls : []).map((u) => String(u || "").trim()).filter(Boolean).slice(0, 20);
+    if (!list.length) return res.json({ results: [] });
+    const results = [];
+    for (const url of list) {
+      try {
+        const r = await serperIndex({ key, url, gl, hl });
+        results.push({ url, indexed: r.indexed, found: r.found });
+      } catch (e) {
+        if (e.quota) return res.json({ quota: true, error: "Đã hết lượt Serper miễn phí. Đã dừng (không tự chuyển trả phí). Hãy dùng key mới hoặc phương án khác.", results });
+        if (e.badKey) return res.status(400).json({ badKey: true, error: "Serper API key sai hoặc thiếu. Kiểm tra lại key (lấy free tại serper.dev)." });
+        results.push({ url, error: e.message || String(e) });
+      }
+    }
+    res.json({ results });
+  } catch (e) {
+    res.status(500).json({ error: e.message || "Lỗi server" });
+  }
+});
+
+app.post("/api/serp/rank", requireAuth, async (req, res) => {
+  try {
+    const { keywords, domain, key, gl, hl, depth } = req.body || {};
+    if (!domain || !String(domain).trim()) return res.status(400).json({ error: "Thiếu domain website (vd: https://nhakhoashark.vn/)." });
+    const list = (Array.isArray(keywords) ? keywords : []).map((k) => String(k || "").trim()).filter(Boolean).slice(0, 20);
+    if (!list.length) return res.json({ results: [] });
+    const num = Math.min(100, Math.max(10, Number(depth) || 10));
+    const results = [];
+    for (const kw of list) {
+      try {
+        const r = await serperRank({ key, keyword: kw, domain, gl, hl, num });
+        results.push(r);
+      } catch (e) {
+        if (e.quota) return res.json({ quota: true, error: "Đã hết lượt Serper miễn phí. Đã dừng (không tự chuyển trả phí). Hãy dùng key mới hoặc phương án khác.", results });
+        if (e.badKey) return res.status(400).json({ badKey: true, error: "Serper API key sai hoặc thiếu. Kiểm tra lại key (lấy free tại serper.dev)." });
+        results.push({ keyword: kw, error: e.message || String(e) });
+      }
+    }
+    res.json({ results });
+  } catch (e) {
+    res.status(500).json({ error: e.message || "Lỗi server" });
   }
 });
 
