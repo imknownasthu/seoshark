@@ -4,3 +4,4 @@ node_modules/
 .DS_Store
 data/
 .db_pass
+public/uploads/

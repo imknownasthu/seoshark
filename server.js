@@ -4,6 +4,7 @@ import express from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
 
 import { extractArticle, blocksToHtml, blocksToMarkdown } from "./src/extract.js";
 import { loadTargets, rankTargets } from "./src/sitemap.js";
@@ -25,6 +26,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 app.use(express.json({ limit: "5mb" }));
 app.use(express.static(path.join(__dirname, "public")));
+const UPLOAD_DIR = path.join(__dirname, "public", "uploads");
+fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 // ====== AUTH ======
 await auth.initAuth();
@@ -718,57 +721,68 @@ app.post("/api/serp/rank", requireAuth, async (req, res) => {
   }
 });
 
-// ====== SHARE LINK: chuan bi noi dung (OG meta + AI caption) cho 1-click share ======
+// ====== SHARE LINK: noi dung (OG + caption RIENG tung nen) + upload anh ======
 app.post("/api/share/prepare", requireAuth, async (req, res) => {
   try {
-    const { url, keyword, engine, model, apiKey } = req.body || {};
+    const { url, keyword, platforms, engine, model, apiKey } = req.body || {};
     if (!url || !String(url).trim()) return res.status(400).json({ error: "Thiếu URL bài viết." });
     const cleanUrl = String(url).trim();
+    const plats = (Array.isArray(platforms) ? platforms : []).filter((p) => p && p.id).slice(0, 30);
     const og = await fetchOgMeta(cleanUrl).catch(() => ({ title: "", description: "", image: "" }));
 
-    let caption = "", hashtags = [], engineUsed = "Local (cơ học)";
+    let captions = []; // [{platform, caption}]
+    let engineUsed = "Local (cơ học)";
     const eng = (engine || "local").toLowerCase();
-    const sys =
-      "Bạn là chuyên gia social media tiếng Việt. Viết caption NGẮN (2-3 câu, hấp dẫn, tự nhiên, có lời mời đọc bài - CTA), KHÔNG spam, KHÔNG nhồi từ khóa. " +
-      "Kèm 4-6 hashtag liên quan (mỗi hashtag không có dấu cách). Trả JSON {caption, hashtags}.";
-    const user =
-      `Tiêu đề bài: ${og.title || "(không có)"}\n` +
-      `Mô tả: ${og.description || "(không có)"}\n` +
-      `Từ khóa: ${keyword || "(không có)"}\n` +
-      `URL: ${cleanUrl}`;
-    const schema = {
-      type: "object",
-      properties: { caption: { type: "string" }, hashtags: { type: "array", items: { type: "string" } } },
-      required: ["caption", "hashtags"],
-    };
-    try {
-      if (eng === "gemini") {
-        const k = (apiKey || process.env.GEMINI_API_KEY || "").trim();
-        if (k) {
-          const d = await geminiJson({ apiKey: k, model: (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim(), system: sys, user, schema, maxTokens: 1024 });
-          caption = d.caption || ""; hashtags = Array.isArray(d.hashtags) ? d.hashtags : []; engineUsed = "Gemini";
+    if (plats.length) {
+      const sys =
+        "Bạn là chuyên gia social media tiếng Việt. Với MỖI nền tảng dưới đây, viết MỘT caption RIÊNG tối ưu theo phong cách của nền đó, hấp dẫn, tự nhiên, có lời mời đọc bài (CTA), KHÔNG spam, KHÔNG nhồi từ khóa. " +
+        "Mỗi caption kèm hashtag phù hợp với nền đó (nền nào không hợp hashtag thì bỏ). Trả JSON {captions:[{platform, caption}]} với platform đúng id đã cho.";
+      const list = plats.map((p) => `- ${p.id}: ${p.name}${p.style ? " — phong cách: " + p.style : ""}`).join("\n");
+      const user =
+        `Tiêu đề bài: ${og.title || "(không có)"}\nMô tả: ${og.description || "(không có)"}\nTừ khóa: ${keyword || "(không có)"}\nURL: ${cleanUrl}\n\nDanh sách nền (viết caption riêng cho TỪNG id):\n${list}`;
+      const schema = {
+        type: "object",
+        properties: { captions: { type: "array", items: { type: "object", properties: { platform: { type: "string" }, caption: { type: "string" } }, required: ["platform", "caption"] } } },
+        required: ["captions"],
+      };
+      try {
+        if (eng === "gemini") {
+          const k = (apiKey || process.env.GEMINI_API_KEY || "").trim();
+          if (k) { const d = await geminiJson({ apiKey: k, model: (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim(), system: sys, user, schema, maxTokens: 2048 }); captions = Array.isArray(d.captions) ? d.captions : []; engineUsed = "Gemini"; }
+        } else if (eng === "claude") {
+          const k = (apiKey || process.env.ANTHROPIC_API_KEY || "").trim();
+          if (k) { const d = await claudeJson({ apiKey: k, model: (model || process.env.SEOSHARK_MODEL || "claude-sonnet-4-6").trim(), system: sys, user, schema, maxTokens: 2048 }); captions = Array.isArray(d.captions) ? d.captions : []; engineUsed = "Claude"; }
         }
-      } else if (eng === "claude") {
-        const k = (apiKey || process.env.ANTHROPIC_API_KEY || "").trim();
-        if (k) {
-          const d = await claudeJson({ apiKey: k, model: (model || process.env.SEOSHARK_MODEL || "claude-sonnet-4-6").trim(), system: sys, user, schema, maxTokens: 1024 });
-          caption = d.caption || ""; hashtags = Array.isArray(d.hashtags) ? d.hashtags : []; engineUsed = "Claude";
-        }
-      }
-    } catch (e) {
-      // AI loi -> dung fallback Local ben duoi
+      } catch (e) { /* fallback ben duoi */ }
     }
-    if (!caption) {
-      const t = og.title || keyword || "Bài viết hữu ích";
-      caption = `${t}\n👉 Xem chi tiết trong bài viết bên dưới.`;
-      const kwTag = (keyword || "").trim().replace(/\s+/g, "");
-      hashtags = [kwTag, "nhakhoa", "SeoShark"].filter(Boolean);
-    }
-    // Don hashtag: bo dau #, bo ky tu trong
-    hashtags = hashtags.map((h) => String(h).replace(/^#+/, "").replace(/\s+/g, "")).filter(Boolean).slice(0, 6);
-    res.json({ url: cleanUrl, title: og.title, description: og.description, image: og.image, caption, hashtags, engineUsed });
+    // Fallback: dam bao moi nen deu co caption
+    const t = og.title || keyword || "Bài viết hữu ích";
+    const kwTag = (keyword || "").trim() ? " #" + (keyword || "").trim().replace(/\s+/g, "") : "";
+    const base = `${t}\n👉 Xem chi tiết trong bài viết bên dưới.${kwTag}`;
+    const map = {};
+    captions.forEach((c) => { if (c && c.platform) map[c.platform] = c.caption || ""; });
+    const out = plats.map((p) => ({ id: p.id, caption: (map[p.id] && String(map[p.id]).trim()) ? map[p.id] : base }));
+
+    res.json({ url: cleanUrl, title: og.title, description: og.description, image: og.image, captions: out, engineUsed });
   } catch (e) {
     res.status(500).json({ error: e.message || "Lỗi server" });
+  }
+});
+
+// Upload anh thumbnail (base64 da nen) -> luu public/uploads -> tra link cong khai
+app.post("/api/share/upload", requireAuth, async (req, res) => {
+  try {
+    const { dataUrl } = req.body || {};
+    const m = /^data:image\/(png|jpe?g|webp|gif);base64,(.+)$/i.exec(String(dataUrl || ""));
+    if (!m) return res.status(400).json({ error: "Ảnh không hợp lệ." });
+    const ext = m[1].toLowerCase().replace("jpeg", "jpg");
+    const buf = Buffer.from(m[2], "base64");
+    if (buf.length > 6 * 1024 * 1024) return res.status(400).json({ error: "Ảnh quá lớn (>6MB)." });
+    const name = `${randomUUID()}.${ext}`;
+    fs.writeFileSync(path.join(UPLOAD_DIR, name), buf);
+    res.json({ url: `/uploads/${name}` });
+  } catch (e) {
+    res.status(500).json({ error: e.message || "Lỗi upload" });
   }
 });
 

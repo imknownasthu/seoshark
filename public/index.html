@@ -531,19 +531,34 @@
       <!-- ===== SECTION: TỰ ĐỘNG SHARE LINK ===== -->
       <div class="section page" data-section="share">
         <section class="card">
-          <h2>1. Nhập bài viết cần share</h2>
-          <p class="hint">Công cụ tự lấy <b>thumbnail + tiêu đề</b>, AI viết <b>caption ngắn + hashtag</b>. Sau đó bấm nút mạng xã hội để đăng (mở sẵn nội dung/link/ảnh; nơi không cho điền sẵn thì tự copy caption để bạn dán).</p>
+          <h2>1. Nhập bài viết &amp; chọn nơi đăng</h2>
+          <p class="hint">Công cụ tự lấy thumbnail + tiêu đề, AI viết <b>caption RIÊNG cho từng mạng</b>. Tick nơi muốn đăng → bấm tạo → bấm nút từng nền (mở sẵn nội dung/link/ảnh; nơi không cho điền sẵn thì tự copy caption để dán).</p>
           <div class="grid cols-2">
-            <div>
-              <label>URL bài viết *</label>
-              <input id="shUrl" type="text" placeholder="https://nhakhoashark.vn/bai-viet" />
-            </div>
-            <div>
-              <label>Từ khóa bài viết</label>
-              <input id="shKeyword" type="text" placeholder="vd: bọc răng sứ thẩm mỹ" />
-            </div>
+            <div><label>URL bài viết *</label><input id="shUrl" type="text" placeholder="https://nhakhoashark.vn/bai-viet" /></div>
+            <div><label>Từ khóa bài viết</label><input id="shKeyword" type="text" placeholder="vd: bọc răng sứ thẩm mỹ" /></div>
           </div>
-          <div style="margin-top:14px"><button id="shRun">✨ Tạo nội dung share</button></div>
+
+          <label style="margin-top:14px">Chọn mạng xã hội muốn đăng</label>
+          <div id="shPlatforms" style="display:flex;flex-wrap:wrap;gap:10px"></div>
+
+          <details style="margin-top:14px">
+            <summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--brand-dark)">➕ Thêm mạng xã hội / trang bookmark khác</summary>
+            <div class="grid cols-2" style="margin-top:10px">
+              <div><label>Tên site</label><input id="shCustName" type="text" placeholder="vd: LinkHay" /></div>
+              <div><label>URL trang đăng / submit</label><input id="shCustUrl" type="text" placeholder="https://linkhay.com/submit" /></div>
+            </div>
+            <div style="margin-top:8px"><button class="ghost small" id="shCustAdd" type="button">+ Thêm site</button></div>
+            <p class="muted">Khi đăng, công cụ tự copy caption + mở trang này để bạn dán. Site đã thêm được lưu lại cho lần sau.</p>
+          </details>
+
+          <label style="margin-top:14px">Ảnh thumbnail (tùy chọn — dùng chung cho mọi nền)</label>
+          <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button class="ghost small" id="shImgUploadBtn" type="button">📁 Upload ảnh</button>
+            <input id="shImgFile" type="file" accept="image/*" class="hidden" />
+            <span class="muted" id="shImgStatus">Để trống = tự lấy ảnh OG của bài (nếu có).</span>
+          </div>
+
+          <div style="margin-top:16px"><button id="shRun">✨ Tạo nội dung share</button></div>
           <div id="shMsg" style="margin-top:10px"></div>
         </section>
 
@@ -552,27 +567,17 @@
             <h2 style="margin:0">2. Nội dung &amp; chia sẻ</h2>
             <span class="muted" id="shEngine"></span>
           </div>
-          <div class="grid cols-2" style="margin-top:6px">
-            <div>
-              <label>Caption (sửa được — nội dung này sẽ điền sẵn khi share)</label>
-              <textarea id="shCaption" rows="5"></textarea>
-              <label style="margin-top:10px">Hashtag (cách nhau bởi dấu cách)</label>
-              <input id="shHashtags" type="text" placeholder="nhakhoa rangsu" />
-              <div style="margin-top:10px"><button class="ghost small" id="shCopyAll">📋 Copy caption + hashtag + link</button></div>
+          <div style="margin:10px 0;display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start">
+            <div id="shThumbWrap" style="border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--bg-2);width:220px;min-height:130px;display:flex;align-items:center;justify-content:center;flex:0 0 auto">
+              <img id="shThumb" alt="thumbnail" style="max-width:100%;max-height:200px;display:none" />
+              <span class="muted" id="shThumbNone" style="padding:10px;text-align:center">Chưa có thumbnail</span>
             </div>
-            <div>
-              <label>Thumbnail (ảnh đại diện bài viết)</label>
-              <div id="shThumbWrap" style="border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--bg-2);min-height:150px;display:flex;align-items:center;justify-content:center">
-                <img id="shThumb" alt="thumbnail" style="max-width:100%;max-height:240px;display:none" />
-                <span class="muted" id="shThumbNone">Không tìm thấy thumbnail (bài chưa có ảnh OG)</span>
-              </div>
-              <p class="muted" id="shTitle" style="margin-top:8px"></p>
+            <div style="flex:1;min-width:200px">
+              <p class="muted" id="shTitle" style="margin:0 0 8px"></p>
             </div>
           </div>
-
-          <h3 style="margin:18px 0 6px">3. Đăng lên mạng xã hội</h3>
-          <p class="muted" style="margin:0 0 12px">🔓 = nội dung điền sẵn, chỉ bấm Đăng. 📋 = tự copy caption (bạn dán vào ô đăng vì nền tảng không cho điền sẵn).</p>
-          <div id="shButtons" style="display:flex;gap:10px;flex-wrap:wrap"></div>
+          <p class="muted" style="margin:6px 0 12px">🔓 = điền sẵn, chỉ bấm Đăng. 📋 = tự copy caption rồi mở trang để bạn dán. Mỗi nền có caption riêng — sửa thoải mái trước khi đăng.</p>
+          <div id="shCards"></div>
         </section>
       </div>
 
