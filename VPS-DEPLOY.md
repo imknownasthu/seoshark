@@ -1,56 +1,66 @@
-# 🖥️ Triển khai SeoShark lên VPS (Ubuntu)
+# 🖥️ Đưa SeoShark lên VPS — AN TOÀN, không đụng web/tool khác
 
-VPS chạy mượt hơn Render free (không "ngủ"). Hướng dẫn: Node + PM2 + PostgreSQL (local) + Nginx, gắn domain + HTTPS sau.
+Cách làm này **chỉ cài thêm** (Node + PM2), **không gỡ/sửa** gì của VPS, đặt app trong **thư mục riêng** `/opt/seoshark`, dùng **tên miền riêng** nên không chiếm cổng của site khác.
 
-## Bước 1 — Cài & chạy (1 lần)
-SSH vào VPS rồi chạy:
+- App chạy nền ở `127.0.0.1:5173` (PM2 tên `seoshark`).
+- Tài khoản lưu bằng **file** (`data/users.json`) — không cần PostgreSQL.
+- Truy cập qua `https://seoshark.51.79.84.143.sslip.io` (tên miền miễn phí + HTTPS).
+
+---
+
+## Bước 1 — Tải code về thư mục riêng & chạy app
+SSH vào VPS rồi chạy từng dòng:
 
 ```bash
-cd /root
-git clone https://github.com/imknownasthu/seoshark.git
-cd seoshark
+sudo git clone https://github.com/imknownasthu/seoshark.git /opt/seoshark
+cd /opt/seoshark
 sudo bash deploy-vps.sh
 ```
 
-Script tự: cài Node 20, PM2, PostgreSQL (tạo DB `seoshark`), Nginx (proxy cổng 80 → 5173), khởi động app, bật tự chạy lại khi reboot.
+Script tự: cài Node 20 + PM2 (nếu chưa có), `npm install`, tạo `.env`, chạy app bằng PM2, bật tự khởi động lại khi reboot. **Không** động vào nginx hay web khác.
+
+Kiểm tra app sống: `curl -I http://127.0.0.1:5173` → thấy `HTTP/1.1 200` hoặc `302`.
 
 ## Bước 2 — Điền API key
 ```bash
-nano /root/seoshark/.env
+sudo nano /opt/seoshark/.env
 ```
-Điền (lấy lại từ Render → Environment):
-- `GEMINI_API_KEY`, `BREVO_API_KEY`, `BREVO_SENDER`, `GOOGLE_CSE_KEY`, `GOOGLE_CSE_CX`
-- `DATABASE_URL` đã tự điền (Postgres local) — không cần sửa.
-
-Lưu (Ctrl+O, Enter, Ctrl+X) rồi:
+Điền (lấy lại từ Render → Environment): `GEMINI_API_KEY`, `BREVO_API_KEY`, `BREVO_SENDER`, `GOOGLE_CSE_KEY`, `GOOGLE_CSE_CX`.
+Lưu: **Ctrl+O → Enter → Ctrl+X**. Rồi:
 ```bash
 pm2 restart seoshark
 ```
-Mở **http://IP_VPS** → công cụ chạy.
 
-## Bước 3 — Gắn domain (khi đã mua)
-1. Tại nơi quản lý DNS của domain, thêm **bản ghi A**:
-   - `@`  →  `51.79.84.143` (IP VPS)
-   - `www` → `51.79.84.143`
-2. Chờ DNS cập nhật (vài phút–vài giờ). Kiểm tra: `ping yourdomain.com` ra IP VPS.
-3. Trên VPS, bật HTTPS (Let's Encrypt miễn phí):
+## Bước 3 — Bật tên miền + HTTPS (chỉ thêm 1 khối nginx riêng)
 ```bash
-certbot --nginx -d yourdomain.com -d www.yourdomain.com
+cd /opt/seoshark
+sudo bash setup-ssl.sh seoshark.51.79.84.143.sslip.io 5173
 ```
-4. Bật cookie bảo mật cho HTTPS:
+Script tự cài nginx/certbot (nếu thiếu), tạo file cấu hình **riêng** `/etc/nginx/conf.d/seoshark.conf` với `server_name` đúng domain (KHÔNG dùng `default_server`), xin chứng chỉ SSL miễn phí. Xong → mở **https://seoshark.51.79.84.143.sslip.io**.
+
+Bật cookie bảo mật cho HTTPS:
 ```bash
-echo "NODE_ENV=production" >> /root/seoshark/.env
+echo "NODE_ENV=production" >> /opt/seoshark/.env
 pm2 restart seoshark
 ```
-Xong — mở **https://yourdomain.com**.
+
+---
 
 ## Cập nhật code sau này
 ```bash
-cd /root/seoshark && git pull && npm install && pm2 restart seoshark
+cd /opt/seoshark && sudo git pull && npm install --omit=dev && pm2 restart seoshark
 ```
 
 ## Lệnh hữu ích
-- Xem log: `pm2 logs seoshark`
+- Xem log app: `pm2 logs seoshark`
 - Trạng thái: `pm2 status`
 - Khởi động lại: `pm2 restart seoshark`
-- Sao lưu DB: `sudo -u postgres pg_dump seoshark > backup.sql`
+- Xem các "khối" nginx đang có (để chắc không đụng nhau): `ls /etc/nginx/conf.d/ /etc/nginx/sites-enabled/`
+- Sao lưu tài khoản: `cp /opt/seoshark/data/users.json ~/users-backup.json`
+
+## Gỡ bỏ hoàn toàn SeoShark (nếu cần) — không ảnh hưởng web khác
+```bash
+pm2 delete seoshark && pm2 save
+sudo rm -f /etc/nginx/conf.d/seoshark.conf && sudo systemctl reload nginx
+sudo rm -rf /opt/seoshark
+```
