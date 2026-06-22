@@ -1394,53 +1394,112 @@ $("#opClearSkill").addEventListener("click", () => {
     zalo:      { name: "Zalo", prefill: false, style: "thân thiện, ngắn", build: null },
   };
 
+  // Danh sách ~45 site bookmark/social dung san (1 nut = copy caption + mo trang submit).
+  // Vai site ho tro dien san -> CURATED_PREFILL.
+  const CURATED = [
+    ["trello", "Trello", "https://trello.com/"], ["scoopit", "Scoop.it", "https://www.scoop.it/"],
+    ["wakelet", "Wakelet", "https://wakelet.com/"], ["flipboard", "Flipboard", "https://flipboard.com/"],
+    ["instapaper", "Instapaper", "https://www.instapaper.com/"], ["startme", "Start.me", "https://start.me/"],
+    ["telegraph", "Telegra.ph", "https://telegra.ph/"], ["videobookmark", "Video-Bookmark", "https://www.video-bookmark.com/"],
+    ["getpocket", "Pocket", "https://getpocket.com/"], ["listly", "List.ly", "https://list.ly/"],
+    ["patreon", "Patreon", "https://www.patreon.com/"], ["abookmarking", "ABookmarking", "https://www.abookmarking.com/"],
+    ["guidesco", "Guides.co", "https://guides.co/"], ["soctrip", "Soctrip", "https://soctrip.com/"],
+    ["crokes", "Crokes", "https://www.crokes.com/"], ["academia", "Academia.edu", "https://www.academia.edu/"],
+    ["metooo", "Metooo", "https://metooo.io/"], ["askmap", "Askmap", "https://www.askmap.net/"],
+    ["pastelink", "Pastelink", "https://pastelink.net/"], ["behance", "Behance", "https://www.behance.net/"],
+    ["okru", "OK.ru", "https://ok.ru/"], ["hashnode", "Hashnode", "https://hashnode.com/"],
+    ["safechat", "Safechat", "https://safechat.com/"], ["linktree", "Linktr.ee", "https://linktr.ee/"],
+    ["bandlab", "BandLab", "https://www.bandlab.com/"], ["glose", "Glose", "https://glose.com/"],
+    ["learningapps", "LearningApps", "https://learningapps.org/"], ["dentaldiaries", "DentalDiaries", "https://dentaldiaries.8b.io/"],
+    ["padlet", "Padlet", "https://padlet.com/"], ["pharmahub", "PharmaHub", "https://pharmahub.org/"],
+    ["apsense", "APSense", "https://www.apsense.com/"], ["bondhuplus", "BondhuPlus", "https://bondhuplus.com/"],
+    ["pittsburghtribune", "PittsburghTribune", "https://pittsburghtribune.org/"], ["px500", "500px", "https://500px.com/"],
+    ["myspace", "Myspace", "https://myspace.com/"], ["vivaldi", "Vivaldi Social", "https://social.vivaldi.net/"],
+    ["buzzbii", "Buzzbii", "https://www.buzzbii.com/"], ["wongcw", "WongCW", "https://community.wongcw.com/"],
+    ["addonface", "Addonface", "https://www.addonface.com/"], ["wowonder", "WoWonder", "https://demo.wowonder.com/"],
+    ["snipesocial", "SnipeSocial", "https://snipesocial.co.uk/"], ["blacksocially", "BlackSocially", "https://blacksocially.com/"],
+  ];
+  const CURATED_PREFILL = {
+    getpocket: (s, c) => `https://getpocket.com/save?url=${E(s.url)}&title=${E(firstLine(c))}`,
+    okru: (s, c) => `https://connect.ok.ru/offer?url=${E(s.url)}&title=${E(c)}`,
+    vivaldi: (s, c) => `https://social.vivaldi.net/share?text=${E(c + " " + s.url)}`,
+  };
+  const CURATED_MAP = {}; CURATED.forEach(([id, name, url]) => (CURATED_MAP[id] = { name, url }));
+
   // Site bookmark tùy chỉnh do user thêm
   let customSites = [];
   try { customSites = JSON.parse(localStorage.getItem("seoshark_share_custom") || "[]") || []; } catch {}
   const saveCustom = () => localStorage.setItem("seoshark_share_custom", JSON.stringify(customSites));
 
+  // Luu lua chon (nen + site) cho lan sau
+  let savedSel = null;
+  try { savedSel = JSON.parse(localStorage.getItem("seoshark_share_sel") || "null"); } catch {}
+  const defOn = new Set(["facebook", "x", "telegram", "linkedin", "pinterest"]);
+  const isOn = (id, dflt) => (Array.isArray(savedSel) ? savedSel.includes(id) : dflt);
+  function saveSel() {
+    savedSel = $$('.section[data-section="share"] input[data-plat]:checked').map((cb) => cb.dataset.plat);
+    localStorage.setItem("seoshark_share_sel", JSON.stringify(savedSel));
+  }
+
+  function chip(id, label, on, accent) {
+    const l = document.createElement("label");
+    l.style.cssText = `display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:13px;background:${accent ? "var(--brand-light)" : "var(--card-soft)"};border:1px solid var(--line);padding:7px 12px;border-radius:999px;cursor:pointer`;
+    l.innerHTML = `<input type="checkbox" data-plat="${id}" ${on ? "checked" : ""} style="width:16px;height:16px;accent-color:var(--brand)"> ${esc(label)}`;
+    return l;
+  }
+
   function renderChecks() {
     const wrap = $("#shPlatforms");
     wrap.innerHTML = "";
-    const defOn = new Set(["facebook", "x", "telegram", "linkedin", "pinterest"]);
-    const add = (id, label, on) => {
-      const l = document.createElement("label");
-      l.style.cssText = "display:flex;align-items:center;gap:6px;font-weight:600;font-size:13px;background:var(--card-soft);border:1px solid var(--line);padding:7px 12px;border-radius:999px;cursor:pointer";
-      l.innerHTML = `<input type="checkbox" data-plat="${id}" ${on ? "checked" : ""} style="width:16px;height:16px;accent-color:var(--brand)"> ${esc(label)}`;
-      wrap.appendChild(l);
-    };
-    Object.keys(PLAT).forEach((id) => add(id, PLAT[id].name, defOn.has(id)));
+    // Nen MXH chinh
+    Object.keys(PLAT).forEach((id) => wrap.appendChild(chip(id, PLAT[id].name, isOn(id, defOn.has(id)), false)));
+    // Site tuy chinh (co nut xoa)
     customSites.forEach((c) => {
-      const box = document.createElement("span");
-      box.style.cssText = "display:inline-flex;align-items:center;gap:4px";
-      const l = document.createElement("label");
-      l.style.cssText = "display:flex;align-items:center;gap:6px;font-weight:600;font-size:13px;background:var(--brand-light);border:1px solid var(--line);padding:7px 10px;border-radius:999px;cursor:pointer";
-      l.innerHTML = `<input type="checkbox" data-plat="${c.id}" checked style="width:16px;height:16px;accent-color:var(--brand)"> ${esc(c.name)} <span data-del="${c.id}" title="Xóa" style="color:var(--red);cursor:pointer;font-weight:700">✕</span>`;
-      box.appendChild(l);
-      wrap.appendChild(box);
+      const l = chip(c.id, c.name, isOn(c.id, true), true);
+      l.insertAdjacentHTML("beforeend", ` <span data-del="${c.id}" title="Xóa" style="color:var(--red);cursor:pointer;font-weight:700">✕</span>`);
+      wrap.appendChild(l);
     });
+    // Danh sach bookmark dung san (trong details)
+    const box = $("#shCurated");
+    box.innerHTML = "";
+    CURATED.forEach(([id, name]) => box.appendChild(chip(id, name, isOn(id, false), false)));
     $$('#shPlatforms [data-del]').forEach((x) => x.addEventListener("click", (e) => {
       e.preventDefault(); e.stopPropagation();
       customSites = customSites.filter((c) => c.id !== x.dataset.del); saveCustom(); renderChecks();
     }));
   }
   renderChecks();
+  // Luu lua chon moi khi tick/bo tick bat ky cho nao
+  document.querySelector('.section[data-section="share"]').addEventListener("change", (e) => {
+    if (e.target && e.target.matches('input[data-plat]')) saveSel();
+  });
+
+  $("#shCuratedAll").addEventListener("click", () => {
+    const boxes = $$('#shCurated input[data-plat]');
+    const allOn = boxes.every((b) => b.checked);
+    boxes.forEach((b) => (b.checked = !allOn));
+    saveSel();
+  });
 
   $("#shCustAdd").addEventListener("click", () => {
     const name = $("#shCustName").value.trim(), url = $("#shCustUrl").value.trim();
     if (!name || !url) return toast("Nhập cả tên và URL trang đăng.");
     customSites.push({ id: "custom_" + Math.abs(Date.now()), name, url });
-    saveCustom(); renderChecks();
+    saveCustom();
+    if (Array.isArray(savedSel)) { savedSel.push(customSites[customSites.length - 1].id); localStorage.setItem("seoshark_share_sel", JSON.stringify(savedSel)); }
+    renderChecks();
     $("#shCustName").value = ""; $("#shCustUrl").value = "";
     toast("Đã thêm site: " + name);
   });
 
-  function selectedPlatforms() {
-    return $$('#shPlatforms input[data-plat]:checked').map((cb) => {
+  // Tat ca nen/site dang chon -> {id,name,kind,style,prefill,url,build}
+  function selectedAll() {
+    return $$('.section[data-section="share"] input[data-plat]:checked').map((cb) => {
       const id = cb.dataset.plat;
-      if (PLAT[id]) return { id, name: PLAT[id].name, style: PLAT[id].style };
+      if (PLAT[id]) return { id, name: PLAT[id].name, kind: "social", style: PLAT[id].style, prefill: PLAT[id].prefill, build: PLAT[id].build };
+      if (CURATED_MAP[id]) { const pf = CURATED_PREFILL[id]; return { id, name: CURATED_MAP[id].name, kind: "curated", url: CURATED_MAP[id].url, prefill: !!pf, build: pf || null }; }
       const c = customSites.find((x) => x.id === id);
-      return c ? { id, name: c.name, style: "tổng quát, thân thiện, có CTA" } : null;
+      return c ? { id, name: c.name, kind: "custom", url: c.url, prefill: false, build: null } : null;
     }).filter(Boolean);
   }
 
@@ -1480,7 +1539,7 @@ $("#opClearSkill").addEventListener("click", () => {
   function curImage() { return absImg(uploadedImage || (share && share.image) || ""); }
   function renderCards(plats) {
     $("#shCards").innerHTML = plats.map((p) => {
-      const prefill = PLAT[p.id] ? PLAT[p.id].prefill : false;
+      const prefill = p.prefill;
       const cap = captionMap[p.id] || "";
       return `<div style="border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px;background:var(--card-soft)">
         <div class="flexbar" style="margin-bottom:8px"><b>${esc(p.name)}</b>
@@ -1491,43 +1550,46 @@ $("#opClearSkill").addEventListener("click", () => {
     $$('#shCards [data-share]').forEach((b) => b.addEventListener("click", () => doShare(b.dataset.share)));
   }
 
+  let curSel = [];
   async function doShare(id) {
     if (!share) return;
+    const item = curSel.find((x) => x.id === id); if (!item) return;
     const ta = $(`#shCards [data-caption="${id}"]`);
     const cap = ta ? ta.value : "";
     const s = { url: share.url, title: share.title, image: curImage() };
-    if (PLAT[id]) {
-      const p = PLAT[id];
-      if (!p.prefill) { await copyText(cap + "\n" + s.url); toast("Đã copy caption — dán vào " + p.name); }
-      if (p.build) window.open(p.build(s, cap), "_blank", "noopener");
-      else window.open("https://zalo.me/", "_blank", "noopener");
-    } else {
-      const c = customSites.find((x) => x.id === id);
-      await copyText(cap + "\n" + s.url);
-      toast("Đã copy caption — dán vào " + (c ? c.name : "site"));
-      if (c && c.url) window.open(c.url, "_blank", "noopener");
-    }
+    // Dien san hoan toan -> mo luon
+    if (item.prefill && item.build) { window.open(item.build(s, cap), "_blank", "noopener"); return; }
+    // Khong dien san -> copy caption roi mo trang de dan
+    await copyText(cap + "\n" + s.url);
+    toast("Đã copy caption — dán vào " + item.name);
+    const openUrl = item.build ? item.build(s, cap) : (item.url || (item.id === "zalo" ? "https://zalo.me/" : ""));
+    if (openUrl) window.open(openUrl, "_blank", "noopener");
   }
 
   $("#shRun").addEventListener("click", async () => {
     const url = urlEl.value.trim();
     if (!url) return toast("Hãy nhập URL bài viết.");
-    const plats = selectedPlatforms();
-    if (!plats.length) return toast("Hãy tick ít nhất 1 nơi muốn đăng.");
+    const selAll = selectedAll();
+    if (!selAll.length) return toast("Hãy tick ít nhất 1 nơi muốn đăng.");
+    curSel = selAll;
     localStorage.setItem("seoshark_share_url", url);
     const keyword = $("#shKeyword").value.trim();
     const engine = $("#engine").value, model = $("#model").value, apiKey = $("#apiKey").value.trim();
+    // Chi nho AI viet caption rieng cho nen MXH chinh; site bookmark dung caption nen (do ton luot)
+    const social = selAll.filter((p) => p.kind === "social").map((p) => ({ id: p.id, name: p.name, style: p.style }));
     const btn = $("#shRun"); btn.disabled = true;
-    $("#shMsg").innerHTML = `<div class="alert info"><span class="spinner" style="border-color:var(--brand);border-top-color:transparent"></span>Đang lấy thumbnail & viết caption riêng cho ${plats.length} nền...</div>`;
+    $("#shMsg").innerHTML = `<div class="alert info"><span class="spinner" style="border-color:var(--brand);border-top-color:transparent"></span>Đang lấy thumbnail & viết caption cho ${selAll.length} nơi...</div>`;
     $("#shResultCard").classList.add("hidden");
     try {
-      const r = await fetch("/api/share/prepare", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url, keyword, platforms: plats, engine, model, apiKey }) });
+      const r = await fetch("/api/share/prepare", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url, keyword, platforms: social, engine, model, apiKey }) });
       const d = await r.json();
       if (d.needAuth) { $("#shMsg").innerHTML = `<div class="alert err">Phiên hết hạn, hãy tải lại trang.</div>`; return; }
       if (!r.ok) { $("#shMsg").innerHTML = `<div class="alert err">${esc(d.error || "Lỗi server")}</div>`; return; }
       share = { url: d.url, title: d.title || "", image: d.image || "" };
+      const base = d.base || "";
       captionMap = {};
       (d.captions || []).forEach((c) => { if (c && c.id) captionMap[c.id] = c.caption || ""; });
+      selAll.forEach((p) => { if (!(p.id in captionMap)) captionMap[p.id] = base; });
       $("#shTitle").textContent = d.title ? "📄 " + d.title : "";
       $("#shEngine").textContent = "Caption bởi: " + (d.engineUsed || "Local");
       const img = $("#shThumb"), none = $("#shThumbNone"), cur = curImage();
@@ -1535,7 +1597,7 @@ $("#opClearSkill").addEventListener("click", () => {
       else { img.style.display = "none"; none.style.display = "block"; none.textContent = "Không có thumbnail (bài chưa có ảnh OG — bạn có thể Upload ảnh ở trên)."; }
       $("#shMsg").innerHTML = "";
       $("#shResultCard").classList.remove("hidden");
-      renderCards(plats);
+      renderCards(selAll);
     } catch (e) {
       $("#shMsg").innerHTML = `<div class="alert err">Lỗi: ${esc(e.message || e)}</div>`;
     } finally {

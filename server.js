@@ -763,7 +763,7 @@ app.post("/api/share/prepare", requireAuth, async (req, res) => {
     captions.forEach((c) => { if (c && c.platform) map[c.platform] = c.caption || ""; });
     const out = plats.map((p) => ({ id: p.id, caption: (map[p.id] && String(map[p.id]).trim()) ? map[p.id] : base }));
 
-    res.json({ url: cleanUrl, title: og.title, description: og.description, image: og.image, captions: out, engineUsed });
+    res.json({ url: cleanUrl, title: og.title, description: og.description, image: og.image, captions: out, base, engineUsed });
   } catch (e) {
     res.status(500).json({ error: e.message || "Lỗi server" });
   }
