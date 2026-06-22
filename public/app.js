@@ -86,7 +86,7 @@ function showSection(section, title) {
   if (el) el.classList.add("active");
   $("#sectionTitle").textContent = title;
 }
-const SECTION_TITLES = { "internal-link": "Tối ưu Internal link", "onpage": "Tối ưu Onpage", "serp": "Check Index & Thứ hạng" };
+const SECTION_TITLES = { "internal-link": "Tối ưu Internal link", "onpage": "Tối ưu Onpage", "serp": "Check Index & Thứ hạng", "share": "Tự động Share Link" };
 $$("#menu .menu-item").forEach((mi) => {
   mi.addEventListener("click", () => {
     $$("#menu .menu-item").forEach((x) => x.classList.remove("active"));
@@ -1360,5 +1360,99 @@ $("#opClearSkill").addEventListener("click", () => {
       rkResults.map((r) => [r.keyword, r.error ? "Lỗi" : r.rank ? r.rank : ("Ngoài top " + lastDepth), r.url || "", r.title || ""])
     );
     exportXlsx(aoa, "seoshark-check-thu-hang.xlsx", "ThuHang");
+  });
+})();
+
+/* ===================== TỰ ĐỘNG SHARE LINK (1-click) ===================== */
+(function () {
+  const urlEl = $("#shUrl");
+  if (!urlEl) return;
+  urlEl.value = localStorage.getItem("seoshark_share_url") || "";
+  let share = null; // { url, title, image }
+
+  const E = (s) => encodeURIComponent(String(s == null ? "" : s));
+  async function copyText(t) {
+    try { await navigator.clipboard.writeText(t); return true; }
+    catch { const ta = document.createElement("textarea"); ta.value = t; document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); } catch {} ta.remove(); return true; }
+  }
+  function hashtagStr() {
+    return ($("#shHashtags").value || "").split(/[\s,]+/).filter(Boolean).map((h) => "#" + h.replace(/^#+/, "")).join(" ");
+  }
+  function fullText() {
+    const cap = ($("#shCaption").value || "").trim();
+    const tags = hashtagStr();
+    return tags ? cap + "\n\n" + tags : cap;
+  }
+
+  // Dinh nghia nut: prefill=true -> mo san; prefill=false -> copy caption roi mo (de dan)
+  const PLATFORMS = [
+    { id: "facebook", name: "Facebook", prefill: false, build: (s) => `https://www.facebook.com/sharer/sharer.php?u=${E(s.url)}` },
+    { id: "x", name: "X (Twitter)", prefill: true, build: (s) => `https://twitter.com/intent/tweet?text=${E(fullText())}&url=${E(s.url)}` },
+    { id: "telegram", name: "Telegram", prefill: true, build: (s) => `https://t.me/share/url?url=${E(s.url)}&text=${E(fullText())}` },
+    { id: "linkedin", name: "LinkedIn", prefill: false, build: (s) => `https://www.linkedin.com/sharing/share-offsite/?url=${E(s.url)}` },
+    { id: "pinterest", name: "Pinterest", prefill: true, build: (s) => `https://pinterest.com/pin/create/button/?url=${E(s.url)}&media=${E(s.image)}&description=${E(fullText())}` },
+    { id: "reddit", name: "Reddit", prefill: true, build: (s) => `https://www.reddit.com/submit?url=${E(s.url)}&title=${E(($("#shCaption").value || s.title || "").split("\n")[0])}` },
+    { id: "tumblr", name: "Tumblr", prefill: true, build: (s) => `https://www.tumblr.com/widgets/share/tool?canonicalUrl=${E(s.url)}&title=${E(s.title || "")}&caption=${E(fullText())}` },
+    { id: "whatsapp", name: "WhatsApp", prefill: true, build: (s) => `https://wa.me/?text=${E(fullText() + "\n" + s.url)}` },
+    { id: "email", name: "Email", prefill: true, build: (s) => `mailto:?subject=${E(s.title || "Chia sẻ bài viết")}&body=${E(fullText() + "\n" + s.url)}` },
+    { id: "zalo", name: "Zalo", prefill: false, build: null }, // chi copy
+  ];
+
+  function renderButtons() {
+    if (!share) return;
+    const wrap = $("#shButtons");
+    wrap.innerHTML = "";
+    PLATFORMS.forEach((p) => {
+      const btn = document.createElement("button");
+      btn.className = p.prefill ? "small" : "ghost small";
+      btn.textContent = (p.prefill ? "🔓 " : "📋 ") + p.name;
+      btn.addEventListener("click", async () => {
+        if (!p.prefill) {
+          await copyText(fullText() + "\n" + share.url);
+          toast("Đã copy caption — dán vào ô đăng của " + p.name);
+        }
+        if (p.build) window.open(p.build(share), "_blank", "noopener");
+        else if (!p.prefill) { /* zalo: chi copy, mo trang chu */ window.open("https://zalo.me/", "_blank", "noopener"); }
+      });
+      wrap.appendChild(btn);
+    });
+  }
+
+  $("#shRun").addEventListener("click", async () => {
+    const url = urlEl.value.trim();
+    if (!url) return toast("Hãy nhập URL bài viết.");
+    localStorage.setItem("seoshark_share_url", url);
+    const keyword = $("#shKeyword").value.trim();
+    const engine = $("#engine").value, model = $("#model").value, apiKey = $("#apiKey").value.trim();
+    const btn = $("#shRun"); btn.disabled = true;
+    $("#shMsg").innerHTML = `<div class="alert info"><span class="spinner" style="border-color:var(--brand);border-top-color:transparent"></span>Đang lấy thumbnail & viết nội dung...</div>`;
+    $("#shResultCard").classList.add("hidden");
+    try {
+      const r = await fetch("/api/share/prepare", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url, keyword, engine, model, apiKey }) });
+      const d = await r.json();
+      if (d.needAuth) { $("#shMsg").innerHTML = `<div class="alert err">Phiên hết hạn, hãy tải lại trang.</div>`; return; }
+      if (!r.ok) { $("#shMsg").innerHTML = `<div class="alert err">${esc(d.error || "Lỗi server")}</div>`; return; }
+      share = { url: d.url, title: d.title || "", image: d.image || "" };
+      $("#shCaption").value = d.caption || "";
+      $("#shHashtags").value = (d.hashtags || []).join(" ");
+      $("#shTitle").textContent = d.title ? "📄 " + d.title : "";
+      $("#shEngine").textContent = "Nội dung bởi: " + (d.engineUsed || "Local");
+      const img = $("#shThumb"), none = $("#shThumbNone");
+      if (d.image) { img.src = d.image; img.style.display = "block"; none.style.display = "none"; }
+      else { img.style.display = "none"; none.style.display = "block"; }
+      $("#shMsg").innerHTML = "";
+      $("#shResultCard").classList.remove("hidden");
+      renderButtons();
+    } catch (e) {
+      $("#shMsg").innerHTML = `<div class="alert err">Lỗi: ${esc(e.message || e)}</div>`;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  $("#shCopyAll").addEventListener("click", async () => {
+    if (!share) return;
+    await copyText(fullText() + "\n" + share.url);
+    toast("✓ Đã copy caption + hashtag + link");
   });
 })();

@@ -80,6 +80,9 @@
         <div class="menu-item" data-section="serp">
           <span class="mi-ic">📑</span> Check Index &amp; Thứ hạng
         </div>
+        <div class="menu-item" data-section="share">
+          <span class="mi-ic">📣</span> Tự động Share Link
+        </div>
         <div class="menu-item disabled" data-section="soon" data-name="Nghiên cứu từ khóa">
           <span class="mi-ic">🔑</span> Nghiên cứu từ khóa <span class="soon">Sắp ra mắt</span>
         </div>
@@ -523,6 +526,54 @@
             <div id="rkTable" style="overflow:auto"></div>
           </section>
         </div>
+      </div>
+
+      <!-- ===== SECTION: TỰ ĐỘNG SHARE LINK ===== -->
+      <div class="section page" data-section="share">
+        <section class="card">
+          <h2>1. Nhập bài viết cần share</h2>
+          <p class="hint">Công cụ tự lấy <b>thumbnail + tiêu đề</b>, AI viết <b>caption ngắn + hashtag</b>. Sau đó bấm nút mạng xã hội để đăng (mở sẵn nội dung/link/ảnh; nơi không cho điền sẵn thì tự copy caption để bạn dán).</p>
+          <div class="grid cols-2">
+            <div>
+              <label>URL bài viết *</label>
+              <input id="shUrl" type="text" placeholder="https://nhakhoashark.vn/bai-viet" />
+            </div>
+            <div>
+              <label>Từ khóa bài viết</label>
+              <input id="shKeyword" type="text" placeholder="vd: bọc răng sứ thẩm mỹ" />
+            </div>
+          </div>
+          <div style="margin-top:14px"><button id="shRun">✨ Tạo nội dung share</button></div>
+          <div id="shMsg" style="margin-top:10px"></div>
+        </section>
+
+        <section class="card hidden" id="shResultCard">
+          <div class="flexbar">
+            <h2 style="margin:0">2. Nội dung &amp; chia sẻ</h2>
+            <span class="muted" id="shEngine"></span>
+          </div>
+          <div class="grid cols-2" style="margin-top:6px">
+            <div>
+              <label>Caption (sửa được — nội dung này sẽ điền sẵn khi share)</label>
+              <textarea id="shCaption" rows="5"></textarea>
+              <label style="margin-top:10px">Hashtag (cách nhau bởi dấu cách)</label>
+              <input id="shHashtags" type="text" placeholder="nhakhoa rangsu" />
+              <div style="margin-top:10px"><button class="ghost small" id="shCopyAll">📋 Copy caption + hashtag + link</button></div>
+            </div>
+            <div>
+              <label>Thumbnail (ảnh đại diện bài viết)</label>
+              <div id="shThumbWrap" style="border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--bg-2);min-height:150px;display:flex;align-items:center;justify-content:center">
+                <img id="shThumb" alt="thumbnail" style="max-width:100%;max-height:240px;display:none" />
+                <span class="muted" id="shThumbNone">Không tìm thấy thumbnail (bài chưa có ảnh OG)</span>
+              </div>
+              <p class="muted" id="shTitle" style="margin-top:8px"></p>
+            </div>
+          </div>
+
+          <h3 style="margin:18px 0 6px">3. Đăng lên mạng xã hội</h3>
+          <p class="muted" style="margin:0 0 12px">🔓 = nội dung điền sẵn, chỉ bấm Đăng. 📋 = tự copy caption (bạn dán vào ô đăng vì nền tảng không cho điền sẵn).</p>
+          <div id="shButtons" style="display:flex;gap:10px;flex-wrap:wrap"></div>
+        </section>
       </div>
 
       <!-- ===== SECTION: COMING SOON ===== -->

@@ -13,6 +13,7 @@ import { optimizeWithClaude, claudeJson, claudePing } from "./src/claude.js";
 import { auditUrl, benchmark } from "./src/onpage.js";
 import { fetchSerp, serpConfigured } from "./src/serp.js";
 import { serperIndex, serperRank } from "./src/serper.js";
+import { fetchOgMeta } from "./src/sharekit.js";
 import {
   ONPAGE_SYSTEM, RECOMMEND_SCHEMA, OPTIMIZE_SCHEMA, SUGGEST_SCHEMA,
   buildRecommendPrompt, buildOptimizePrompt, buildSuggestPrompt, mechanicalRecommendations,
@@ -712,6 +713,60 @@ app.post("/api/serp/rank", requireAuth, async (req, res) => {
       }
     }
     res.json({ results });
+  } catch (e) {
+    res.status(500).json({ error: e.message || "Lỗi server" });
+  }
+});
+
+// ====== SHARE LINK: chuan bi noi dung (OG meta + AI caption) cho 1-click share ======
+app.post("/api/share/prepare", requireAuth, async (req, res) => {
+  try {
+    const { url, keyword, engine, model, apiKey } = req.body || {};
+    if (!url || !String(url).trim()) return res.status(400).json({ error: "Thiếu URL bài viết." });
+    const cleanUrl = String(url).trim();
+    const og = await fetchOgMeta(cleanUrl).catch(() => ({ title: "", description: "", image: "" }));
+
+    let caption = "", hashtags = [], engineUsed = "Local (cơ học)";
+    const eng = (engine || "local").toLowerCase();
+    const sys =
+      "Bạn là chuyên gia social media tiếng Việt. Viết caption NGẮN (2-3 câu, hấp dẫn, tự nhiên, có lời mời đọc bài - CTA), KHÔNG spam, KHÔNG nhồi từ khóa. " +
+      "Kèm 4-6 hashtag liên quan (mỗi hashtag không có dấu cách). Trả JSON {caption, hashtags}.";
+    const user =
+      `Tiêu đề bài: ${og.title || "(không có)"}\n` +
+      `Mô tả: ${og.description || "(không có)"}\n` +
+      `Từ khóa: ${keyword || "(không có)"}\n` +
+      `URL: ${cleanUrl}`;
+    const schema = {
+      type: "object",
+      properties: { caption: { type: "string" }, hashtags: { type: "array", items: { type: "string" } } },
+      required: ["caption", "hashtags"],
+    };
+    try {
+      if (eng === "gemini") {
+        const k = (apiKey || process.env.GEMINI_API_KEY || "").trim();
+        if (k) {
+          const d = await geminiJson({ apiKey: k, model: (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim(), system: sys, user, schema, maxTokens: 1024 });
+          caption = d.caption || ""; hashtags = Array.isArray(d.hashtags) ? d.hashtags : []; engineUsed = "Gemini";
+        }
+      } else if (eng === "claude") {
+        const k = (apiKey || process.env.ANTHROPIC_API_KEY || "").trim();
+        if (k) {
+          const d = await claudeJson({ apiKey: k, model: (model || process.env.SEOSHARK_MODEL || "claude-sonnet-4-6").trim(), system: sys, user, schema, maxTokens: 1024 });
+          caption = d.caption || ""; hashtags = Array.isArray(d.hashtags) ? d.hashtags : []; engineUsed = "Claude";
+        }
+      }
+    } catch (e) {
+      // AI loi -> dung fallback Local ben duoi
+    }
+    if (!caption) {
+      const t = og.title || keyword || "Bài viết hữu ích";
+      caption = `${t}\n👉 Xem chi tiết trong bài viết bên dưới.`;
+      const kwTag = (keyword || "").trim().replace(/\s+/g, "");
+      hashtags = [kwTag, "nhakhoa", "SeoShark"].filter(Boolean);
+    }
+    // Don hashtag: bo dau #, bo ky tu trong
+    hashtags = hashtags.map((h) => String(h).replace(/^#+/, "").replace(/\s+/g, "")).filter(Boolean).slice(0, 6);
+    res.json({ url: cleanUrl, title: og.title, description: og.description, image: og.image, caption, hashtags, engineUsed });
   } catch (e) {
     res.status(500).json({ error: e.message || "Lỗi server" });
   }
