@@ -1363,14 +1363,15 @@ $("#opClearSkill").addEventListener("click", () => {
   });
 })();
 
-/* ===================== TỰ ĐỘNG SHARE LINK (1-click, caption riêng từng nền) ===================== */
+/* ===================== TỰ ĐỘNG SHARE LINK (1 danh sách A→Z + lọc, tiêu đề+nội dung riêng) ===================== */
 (function () {
   const urlEl = $("#shUrl");
   if (!urlEl) return;
   urlEl.value = localStorage.getItem("seoshark_share_url") || "";
   let share = null;          // { url, title, image }
-  let uploadedImage = "";    // /uploads/xxx (ghi đè thumbnail OG nếu có)
-  let captionMap = {};       // id -> caption (do AI tạo)
+  let uploadedImage = "";
+  let contentMap = {};       // id -> { title, caption }
+  let curSel = [];
 
   const E = (s) => encodeURIComponent(String(s == null ? "" : s));
   const firstLine = (s) => String(s || "").split("\n")[0];
@@ -1380,130 +1381,129 @@ $("#opClearSkill").addEventListener("click", () => {
     catch { const ta = document.createElement("textarea"); ta.value = t; document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); } catch {} ta.remove(); return true; }
   }
 
-  // Nền dựng sẵn: prefill=true -> mở sẵn nội dung; false -> copy caption rồi mở để dán.
-  const PLAT = {
+  // === MỘT danh sách hợp nhất: social + bookmark. s = {url, image, title, caption} ===
+  // prefill=true -> mở sẵn nội dung; false -> copy (tiêu đề+nội dung+link) rồi mở trang để dán.
+  const ITEMS = {
     facebook:  { name: "Facebook", prefill: false, style: "thân thiện, có emoji, 2-3 câu, CTA mời đọc", build: (s) => `https://www.facebook.com/sharer/sharer.php?u=${E(s.url)}` },
-    x:         { name: "X (Twitter)", prefill: true, style: "ngắn gọn dưới 240 ký tự, súc tích, 1-2 hashtag", build: (s, c) => `https://twitter.com/intent/tweet?text=${E(c)}&url=${E(s.url)}` },
-    telegram:  { name: "Telegram", prefill: true, style: "ngắn gọn, có emoji", build: (s, c) => `https://t.me/share/url?url=${E(s.url)}&text=${E(c)}` },
+    x:         { name: "X (Twitter)", prefill: true, style: "ngắn gọn dưới 240 ký tự, súc tích, 1-2 hashtag", build: (s) => `https://twitter.com/intent/tweet?text=${E(s.caption)}&url=${E(s.url)}` },
+    telegram:  { name: "Telegram (share)", prefill: true, style: "ngắn gọn, có emoji", build: (s) => `https://t.me/share/url?url=${E(s.url)}&text=${E(s.caption)}` },
     linkedin:  { name: "LinkedIn", prefill: false, style: "trang trọng, chuyên nghiệp, nhấn giá trị chuyên môn", build: (s) => `https://www.linkedin.com/sharing/share-offsite/?url=${E(s.url)}` },
-    pinterest: { name: "Pinterest", prefill: true, style: "mô tả hấp dẫn cho ghim ảnh, giàu từ khóa", build: (s, c) => `https://pinterest.com/pin/create/button/?url=${E(s.url)}&media=${E(s.image)}&description=${E(c)}` },
-    reddit:    { name: "Reddit", prefill: true, style: "tiêu đề kiểu thảo luận tự nhiên, không quảng cáo lộ liễu", build: (s, c) => `https://www.reddit.com/submit?url=${E(s.url)}&title=${E(firstLine(c))}` },
-    tumblr:    { name: "Tumblr", prefill: true, style: "trẻ trung, sáng tạo", build: (s, c) => `https://www.tumblr.com/widgets/share/tool?canonicalUrl=${E(s.url)}&title=${E(s.title || "")}&caption=${E(c)}` },
-    whatsapp:  { name: "WhatsApp", prefill: true, style: "ngắn gọn, thân mật", build: (s, c) => `https://wa.me/?text=${E(c + "\n" + s.url)}` },
-    email:     { name: "Email", prefill: true, style: "lịch sự", build: (s, c) => `mailto:?subject=${E(s.title || "Chia sẻ bài viết")}&body=${E(c + "\n" + s.url)}` },
+    pinterest: { name: "Pinterest", prefill: true, style: "mô tả hấp dẫn cho ghim ảnh, giàu từ khóa", build: (s) => `https://pinterest.com/pin/create/button/?url=${E(s.url)}&media=${E(s.image)}&description=${E(s.caption)}` },
+    reddit:    { name: "Reddit", prefill: true, style: "tiêu đề kiểu thảo luận tự nhiên, không quảng cáo lộ liễu", build: (s) => `https://www.reddit.com/submit?url=${E(s.url)}&title=${E(s.title)}` },
+    tumblr:    { name: "Tumblr", prefill: true, style: "trẻ trung, sáng tạo", build: (s) => `https://www.tumblr.com/widgets/share/tool?canonicalUrl=${E(s.url)}&title=${E(s.title)}&caption=${E(s.caption)}` },
+    whatsapp:  { name: "WhatsApp", prefill: true, style: "ngắn gọn, thân mật", build: (s) => `https://wa.me/?text=${E(s.caption + "\n" + s.url)}` },
+    email:     { name: "Email", prefill: true, style: "lịch sự", build: (s) => `mailto:?subject=${E(s.title)}&body=${E(s.caption + "\n" + s.url)}` },
     zalo:      { name: "Zalo", prefill: false, style: "thân thiện, ngắn", build: null },
+    getpocket: { name: "Pocket", prefill: true, style: "súc tích", build: (s) => `https://getpocket.com/save?url=${E(s.url)}&title=${E(s.title)}` },
+    okru:      { name: "OK.ru", prefill: true, style: "thân thiện", build: (s) => `https://connect.ok.ru/offer?url=${E(s.url)}&title=${E(s.caption)}` },
+    vivaldi:   { name: "Vivaldi Social", prefill: true, style: "ngắn gọn (Mastodon)", build: (s) => `https://social.vivaldi.net/share?text=${E(s.caption + " " + s.url)}` },
+    // Bookmark/social submit thủ công (copy + mở):
+    trello: { name: "Trello", url: "https://trello.com/" }, scoopit: { name: "Scoop.it", url: "https://www.scoop.it/" },
+    wakelet: { name: "Wakelet", url: "https://wakelet.com/" }, flipboard: { name: "Flipboard", url: "https://flipboard.com/" },
+    instapaper: { name: "Instapaper", url: "https://www.instapaper.com/" }, startme: { name: "Start.me", url: "https://start.me/" },
+    telegraph: { name: "Telegra.ph", url: "https://telegra.ph/" }, videobookmark: { name: "Video-Bookmark", url: "https://www.video-bookmark.com/" },
+    listly: { name: "List.ly", url: "https://list.ly/" }, patreon: { name: "Patreon", url: "https://www.patreon.com/" },
+    abookmarking: { name: "ABookmarking", url: "https://www.abookmarking.com/" }, guidesco: { name: "Guides.co", url: "https://guides.co/" },
+    soctrip: { name: "Soctrip", url: "https://soctrip.com/" }, crokes: { name: "Crokes", url: "https://www.crokes.com/" },
+    academia: { name: "Academia.edu", url: "https://www.academia.edu/" }, metooo: { name: "Metooo", url: "https://metooo.io/" },
+    askmap: { name: "Askmap", url: "https://www.askmap.net/" }, pastelink: { name: "Pastelink", url: "https://pastelink.net/" },
+    behance: { name: "Behance", url: "https://www.behance.net/" }, hashnode: { name: "Hashnode", url: "https://hashnode.com/" },
+    safechat: { name: "Safechat", url: "https://safechat.com/" }, linktree: { name: "Linktr.ee", url: "https://linktr.ee/" },
+    bandlab: { name: "BandLab", url: "https://www.bandlab.com/" }, glose: { name: "Glose", url: "https://glose.com/" },
+    learningapps: { name: "LearningApps", url: "https://learningapps.org/" }, dentaldiaries: { name: "DentalDiaries", url: "https://dentaldiaries.8b.io/" },
+    padlet: { name: "Padlet", url: "https://padlet.com/" }, pharmahub: { name: "PharmaHub", url: "https://pharmahub.org/" },
+    apsense: { name: "APSense", url: "https://www.apsense.com/" }, bondhuplus: { name: "BondhuPlus", url: "https://bondhuplus.com/" },
+    pittsburghtribune: { name: "PittsburghTribune", url: "https://pittsburghtribune.org/" }, px500: { name: "500px", url: "https://500px.com/" },
+    myspace: { name: "Myspace", url: "https://myspace.com/" }, buzzbii: { name: "Buzzbii", url: "https://www.buzzbii.com/" },
+    wongcw: { name: "WongCW", url: "https://community.wongcw.com/" }, addonface: { name: "Addonface", url: "https://www.addonface.com/" },
+    wowonder: { name: "WoWonder", url: "https://demo.wowonder.com/" }, snipesocial: { name: "SnipeSocial", url: "https://snipesocial.co.uk/" },
+    blacksocially: { name: "BlackSocially", url: "https://blacksocially.com/" },
   };
+  const defOn = new Set(["facebook", "x", "telegram", "linkedin", "pinterest", "reddit", "tumblr"]);
 
-  // Danh sách ~45 site bookmark/social dung san (1 nut = copy caption + mo trang submit).
-  // Vai site ho tro dien san -> CURATED_PREFILL.
-  const CURATED = [
-    ["trello", "Trello", "https://trello.com/"], ["scoopit", "Scoop.it", "https://www.scoop.it/"],
-    ["wakelet", "Wakelet", "https://wakelet.com/"], ["flipboard", "Flipboard", "https://flipboard.com/"],
-    ["instapaper", "Instapaper", "https://www.instapaper.com/"], ["startme", "Start.me", "https://start.me/"],
-    ["telegraph", "Telegra.ph", "https://telegra.ph/"], ["videobookmark", "Video-Bookmark", "https://www.video-bookmark.com/"],
-    ["getpocket", "Pocket", "https://getpocket.com/"], ["listly", "List.ly", "https://list.ly/"],
-    ["patreon", "Patreon", "https://www.patreon.com/"], ["abookmarking", "ABookmarking", "https://www.abookmarking.com/"],
-    ["guidesco", "Guides.co", "https://guides.co/"], ["soctrip", "Soctrip", "https://soctrip.com/"],
-    ["crokes", "Crokes", "https://www.crokes.com/"], ["academia", "Academia.edu", "https://www.academia.edu/"],
-    ["metooo", "Metooo", "https://metooo.io/"], ["askmap", "Askmap", "https://www.askmap.net/"],
-    ["pastelink", "Pastelink", "https://pastelink.net/"], ["behance", "Behance", "https://www.behance.net/"],
-    ["okru", "OK.ru", "https://ok.ru/"], ["hashnode", "Hashnode", "https://hashnode.com/"],
-    ["safechat", "Safechat", "https://safechat.com/"], ["linktree", "Linktr.ee", "https://linktr.ee/"],
-    ["bandlab", "BandLab", "https://www.bandlab.com/"], ["glose", "Glose", "https://glose.com/"],
-    ["learningapps", "LearningApps", "https://learningapps.org/"], ["dentaldiaries", "DentalDiaries", "https://dentaldiaries.8b.io/"],
-    ["padlet", "Padlet", "https://padlet.com/"], ["pharmahub", "PharmaHub", "https://pharmahub.org/"],
-    ["apsense", "APSense", "https://www.apsense.com/"], ["bondhuplus", "BondhuPlus", "https://bondhuplus.com/"],
-    ["pittsburghtribune", "PittsburghTribune", "https://pittsburghtribune.org/"], ["px500", "500px", "https://500px.com/"],
-    ["myspace", "Myspace", "https://myspace.com/"], ["vivaldi", "Vivaldi Social", "https://social.vivaldi.net/"],
-    ["buzzbii", "Buzzbii", "https://www.buzzbii.com/"], ["wongcw", "WongCW", "https://community.wongcw.com/"],
-    ["addonface", "Addonface", "https://www.addonface.com/"], ["wowonder", "WoWonder", "https://demo.wowonder.com/"],
-    ["snipesocial", "SnipeSocial", "https://snipesocial.co.uk/"], ["blacksocially", "BlackSocially", "https://blacksocially.com/"],
-  ];
-  const CURATED_PREFILL = {
-    getpocket: (s, c) => `https://getpocket.com/save?url=${E(s.url)}&title=${E(firstLine(c))}`,
-    okru: (s, c) => `https://connect.ok.ru/offer?url=${E(s.url)}&title=${E(c)}`,
-    vivaldi: (s, c) => `https://social.vivaldi.net/share?text=${E(c + " " + s.url)}`,
-  };
-  const CURATED_MAP = {}; CURATED.forEach(([id, name, url]) => (CURATED_MAP[id] = { name, url }));
-
-  // Site bookmark tùy chỉnh do user thêm
+  // Site tùy chỉnh do user thêm
   let customSites = [];
   try { customSites = JSON.parse(localStorage.getItem("seoshark_share_custom") || "[]") || []; } catch {}
   const saveCustom = () => localStorage.setItem("seoshark_share_custom", JSON.stringify(customSites));
 
-  // Luu lua chon (nen + site) cho lan sau
+  // Lưu lựa chọn cho lần sau
   let savedSel = null;
   try { savedSel = JSON.parse(localStorage.getItem("seoshark_share_sel") || "null"); } catch {}
-  const defOn = new Set(["facebook", "x", "telegram", "linkedin", "pinterest"]);
   const isOn = (id, dflt) => (Array.isArray(savedSel) ? savedSel.includes(id) : dflt);
   function saveSel() {
-    savedSel = $$('.section[data-section="share"] input[data-plat]:checked').map((cb) => cb.dataset.plat);
+    savedSel = $$('#shCurated input[data-plat]:checked').map((cb) => cb.dataset.plat);
     localStorage.setItem("seoshark_share_sel", JSON.stringify(savedSel));
+    updateSelCount();
+  }
+  function updateSelCount() {
+    const n = $$('#shCurated input[data-plat]:checked').length;
+    $("#shSelCount").textContent = `Đã chọn: ${n}`;
   }
 
-  function chip(id, label, on, accent) {
-    const l = document.createElement("label");
-    l.style.cssText = `display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:13px;background:${accent ? "var(--brand-light)" : "var(--card-soft)"};border:1px solid var(--line);padding:7px 12px;border-radius:999px;cursor:pointer`;
-    l.innerHTML = `<input type="checkbox" data-plat="${id}" ${on ? "checked" : ""} style="width:16px;height:16px;accent-color:var(--brand)"> ${esc(label)}`;
-    return l;
+  // Toàn bộ mục (built-in + custom) sắp xếp A→Z
+  function allEntries() {
+    const out = Object.keys(ITEMS).map((id) => ({ id, name: ITEMS[id].name, custom: false }));
+    customSites.forEach((c) => out.push({ id: c.id, name: c.name, custom: true }));
+    out.sort((a, b) => a.name.localeCompare(b.name, "vi", { sensitivity: "base" }));
+    return out;
   }
 
   function renderChecks() {
-    const wrap = $("#shPlatforms");
-    wrap.innerHTML = "";
-    // Nen MXH chinh
-    Object.keys(PLAT).forEach((id) => wrap.appendChild(chip(id, PLAT[id].name, isOn(id, defOn.has(id)), false)));
-    // Site tuy chinh (co nut xoa)
-    customSites.forEach((c) => {
-      const l = chip(c.id, c.name, isOn(c.id, true), true);
-      l.insertAdjacentHTML("beforeend", ` <span data-del="${c.id}" title="Xóa" style="color:var(--red);cursor:pointer;font-weight:700">✕</span>`);
-      wrap.appendChild(l);
-    });
-    // Danh sach bookmark dung san (trong details)
     const box = $("#shCurated");
     box.innerHTML = "";
-    CURATED.forEach(([id, name]) => box.appendChild(chip(id, name, isOn(id, false), false)));
-    $$('#shPlatforms [data-del]').forEach((x) => x.addEventListener("click", (e) => {
-      e.preventDefault(); e.stopPropagation();
-      customSites = customSites.filter((c) => c.id !== x.dataset.del); saveCustom(); renderChecks();
+    allEntries().forEach((e) => {
+      const l = document.createElement("label");
+      l.dataset.name = e.name.toLowerCase();
+      l.style.cssText = `display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:13px;background:${e.custom ? "var(--brand-light)" : "var(--card-soft)"};border:1px solid var(--line);padding:7px 12px;border-radius:999px;cursor:pointer`;
+      l.innerHTML = `<input type="checkbox" data-plat="${e.id}" ${isOn(e.id, defOn.has(e.id)) ? "checked" : ""} style="width:16px;height:16px;accent-color:var(--brand-bright)"> ${esc(e.name)}` +
+        (e.custom ? ` <span data-del="${e.id}" title="Xóa" style="color:var(--red);cursor:pointer;font-weight:700">✕</span>` : "");
+      box.appendChild(l);
+    });
+    $$('#shCurated [data-del]').forEach((x) => x.addEventListener("click", (ev) => {
+      ev.preventDefault(); ev.stopPropagation();
+      customSites = customSites.filter((c) => c.id !== x.dataset.del); saveCustom(); renderChecks(); applyFilter();
     }));
+    updateSelCount();
   }
+
+  function applyFilter() {
+    const q = ($("#shFilter").value || "").trim().toLowerCase();
+    $$("#shCurated label").forEach((l) => { l.style.display = !q || l.dataset.name.includes(q) ? "" : "none"; });
+  }
+
   renderChecks();
-  // Luu lua chon moi khi tick/bo tick bat ky cho nao
-  document.querySelector('.section[data-section="share"]').addEventListener("change", (e) => {
-    if (e.target && e.target.matches('input[data-plat]')) saveSel();
-  });
+  $("#shFilter").addEventListener("input", applyFilter);
+  $("#shCurated").addEventListener("change", (e) => { if (e.target && e.target.matches("input[data-plat]")) saveSel(); });
 
   $("#shCuratedAll").addEventListener("click", () => {
-    const boxes = $$('#shCurated input[data-plat]');
-    const allOn = boxes.every((b) => b.checked);
-    boxes.forEach((b) => (b.checked = !allOn));
+    const visible = $$('#shCurated label').filter((l) => l.style.display !== "none").map((l) => l.querySelector("input"));
+    const allOn = visible.every((b) => b.checked);
+    visible.forEach((b) => (b.checked = !allOn));
     saveSel();
   });
 
   $("#shCustAdd").addEventListener("click", () => {
     const name = $("#shCustName").value.trim(), url = $("#shCustUrl").value.trim();
     if (!name || !url) return toast("Nhập cả tên và URL trang đăng.");
-    customSites.push({ id: "custom_" + Math.abs(Date.now()), name, url });
+    const id = "custom_" + Math.abs(Date.now());
+    customSites.push({ id, name, url });
     saveCustom();
-    if (Array.isArray(savedSel)) { savedSel.push(customSites[customSites.length - 1].id); localStorage.setItem("seoshark_share_sel", JSON.stringify(savedSel)); }
-    renderChecks();
+    if (Array.isArray(savedSel)) { savedSel.push(id); localStorage.setItem("seoshark_share_sel", JSON.stringify(savedSel)); }
+    renderChecks(); applyFilter();
     $("#shCustName").value = ""; $("#shCustUrl").value = "";
-    toast("Đã thêm site: " + name);
+    toast("Đã thêm: " + name);
   });
 
-  // Tat ca nen/site dang chon -> {id,name,kind,style,prefill,url,build}
   function selectedAll() {
-    return $$('.section[data-section="share"] input[data-plat]:checked').map((cb) => {
+    return $$('#shCurated input[data-plat]:checked').map((cb) => {
       const id = cb.dataset.plat;
-      if (PLAT[id]) return { id, name: PLAT[id].name, kind: "social", style: PLAT[id].style, prefill: PLAT[id].prefill, build: PLAT[id].build };
-      if (CURATED_MAP[id]) { const pf = CURATED_PREFILL[id]; return { id, name: CURATED_MAP[id].name, kind: "curated", url: CURATED_MAP[id].url, prefill: !!pf, build: pf || null }; }
+      if (ITEMS[id]) return { id, name: ITEMS[id].name, style: ITEMS[id].style || "tổng quát, cuốn hút, có CTA", prefill: !!ITEMS[id].prefill, build: ITEMS[id].build || null, url: ITEMS[id].url || "" };
       const c = customSites.find((x) => x.id === id);
-      return c ? { id, name: c.name, kind: "custom", url: c.url, prefill: false, build: null } : null;
+      return c ? { id, name: c.name, style: "tổng quát, cuốn hút, có CTA", prefill: false, build: null, url: c.url } : null;
     }).filter(Boolean);
   }
 
-  // ----- Upload ảnh (nén client-side rồi gửi base64) -----
+  // ----- Upload ảnh -----
   function downscale(file, max, cb) {
     const img = new Image(); const u = URL.createObjectURL(file);
     img.onload = () => {
@@ -1535,34 +1535,31 @@ $("#opClearSkill").addEventListener("click", () => {
     e.target.value = "";
   });
 
-  // ----- Render cards (mỗi nền 1 caption + nút) -----
+  // ----- Render cards (mỗi nền: tiêu đề + nội dung riêng + nút) -----
   function curImage() { return absImg(uploadedImage || (share && share.image) || ""); }
   function renderCards(plats) {
     $("#shCards").innerHTML = plats.map((p) => {
-      const prefill = p.prefill;
-      const cap = captionMap[p.id] || "";
-      return `<div style="border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px;background:var(--card-soft)">
+      const c = contentMap[p.id] || { title: "", caption: "" };
+      return `<div style="border:1px solid var(--glass-border);border-radius:12px;padding:14px;margin-bottom:12px;background:var(--glass-strong)">
         <div class="flexbar" style="margin-bottom:8px"><b>${esc(p.name)}</b>
-          <button class="${prefill ? "small" : "ghost small"}" data-share="${p.id}">${prefill ? "🔓" : "📋"} Đăng lên ${esc(p.name)}</button></div>
-        <textarea data-caption="${p.id}" rows="3">${esc(cap)}</textarea>
+          <button class="${p.prefill ? "small" : "ghost small"}" data-share="${p.id}">${p.prefill ? "🔓" : "📋"} Đăng lên ${esc(p.name)}</button></div>
+        <input data-title="${p.id}" type="text" value="${esc(c.title)}" placeholder="Tiêu đề" style="margin-bottom:6px" />
+        <textarea data-caption="${p.id}" rows="3" placeholder="Nội dung">${esc(c.caption)}</textarea>
       </div>`;
     }).join("");
     $$('#shCards [data-share]').forEach((b) => b.addEventListener("click", () => doShare(b.dataset.share)));
   }
 
-  let curSel = [];
   async function doShare(id) {
     if (!share) return;
     const item = curSel.find((x) => x.id === id); if (!item) return;
-    const ta = $(`#shCards [data-caption="${id}"]`);
-    const cap = ta ? ta.value : "";
-    const s = { url: share.url, title: share.title, image: curImage() };
-    // Dien san hoan toan -> mo luon
-    if (item.prefill && item.build) { window.open(item.build(s, cap), "_blank", "noopener"); return; }
-    // Khong dien san -> copy caption roi mo trang de dan
-    await copyText(cap + "\n" + s.url);
-    toast("Đã copy caption — dán vào " + item.name);
-    const openUrl = item.build ? item.build(s, cap) : (item.url || (item.id === "zalo" ? "https://zalo.me/" : ""));
+    const title = ($(`#shCards [data-title="${id}"]`) || {}).value || "";
+    const caption = ($(`#shCards [data-caption="${id}"]`) || {}).value || "";
+    const s = { url: share.url, image: curImage(), title, caption };
+    if (item.prefill && item.build) { window.open(item.build(s), "_blank", "noopener"); return; }
+    await copyText(`${title}\n\n${caption}\n\n${s.url}`);
+    toast("Đã copy (tiêu đề + nội dung + link) — dán vào " + item.name);
+    const openUrl = item.build ? item.build(s) : (item.url || (item.id === "zalo" ? "https://zalo.me/" : ""));
     if (openUrl) window.open(openUrl, "_blank", "noopener");
   }
 
@@ -1570,33 +1567,32 @@ $("#opClearSkill").addEventListener("click", () => {
     const url = urlEl.value.trim();
     if (!url) return toast("Hãy nhập URL bài viết.");
     const selAll = selectedAll();
-    if (!selAll.length) return toast("Hãy tick ít nhất 1 nơi muốn đăng.");
+    if (!selAll.length) return toast("Hãy tick ít nhất 1 nơi muốn đi link.");
     curSel = selAll;
     localStorage.setItem("seoshark_share_url", url);
     const keyword = $("#shKeyword").value.trim();
     const engine = $("#engine").value, model = $("#model").value, apiKey = $("#apiKey").value.trim();
-    // Chi nho AI viet caption rieng cho nen MXH chinh; site bookmark dung caption nen (do ton luot)
-    const social = selAll.filter((p) => p.kind === "social").map((p) => ({ id: p.id, name: p.name, style: p.style }));
+    const platforms = selAll.map((p) => ({ id: p.id, name: p.name, style: p.style }));
     const btn = $("#shRun"); btn.disabled = true;
-    $("#shMsg").innerHTML = `<div class="alert info"><span class="spinner" style="border-color:var(--brand);border-top-color:transparent"></span>Đang lấy thumbnail & viết caption cho ${selAll.length} nơi...</div>`;
+    $("#shMsg").innerHTML = `<div class="alert info"><span class="spinner" style="border-color:var(--brand-bright);border-top-color:transparent"></span>Đang lấy thumbnail & viết tiêu đề + nội dung riêng cho ${selAll.length} nơi...</div>`;
     $("#shResultCard").classList.add("hidden");
     try {
-      const r = await fetch("/api/share/prepare", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url, keyword, platforms: social, engine, model, apiKey }) });
+      const r = await fetch("/api/share/prepare", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url, keyword, platforms, engine, model, apiKey }) });
       const d = await r.json();
       if (d.needAuth) { $("#shMsg").innerHTML = `<div class="alert err">Phiên hết hạn, hãy tải lại trang.</div>`; return; }
       if (!r.ok) { $("#shMsg").innerHTML = `<div class="alert err">${esc(d.error || "Lỗi server")}</div>`; return; }
       share = { url: d.url, title: d.title || "", image: d.image || "" };
-      const base = d.base || "";
-      captionMap = {};
-      (d.captions || []).forEach((c) => { if (c && c.id) captionMap[c.id] = c.caption || ""; });
-      selAll.forEach((p) => { if (!(p.id in captionMap)) captionMap[p.id] = base; });
-      $("#shAutoCaption").value = captionMap["telegram"] || base;
+      const base = d.base || { title: d.title || "", caption: "" };
+      contentMap = {};
+      (d.items || []).forEach((c) => { if (c && c.id) contentMap[c.id] = { title: c.title || base.title, caption: c.caption || base.caption }; });
+      selAll.forEach((p) => { if (!(p.id in contentMap)) contentMap[p.id] = { title: base.title, caption: base.caption }; });
+      $("#shAutoCaption").value = (contentMap["telegram"] || base).caption || base.caption;
       $("#shAutoResult").innerHTML = "";
       $("#shTitle").textContent = d.title ? "📄 " + d.title : "";
-      $("#shEngine").textContent = "Caption bởi: " + (d.engineUsed || "Local");
+      $("#shEngine").textContent = "Nội dung bởi: " + (d.engineUsed || "Local");
       const img = $("#shThumb"), none = $("#shThumbNone"), cur = curImage();
       if (cur) { img.src = cur; img.style.display = "block"; none.style.display = "none"; }
-      else { img.style.display = "none"; none.style.display = "block"; none.textContent = "Không có thumbnail (bài chưa có ảnh OG — bạn có thể Upload ảnh ở trên)."; }
+      else { img.style.display = "none"; none.style.display = "block"; none.textContent = "Không có thumbnail (bài chưa có ảnh OG — có thể Upload ảnh ở phần 1)."; }
       $("#shMsg").innerHTML = "";
       $("#shResultCard").classList.remove("hidden");
       renderCards(selAll);
@@ -1607,29 +1603,7 @@ $("#opClearSkill").addEventListener("click", () => {
     }
   });
 
-  // ----- TỰ ĐỘNG ĐĂNG THẬT: Telegra.ph + Telegram -----
-  const tgTok = $("#shTgToken"), tgChat = $("#shTgChat");
-  if (tgTok) {
-    tgTok.value = localStorage.getItem("seoshark_tg_token") || "";
-    tgChat.value = localStorage.getItem("seoshark_tg_chat") || "";
-    tgTok.addEventListener("change", () => localStorage.setItem("seoshark_tg_token", tgTok.value.trim()));
-    tgChat.addEventListener("change", () => localStorage.setItem("seoshark_tg_chat", tgChat.value.trim()));
-  }
-  function autoLinkRow(name, link) {
-    const row = document.createElement("div");
-    row.className = "alert";
-    row.style.cssText = "background:var(--green-light);color:var(--brand-darker);display:flex;gap:8px;align-items:center;flex-wrap:wrap";
-    row.innerHTML = `✅ Đã đăng <b>${esc(name)}</b>: <a href="${esc(link)}" target="_blank" rel="noopener">${esc(link)}</a>`;
-    const cp = document.createElement("button"); cp.className = "ghost small"; cp.textContent = "Copy link";
-    cp.addEventListener("click", () => { copyText(link); toast("Đã copy link"); });
-    row.appendChild(cp);
-    $("#shAutoResult").appendChild(row);
-  }
-  function autoErr(msg) {
-    const row = document.createElement("div"); row.className = "alert err"; row.innerHTML = msg;
-    $("#shAutoResult").appendChild(row);
-  }
-
+  // ----- TỰ ĐỘNG ĐĂNG THẬT: Telegra.ph (không cần cấu hình) -----
   $("#shAutoTelegraph").addEventListener("click", async () => {
     if (!share) return toast("Hãy bấm 'Tạo nội dung share' trước.");
     const cap = $("#shAutoCaption").value.trim();
@@ -1637,25 +1611,16 @@ $("#opClearSkill").addEventListener("click", () => {
     try {
       const r = await fetch("/api/autopost/telegraph", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: share.title, caption: cap, url: share.url, image: curImage() }) });
       const d = await r.json();
-      if (d.needAuth) return autoErr("Phiên hết hạn, tải lại trang.");
-      if (!r.ok || !d.url) return autoErr("❌ Telegra.ph: " + esc(d.error || "thất bại"));
-      autoLinkRow("Telegra.ph", d.url);
-    } catch (e) { autoErr("❌ " + esc(e.message || e)); } finally { btn.disabled = false; }
-  });
-
-  $("#shAutoTelegram").addEventListener("click", async () => {
-    if (!share) return toast("Hãy bấm 'Tạo nội dung share' trước.");
-    const token = (tgTok.value || "").trim(), chatId = (tgChat.value || "").trim();
-    if (!token || !chatId) return autoErr("❌ Chưa cấu hình Telegram — mở mục ⚡ Cấu hình tự động đăng (Telegram) ở phần 1.");
-    const cap = $("#shAutoCaption").value.trim() + "\n" + share.url;
-    const btn = $("#shAutoTelegram"); btn.disabled = true; toast("Đang đăng Telegram...");
-    try {
-      const r = await fetch("/api/autopost/telegram", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, chatId, caption: cap, image: curImage() }) });
-      const d = await r.json();
-      if (d.needAuth) return autoErr("Phiên hết hạn, tải lại trang.");
-      if (!r.ok) return autoErr("❌ Telegram: " + esc(d.error || "thất bại"));
-      if (d.link) autoLinkRow("Telegram", d.link);
-      else { const row = document.createElement("div"); row.className = "alert"; row.style.cssText = "background:var(--green-light);color:var(--brand-darker)"; row.textContent = "✅ Đã đăng Telegram (kênh không có @username nên không có link web công khai)."; $("#shAutoResult").appendChild(row); }
-    } catch (e) { autoErr("❌ " + esc(e.message || e)); } finally { btn.disabled = false; }
+      const box = $("#shAutoResult");
+      if (d.needAuth) { box.innerHTML = `<div class="alert err">Phiên hết hạn, tải lại trang.</div>`; return; }
+      if (!r.ok || !d.url) { box.innerHTML = `<div class="alert err">❌ Telegra.ph: ${esc(d.error || "thất bại")}</div>`; return; }
+      box.innerHTML = "";
+      const row = document.createElement("div");
+      row.className = "alert"; row.style.cssText = "background:var(--green-light);color:var(--green);display:flex;gap:8px;align-items:center;flex-wrap:wrap";
+      row.innerHTML = `✅ Đã đăng: <a href="${esc(d.url)}" target="_blank" rel="noopener">${esc(d.url)}</a>`;
+      const cp = document.createElement("button"); cp.className = "ghost small"; cp.textContent = "Copy link";
+      cp.addEventListener("click", () => { copyText(d.url); toast("Đã copy link"); });
+      row.appendChild(cp); box.appendChild(row);
+    } catch (e) { $("#shAutoResult").innerHTML = `<div class="alert err">❌ ${esc(e.message || e)}</div>`; } finally { btn.disabled = false; }
   });
 })();

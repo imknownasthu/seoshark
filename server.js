@@ -731,40 +731,39 @@ app.post("/api/share/prepare", requireAuth, async (req, res) => {
     const plats = (Array.isArray(platforms) ? platforms : []).filter((p) => p && p.id).slice(0, 30);
     const og = await fetchOgMeta(cleanUrl).catch(() => ({ title: "", description: "", image: "" }));
 
-    let captions = []; // [{platform, caption}]
+    let aiItems = []; // [{platform, title, caption}]
     let engineUsed = "Local (cơ học)";
     const eng = (engine || "local").toLowerCase();
     if (plats.length) {
       const sys =
-        "Bạn là chuyên gia social media tiếng Việt. Với MỖI nền tảng dưới đây, viết MỘT caption RIÊNG tối ưu theo phong cách của nền đó, hấp dẫn, tự nhiên, có lời mời đọc bài (CTA), KHÔNG spam, KHÔNG nhồi từ khóa. " +
-        "Mỗi caption kèm hashtag phù hợp với nền đó (nền nào không hợp hashtag thì bỏ). Trả JSON {captions:[{platform, caption}]} với platform đúng id đã cho.";
+        "Bạn là chuyên gia social media tiếng Việt. Với MỖI nền tảng dưới đây, viết RIÊNG một TIÊU ĐỀ ngắn + một ĐOẠN NỘI DUNG (2-4 câu) KHÁC NHAU, CUỐN HÚT, có lời kêu gọi rõ ràng (CTA) điều hướng người đọc bấm vào link bài viết. Tự nhiên, KHÔNG spam, KHÔNG nhồi từ khóa; kèm hashtag phù hợp nếu nền đó hợp. Mỗi nền PHẢI khác nhau (đa dạng góc tiếp cận). Trả JSON {items:[{platform, title, caption}]} với platform đúng id đã cho.";
       const list = plats.map((p) => `- ${p.id}: ${p.name}${p.style ? " — phong cách: " + p.style : ""}`).join("\n");
       const user =
-        `Tiêu đề bài: ${og.title || "(không có)"}\nMô tả: ${og.description || "(không có)"}\nTừ khóa: ${keyword || "(không có)"}\nURL: ${cleanUrl}\n\nDanh sách nền (viết caption riêng cho TỪNG id):\n${list}`;
+        `Tiêu đề bài: ${og.title || "(không có)"}\nMô tả: ${og.description || "(không có)"}\nTừ khóa: ${keyword || "(không có)"}\nURL: ${cleanUrl}\n\nDanh sách nền (viết TIÊU ĐỀ + NỘI DUNG riêng, KHÁC NHAU cho TỪNG id):\n${list}`;
       const schema = {
         type: "object",
-        properties: { captions: { type: "array", items: { type: "object", properties: { platform: { type: "string" }, caption: { type: "string" } }, required: ["platform", "caption"] } } },
-        required: ["captions"],
+        properties: { items: { type: "array", items: { type: "object", properties: { platform: { type: "string" }, title: { type: "string" }, caption: { type: "string" } }, required: ["platform", "title", "caption"] } } },
+        required: ["items"],
       };
       try {
         if (eng === "gemini") {
           const k = (apiKey || process.env.GEMINI_API_KEY || "").trim();
-          if (k) { const d = await geminiJson({ apiKey: k, model: (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim(), system: sys, user, schema, maxTokens: 2048 }); captions = Array.isArray(d.captions) ? d.captions : []; engineUsed = "Gemini"; }
+          if (k) { const d = await geminiJson({ apiKey: k, model: (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim(), system: sys, user, schema, maxTokens: 4096 }); aiItems = Array.isArray(d.items) ? d.items : []; engineUsed = "Gemini"; }
         } else if (eng === "claude") {
           const k = (apiKey || process.env.ANTHROPIC_API_KEY || "").trim();
-          if (k) { const d = await claudeJson({ apiKey: k, model: (model || process.env.SEOSHARK_MODEL || "claude-sonnet-4-6").trim(), system: sys, user, schema, maxTokens: 2048 }); captions = Array.isArray(d.captions) ? d.captions : []; engineUsed = "Claude"; }
+          if (k) { const d = await claudeJson({ apiKey: k, model: (model || process.env.SEOSHARK_MODEL || "claude-sonnet-4-6").trim(), system: sys, user, schema, maxTokens: 4096 }); aiItems = Array.isArray(d.items) ? d.items : []; engineUsed = "Claude"; }
         }
       } catch (e) { /* fallback ben duoi */ }
     }
-    // Fallback: dam bao moi nen deu co caption
-    const t = og.title || keyword || "Bài viết hữu ích";
+    // Fallback: dam bao moi nen deu co tieu de + noi dung
+    const baseTitle = og.title || keyword || "Bài viết hữu ích";
     const kwTag = (keyword || "").trim() ? " #" + (keyword || "").trim().replace(/\s+/g, "") : "";
-    const base = `${t}\n👉 Xem chi tiết trong bài viết bên dưới.${kwTag}`;
+    const baseCaption = `${baseTitle}\n👉 Xem chi tiết trong bài viết bên dưới.${kwTag}`;
     const map = {};
-    captions.forEach((c) => { if (c && c.platform) map[c.platform] = c.caption || ""; });
-    const out = plats.map((p) => ({ id: p.id, caption: (map[p.id] && String(map[p.id]).trim()) ? map[p.id] : base }));
+    aiItems.forEach((c) => { if (c && c.platform) map[c.platform] = { title: (c.title || baseTitle).trim(), caption: (c.caption || baseCaption).trim() }; });
+    const out = plats.map((p) => (map[p.id] ? { id: p.id, ...map[p.id] } : { id: p.id, title: baseTitle, caption: baseCaption }));
 
-    res.json({ url: cleanUrl, title: og.title, description: og.description, image: og.image, captions: out, base, engineUsed });
+    res.json({ url: cleanUrl, title: og.title, description: og.description, image: og.image, items: out, base: { title: baseTitle, caption: baseCaption }, engineUsed });
   } catch (e) {
     res.status(500).json({ error: e.message || "Lỗi server" });
   }
