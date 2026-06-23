@@ -1719,13 +1719,21 @@ $("#opClearSkill").addEventListener("click", () => {
     card.innerHTML = `
       <div class="flexbar"><h3 style="margin:0">${esc(blog.name)} <span class="muted">(${esc(blog.type)})</span></h3>
         <span style="display:flex;gap:6px;flex-wrap:wrap">
-          <button class="ghost small" data-act="copy">📋 Copy bài</button>
-          ${canPost ? `<button class="small" data-act="post">🚀 Đăng</button>` : `<span class="muted">(loại "Khác" — chỉ copy dán tay)</span>`}
+          <button class="ghost small" data-act="copyrich">📋 Copy (giữ định dạng)</button>
+          <button class="ghost small" data-act="copyhtml">&lt;/&gt; HTML</button>
+          ${canPost ? `<button class="small" data-act="post">🚀 Đăng</button>` : ""}
         </span></div>
       <div style="margin:8px 0"><b>Tiêu đề:</b> ${esc(art.title)} &nbsp; <span class="muted">slug: /${esc(art.slug)}</span></div>
       <div class="render" style="max-height:360px">${art.html}</div>
       <div data-postresult style="margin-top:10px"></div>`;
-    card.querySelector('[data-act="copy"]').addEventListener("click", () => { copyText(`${art.title}\n\n${art.markdown}`); toast("Đã copy bài (markdown)"); });
+    card.querySelector('[data-act="copyrich"]').addEventListener("click", async () => {
+      const richHtml = `<h1>${esc(art.title)}</h1>` + art.html;
+      try {
+        await navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([richHtml], { type: "text/html" }), "text/plain": new Blob([`${art.title}\n\n${art.markdown}`], { type: "text/plain" }) })]);
+        toast("Đã copy GIỮ ĐỊNH DẠNG — dán thẳng vào trình soạn blog (tiêu đề/link/ảnh giữ nguyên)");
+      } catch { await copyText(`${art.title}\n\n${art.markdown}`); toast("Đã copy (văn bản)"); }
+    });
+    card.querySelector('[data-act="copyhtml"]').addEventListener("click", () => { copyText(`<h1>${esc(art.title)}</h1>\n` + art.html); toast("Đã copy mã HTML (dán vào ô HTML/embed của blog)"); });
     const pb = card.querySelector('[data-act="post"]');
     if (pb) pb.addEventListener("click", () => postArticle(card, blog, art, pb));
   }
