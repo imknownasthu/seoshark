@@ -543,11 +543,12 @@
 
           <label style="margin-top:14px">Chọn social / bookmark muốn đi link (A→Z, có lọc)</label>
           <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
-            <input id="shFilter" type="text" placeholder="🔍 Lọc theo tên (vd: pin, red, beh...)" style="max-width:320px" />
+            <input id="shFilter" type="text" placeholder="🔍 Lọc theo tên (vd: pin, red, beh...)" style="max-width:300px" />
             <button class="ghost small" id="shCuratedAll" type="button">Chọn/bỏ tất cả (đang hiện)</button>
+            <button class="ghost small" id="shSelSave" type="button">💾 Lưu lựa chọn</button>
             <span class="muted" id="shSelCount"></span>
           </div>
-          <div id="shCurated" style="display:flex;flex-wrap:wrap;gap:8px;max-height:260px;overflow:auto;padding:10px;border:1px solid var(--glass-border);border-radius:12px;background:var(--glass-2)"></div>
+          <div id="shCurated" style="display:grid;grid-template-rows:repeat(10,auto);grid-auto-flow:column;grid-auto-columns:max-content;gap:6px 18px;max-height:360px;overflow:auto;padding:12px;border:1px solid var(--glass-border);border-radius:12px;background:var(--glass-2)"></div>
 
           <details style="margin-top:12px">
             <summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--accent)">➕ Thêm social / bookmark khác (tùy chỉnh)</summary>
@@ -557,6 +558,34 @@
             </div>
             <div style="margin-top:8px"><button class="ghost small" id="shCustAdd" type="button">+ Thêm vào danh sách</button></div>
             <p class="muted">Site tự thêm sẽ nằm trong danh sách trên (A→Z) và được lưu cho lần sau.</p>
+          </details>
+
+          <details style="margin-top:12px">
+            <summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--orange-text)">🔌 Kết nối tài khoản TỰ ĐĂNG (Diigo / Instapaper / Telegram) — click để cấu hình</summary>
+            <p class="muted" style="margin:8px 0">Các nền này có API → khi đã kết nối, bấm nút trên thẻ là <b>TỰ đăng/lưu link trần + ra link (0 thao tác)</b>. Thông tin lưu trong trình duyệt của bạn (máy tin cậy).</p>
+            <div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px">
+              <b>Diigo</b> <span class="muted">(bookmark — API key xin tại diigo.com/api_keys)</span>
+              <div class="grid cols-2" style="margin-top:6px">
+                <div><label>Username</label><input id="connDiigoUser" type="text" /></div>
+                <div><label>Password</label><input id="connDiigoPass" type="password" /></div>
+              </div>
+              <div style="margin-top:6px"><label>API key</label><input id="connDiigoKey" type="password" /></div>
+            </div>
+            <div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px">
+              <b>Instapaper</b>
+              <div class="grid cols-2" style="margin-top:6px">
+                <div><label>Email</label><input id="connInstaUser" type="text" /></div>
+                <div><label>Password</label><input id="connInstaPass" type="password" /></div>
+              </div>
+            </div>
+            <div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px">
+              <b>Telegram (kênh)</b> <span class="muted">(@BotFather → token; tạo kênh + thêm bot làm admin)</span>
+              <div class="grid cols-2" style="margin-top:6px">
+                <div><label>Bot token</label><input id="connTgToken" type="password" /></div>
+                <div><label>Chat ID / @kênh</label><input id="connTgChat" type="text" /></div>
+              </div>
+            </div>
+            <div style="margin-top:8px"><button class="ghost small" id="connSave" type="button">💾 Lưu kết nối</button></div>
           </details>
 
           <label style="margin-top:14px">Ảnh thumbnail (tùy chọn — dùng chung cho mọi nền)</label>

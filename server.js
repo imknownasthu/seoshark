@@ -17,6 +17,7 @@ import { serperIndex, serperRank } from "./src/serper.js";
 import { fetchOgMeta } from "./src/sharekit.js";
 import { telegraphPublish, telegramPost } from "./src/autopost.js";
 import { slugify, mdToHtml, pollinationsImage, insertImage, postWordPress, postDevto, postHashnode } from "./src/blog2.js";
+import { diigoSave, instapaperSave } from "./src/social-auto.js";
 import {
   ONPAGE_SYSTEM, RECOMMEND_SCHEMA, OPTIMIZE_SCHEMA, SUGGEST_SCHEMA,
   buildRecommendPrompt, buildOptimizePrompt, buildSuggestPrompt, mechanicalRecommendations,
@@ -737,7 +738,9 @@ app.post("/api/share/prepare", requireAuth, async (req, res) => {
     const eng = (engine || "local").toLowerCase();
     if (plats.length) {
       const sys =
-        "Bạn là chuyên gia social media tiếng Việt. Với MỖI nền tảng dưới đây, viết RIÊNG một TIÊU ĐỀ ngắn + một ĐOẠN NỘI DUNG (2-4 câu) KHÁC NHAU, CUỐN HÚT, có lời kêu gọi rõ ràng (CTA) điều hướng người đọc bấm vào link bài viết. Tự nhiên, KHÔNG spam, KHÔNG nhồi từ khóa; kèm hashtag phù hợp nếu nền đó hợp. Mỗi nền PHẢI khác nhau (đa dạng góc tiếp cận). Trả JSON {items:[{platform, title, caption}]} với platform đúng id đã cho.";
+        "Bạn là chuyên gia social media. Viết bằng ĐÚNG NGÔN NGỮ của từ khóa/bài viết: nếu từ khóa & tiêu đề là tiếng Việt thì viết tiếng Việt; nếu là tiếng Anh thì viết HOÀN TOÀN bằng tiếng Anh. " +
+        "Với MỖI nền tảng dưới đây, viết RIÊNG một TIÊU ĐỀ ngắn + một ĐOẠN NỘI DUNG (2-4 câu) KHÁC NHAU, CUỐN HÚT, có CTA điều hướng người đọc bấm vào link. Tự nhiên, KHÔNG spam, KHÔNG nhồi từ khóa; kèm hashtag phù hợp nếu nền đó hợp. " +
+        "TUYỆT ĐỐI KHÔNG chèn URL/đường link vào trong caption (link sẽ được thêm riêng ở dạng trần). Mỗi nền PHẢI khác nhau (đa dạng góc tiếp cận). Trả JSON {items:[{platform, title, caption}]} với platform đúng id đã cho.";
       const list = plats.map((p) => `- ${p.id}: ${p.name}${p.style ? " — phong cách: " + p.style : ""}`).join("\n");
       const user =
         `Tiêu đề bài: ${og.title || "(không có)"}\nMô tả: ${og.description || "(không có)"}\nTừ khóa: ${keyword || "(không có)"}\nURL: ${cleanUrl}\n\nDanh sách nền (viết TIÊU ĐỀ + NỘI DUNG riêng, KHÁC NHAU cho TỪNG id):\n${list}`;
@@ -861,6 +864,29 @@ app.post("/api/blog/post", requireAuth, async (req, res) => {
     }
     res.json(r);
   } catch (e) { res.status(500).json({ error: e.message || "Lỗi đăng bài" }); }
+});
+
+// ====== SOCIAL AUTO-POST (Diigo / Instapaper / Telegram) — đăng/lưu link trần ======
+app.post("/api/social/autopost", requireAuth, async (req, res) => {
+  try {
+    const { platform, creds, url, title, caption } = req.body || {};
+    if (!url) return res.status(400).json({ error: "Thiếu URL." });
+    const c = creds || {};
+    let r;
+    if (platform === "diigo") {
+      if (!c.user || !c.password || !c.apiKey) return res.status(400).json({ error: "Thiếu Diigo user / password / API key." });
+      r = await diigoSave({ user: c.user, password: c.password, apiKey: c.apiKey, url, title, desc: caption });
+    } else if (platform === "instapaper") {
+      if (!c.user || !c.password) return res.status(400).json({ error: "Thiếu Instapaper email / password." });
+      r = await instapaperSave({ user: c.user, password: c.password, url, title });
+    } else if (platform === "telegramauto") {
+      if (!c.token || !c.chatId) return res.status(400).json({ error: "Thiếu Telegram bot token / chat id." });
+      r = await telegramPost({ token: c.token, chatId: c.chatId, caption: (caption ? caption + "\n" : "") + url, image: "" });
+    } else {
+      return res.status(400).json({ error: "Nền này không hỗ trợ tự đăng API." });
+    }
+    res.json(r);
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi tự đăng" }); }
 });
 
 const PORT = process.env.PORT || 5173;

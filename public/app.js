@@ -1397,10 +1397,16 @@ $("#opClearSkill").addEventListener("click", () => {
     getpocket: { name: "Pocket", prefill: true, style: "súc tích", build: (s) => `https://getpocket.com/save?url=${E(s.url)}&title=${E(s.title)}` },
     okru:      { name: "OK.ru", prefill: true, style: "thân thiện", build: (s) => `https://connect.ok.ru/offer?url=${E(s.url)}&title=${E(s.caption)}` },
     vivaldi:   { name: "Vivaldi Social", prefill: true, style: "ngắn gọn (Mastodon)", build: (s) => `https://social.vivaldi.net/share?text=${E(s.caption + " " + s.url)}` },
+    // TỰ ĐĂNG THẬT qua API (cần kết nối tài khoản ở mục 🔌):
+    diigo:        { name: "Diigo (tự đăng)", auto: "diigo", style: "mô tả bookmark ngắn gọn" },
+    telegramauto: { name: "Telegram kênh (tự đăng)", auto: "telegramauto", style: "ngắn gọn, có emoji" },
+    flickr: { name: "Flickr", url: "https://www.flickr.com/" }, taplink: { name: "Taplink", url: "https://taplink.at/" },
+    hipolink: { name: "Hipolink", url: "https://hipolink.net/" }, officiallink: { name: "Official.link", url: "https://official.link/" },
+    hubblink: { name: "Hubb.link", url: "https://hubb.link/" },
     // Bookmark/social submit thủ công (copy + mở):
     trello: { name: "Trello", url: "https://trello.com/" }, scoopit: { name: "Scoop.it", url: "https://www.scoop.it/" },
     wakelet: { name: "Wakelet", url: "https://wakelet.com/" }, flipboard: { name: "Flipboard", url: "https://flipboard.com/" },
-    instapaper: { name: "Instapaper", url: "https://www.instapaper.com/" }, startme: { name: "Start.me", url: "https://start.me/" },
+    instapaper: { name: "Instapaper (tự đăng)", auto: "instapaper", style: "ngắn gọn" }, startme: { name: "Start.me", url: "https://start.me/" },
     telegraph: { name: "Telegra.ph", url: "https://telegra.ph/" }, videobookmark: { name: "Video-Bookmark", url: "https://www.video-bookmark.com/" },
     listly: { name: "List.ly", url: "https://list.ly/" }, patreon: { name: "Patreon", url: "https://www.patreon.com/" },
     abookmarking: { name: "ABookmarking", url: "https://www.abookmarking.com/" }, guidesco: { name: "Guides.co", url: "https://guides.co/" },
@@ -1481,10 +1487,15 @@ $("#opClearSkill").addEventListener("click", () => {
     visible.forEach((b) => (b.checked = !allOn));
     saveSel();
   });
+  if ($("#shSelSave")) $("#shSelSave").addEventListener("click", () => { saveSel(); toast("✓ Đã lưu lựa chọn social/bookmark cho lần sau"); });
+
+  // Chỉ lấy tên DOMAIN (bỏ http, www, đường dẫn) cho gọn
+  const domainName = (s) => { try { return new URL(/^https?:\/\//i.test(s) ? s : "https://" + s).hostname.replace(/^www\./, ""); } catch { return String(s || "").trim(); } };
 
   $("#shCustAdd").addEventListener("click", () => {
-    const name = $("#shCustName").value.trim(), url = $("#shCustUrl").value.trim();
-    if (!name || !url) return toast("Nhập cả tên và URL trang đăng.");
+    const rawName = $("#shCustName").value.trim(), url = $("#shCustUrl").value.trim();
+    if (!rawName || !url) return toast("Nhập cả tên và URL trang đăng.");
+    const name = domainName(rawName) || domainName(url);
     const id = "custom_" + Math.abs(Date.now());
     customSites.push({ id, name, url });
     saveCustom();
@@ -1497,11 +1508,32 @@ $("#opClearSkill").addEventListener("click", () => {
   function selectedAll() {
     return $$('#shCurated input[data-plat]:checked').map((cb) => {
       const id = cb.dataset.plat;
-      if (ITEMS[id]) return { id, name: ITEMS[id].name, style: ITEMS[id].style || "tổng quát, cuốn hút, có CTA", prefill: !!ITEMS[id].prefill, build: ITEMS[id].build || null, url: ITEMS[id].url || "" };
+      if (ITEMS[id]) return { id, name: ITEMS[id].name, style: ITEMS[id].style || "tổng quát, cuốn hút, có CTA", prefill: !!ITEMS[id].prefill, build: ITEMS[id].build || null, url: ITEMS[id].url || "", auto: ITEMS[id].auto || null };
       const c = customSites.find((x) => x.id === id);
-      return c ? { id, name: c.name, style: "tổng quát, cuốn hút, có CTA", prefill: false, build: null, url: c.url } : null;
+      return c ? { id, name: c.name, style: "tổng quát, cuốn hút, có CTA", prefill: false, build: null, url: c.url, auto: null } : null;
     }).filter(Boolean);
   }
+
+  // ----- Kết nối tài khoản tự đăng (Diigo/Instapaper/Telegram) -----
+  let conn = {};
+  try { conn = JSON.parse(localStorage.getItem("seoshark_social_conn") || "{}") || {}; } catch {}
+  function loadConnFields() {
+    const g = (k) => (conn[k] || {});
+    if ($("#connDiigoUser")) { $("#connDiigoUser").value = g("diigo").user || ""; $("#connDiigoPass").value = g("diigo").password || ""; $("#connDiigoKey").value = g("diigo").apiKey || ""; }
+    if ($("#connInstaUser")) { $("#connInstaUser").value = g("instapaper").user || ""; $("#connInstaPass").value = g("instapaper").password || ""; }
+    if ($("#connTgToken")) { $("#connTgToken").value = g("telegramauto").token || ""; $("#connTgChat").value = g("telegramauto").chatId || ""; }
+  }
+  loadConnFields();
+  if ($("#connSave")) $("#connSave").addEventListener("click", () => {
+    conn = {
+      diigo: { user: $("#connDiigoUser").value.trim(), password: $("#connDiigoPass").value.trim(), apiKey: $("#connDiigoKey").value.trim() },
+      instapaper: { user: $("#connInstaUser").value.trim(), password: $("#connInstaPass").value.trim() },
+      telegramauto: { token: $("#connTgToken").value.trim(), chatId: $("#connTgChat").value.trim() },
+    };
+    localStorage.setItem("seoshark_social_conn", JSON.stringify(conn));
+    toast("Đã lưu kết nối tự đăng");
+  });
+  const hasCreds = (key, c) => key === "diigo" ? !!(c && c.user && c.password && c.apiKey) : key === "instapaper" ? !!(c && c.user && c.password) : key === "telegramauto" ? !!(c && c.token && c.chatId) : false;
 
   // ----- Upload ảnh -----
   function downscale(file, max, cb) {
@@ -1540,14 +1572,31 @@ $("#opClearSkill").addEventListener("click", () => {
   function renderCards(plats) {
     $("#shCards").innerHTML = plats.map((p) => {
       const c = contentMap[p.id] || { title: "", caption: "" };
+      const icon = p.auto ? "🚀" : (p.prefill ? "🔓" : "📋");
+      const label = p.auto ? "Tự đăng (ra link)" : "Đăng lên " + p.name;
       return `<div style="border:1px solid var(--glass-border);border-radius:12px;padding:14px;margin-bottom:12px;background:var(--glass-strong)">
         <div class="flexbar" style="margin-bottom:8px"><b>${esc(p.name)}</b>
-          <button class="${p.prefill ? "small" : "ghost small"}" data-share="${p.id}">${p.prefill ? "🔓" : "📋"} Đăng lên ${esc(p.name)}</button></div>
+          <button class="${p.auto || p.prefill ? "small" : "ghost small"}" data-share="${p.id}">${icon} ${esc(label)}</button></div>
         <input data-title="${p.id}" type="text" value="${esc(c.title)}" placeholder="Tiêu đề" style="margin-bottom:6px" />
         <textarea data-caption="${p.id}" rows="3" placeholder="Nội dung">${esc(c.caption)}</textarea>
+        ${p.auto ? `<div data-result="${p.id}" style="margin-top:8px"></div>` : ""}
       </div>`;
     }).join("");
     $$('#shCards [data-share]').forEach((b) => b.addEventListener("click", () => doShare(b.dataset.share)));
+  }
+
+  async function doAutoPost(item, title, caption) {
+    const key = item.auto;
+    const box = $(`#shCards [data-result="${item.id}"]`);
+    if (!hasCreds(key, conn[key])) { if (box) box.innerHTML = `<div class="alert warn">Chưa kết nối <b>${esc(item.name)}</b> — mở mục <b>🔌 Kết nối tài khoản tự đăng</b> ở phần 1 để cấu hình.</div>`; return; }
+    if (box) box.innerHTML = `<div class="alert info"><span class="spinner" style="border-color:var(--orange);border-top-color:transparent"></span>Đang tự đăng...</div>`;
+    try {
+      const r = await fetch("/api/social/autopost", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ platform: key, creds: conn[key], url: share.url, title, caption }) });
+      const d = await r.json();
+      if (d.needAuth) { if (box) box.innerHTML = `<div class="alert err">Phiên hết hạn, tải lại trang.</div>`; return; }
+      if (!r.ok) { if (box) box.innerHTML = `<div class="alert err">❌ ${esc(d.error || "lỗi")}</div>`; return; }
+      if (box) box.innerHTML = `<div class="alert" style="background:var(--green-light);color:var(--green)">✅ Đã đăng/lưu thành công${d.link ? `: <a href="${esc(d.link)}" target="_blank" rel="noopener">${esc(d.link)}</a>` : ""}.</div>`;
+    } catch (e) { if (box) box.innerHTML = `<div class="alert err">❌ ${esc(e.message || e)}</div>`; }
   }
 
   async function doShare(id) {
@@ -1555,6 +1604,7 @@ $("#opClearSkill").addEventListener("click", () => {
     const item = curSel.find((x) => x.id === id); if (!item) return;
     const title = ($(`#shCards [data-title="${id}"]`) || {}).value || "";
     const caption = ($(`#shCards [data-caption="${id}"]`) || {}).value || "";
+    if (item.auto) return doAutoPost(item, title, caption);
     const s = { url: share.url, image: curImage(), title, caption };
     if (item.prefill && item.build) { window.open(item.build(s), "_blank", "noopener"); return; }
     await copyText(`${title}\n\n${caption}\n\n${s.url}`);
