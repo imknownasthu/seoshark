@@ -538,7 +538,15 @@
           <p class="hint">Công cụ tự lấy thumbnail + tiêu đề, AI viết <b>tiêu đề + nội dung RIÊNG (cuốn hút, có CTA) cho từng nền</b>. Tick các social/bookmark muốn đi link → bấm tạo → bấm nút từng nền.</p>
           <div class="grid cols-2">
             <div><label>URL bài viết * (để public, link sạch không dấu)</label><input id="shUrl" type="text" placeholder="https://nhakhoashark.vn/bai-viet" /></div>
-            <div><label>Từ khóa bài viết</label><input id="shKeyword" type="text" placeholder="vd: bọc răng sứ thẩm mỹ" /></div>
+            <div><label>Từ khóa bài viết</label><input id="shKeyword" type="text" placeholder="vd: bọc răng sứ / dental veneers cost" /></div>
+          </div>
+          <div style="margin-top:10px;max-width:280px">
+            <label>Ngôn ngữ nội dung</label>
+            <select id="shLang">
+              <option value="auto">Tự động (theo từ khóa)</option>
+              <option value="vi">Tiếng Việt</option>
+              <option value="en">English</option>
+            </select>
           </div>
 
           <label style="margin-top:14px">Chọn social / bookmark muốn đi link (A→Z, có lọc)</label>

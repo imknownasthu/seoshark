@@ -733,13 +733,20 @@ app.post("/api/share/prepare", requireAuth, async (req, res) => {
     const plats = (Array.isArray(platforms) ? platforms : []).filter((p) => p && p.id).slice(0, 30);
     const og = await fetchOgMeta(cleanUrl).catch(() => ({ title: "", description: "", image: "" }));
 
+    // Ngon ngu: auto -> dua vao TU KHOA (co dau tieng Viet -> vi, nguoc lai -> en)
+    let lang = String(req.body?.lang || "auto").toLowerCase();
+    if (lang !== "vi" && lang !== "en") {
+      lang = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i.test(keyword || "") ? "vi" : "en";
+    }
+    const langName = lang === "en" ? "ENGLISH — write 100% in natural, correct English" : "TIẾNG VIỆT — viết 100% bằng tiếng Việt tự nhiên, đúng chính tả";
+
     let aiItems = []; // [{platform, title, caption}]
     let engineUsed = "Local (cơ học)";
     const eng = (engine || "local").toLowerCase();
     if (plats.length) {
       const sys =
-        "Bạn là chuyên gia social media. Viết bằng ĐÚNG NGÔN NGỮ của từ khóa/bài viết: nếu từ khóa & tiêu đề là tiếng Việt thì viết tiếng Việt; nếu là tiếng Anh thì viết HOÀN TOÀN bằng tiếng Anh. " +
-        "Với MỖI nền tảng dưới đây, viết RIÊNG một TIÊU ĐỀ ngắn + một ĐOẠN NỘI DUNG (2-4 câu) KHÁC NHAU, CUỐN HÚT, có CTA điều hướng người đọc bấm vào link. Tự nhiên, KHÔNG spam, KHÔNG nhồi từ khóa; kèm hashtag phù hợp nếu nền đó hợp. " +
+        `NGÔN NGỮ BẮT BUỘC: ${langName}. Toàn bộ TIÊU ĐỀ + NỘI DUNG phải bằng đúng ngôn ngữ này, KHÔNG trộn ngôn ngữ khác — kể cả khi tiêu đề bài gốc là ngôn ngữ khác (hãy dựa vào TỪ KHÓA để xác định ngôn ngữ). ` +
+        "Bạn là chuyên gia social media giỏi. Với MỖI nền tảng dưới đây, viết RIÊNG một TIÊU ĐỀ ngắn hấp dẫn + một ĐOẠN NỘI DUNG (2-4 câu) RÕ RÀNG, CHÍNH XÁC, CUỐN HÚT, đúng ngữ pháp, có CTA điều hướng người đọc bấm vào link. KHÔNG spam, KHÔNG nhồi từ khóa; kèm hashtag phù hợp nếu nền đó hợp. " +
         "TUYỆT ĐỐI KHÔNG chèn URL/đường link vào trong caption (link sẽ được thêm riêng ở dạng trần). Mỗi nền PHẢI khác nhau (đa dạng góc tiếp cận). Trả JSON {items:[{platform, title, caption}]} với platform đúng id đã cho.";
       const list = plats.map((p) => `- ${p.id}: ${p.name}${p.style ? " — phong cách: " + p.style : ""}`).join("\n");
       const user =
@@ -760,9 +767,9 @@ app.post("/api/share/prepare", requireAuth, async (req, res) => {
       } catch (e) { /* fallback ben duoi */ }
     }
     // Fallback: dam bao moi nen deu co tieu de + noi dung
-    const baseTitle = og.title || keyword || "Bài viết hữu ích";
+    const baseTitle = (lang === "en" && keyword) ? keyword : (og.title || keyword || (lang === "en" ? "Useful article" : "Bài viết hữu ích"));
     const kwTag = (keyword || "").trim() ? " #" + (keyword || "").trim().replace(/\s+/g, "") : "";
-    const baseCaption = `${baseTitle}\n👉 Xem chi tiết trong bài viết bên dưới.${kwTag}`;
+    const baseCaption = `${baseTitle}\n${lang === "en" ? "👉 Read the full article below." : "👉 Xem chi tiết trong bài viết bên dưới."}${kwTag}`;
     const map = {};
     aiItems.forEach((c) => { if (c && c.platform) map[c.platform] = { title: (c.title || baseTitle).trim(), caption: (c.caption || baseCaption).trim() }; });
     const out = plats.map((p) => (map[p.id] ? { id: p.id, ...map[p.id] } : { id: p.id, title: baseTitle, caption: baseCaption }));

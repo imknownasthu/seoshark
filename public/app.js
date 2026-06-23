@@ -1621,13 +1621,14 @@ $("#opClearSkill").addEventListener("click", () => {
     curSel = selAll;
     localStorage.setItem("seoshark_share_url", url);
     const keyword = $("#shKeyword").value.trim();
+    const lang = ($("#shLang") && $("#shLang").value) || "auto";
     const engine = $("#engine").value, model = $("#model").value, apiKey = $("#apiKey").value.trim();
     const platforms = selAll.map((p) => ({ id: p.id, name: p.name, style: p.style }));
     const btn = $("#shRun"); btn.disabled = true;
-    $("#shMsg").innerHTML = `<div class="alert info"><span class="spinner" style="border-color:var(--brand-bright);border-top-color:transparent"></span>Đang lấy thumbnail & viết tiêu đề + nội dung riêng cho ${selAll.length} nơi...</div>`;
+    $("#shMsg").innerHTML = `<div class="alert info"><span class="spinner" style="border-top-color:transparent"></span>Đang lấy thumbnail & viết tiêu đề + nội dung riêng cho ${selAll.length} nơi...</div>`;
     $("#shResultCard").classList.add("hidden");
     try {
-      const r = await fetch("/api/share/prepare", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url, keyword, platforms, engine, model, apiKey }) });
+      const r = await fetch("/api/share/prepare", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url, keyword, lang, platforms, engine, model, apiKey }) });
       const d = await r.json();
       if (d.needAuth) { $("#shMsg").innerHTML = `<div class="alert err">Phiên hết hạn, hãy tải lại trang.</div>`; return; }
       if (!r.ok) { $("#shMsg").innerHTML = `<div class="alert err">${esc(d.error || "Lỗi server")}</div>`; return; }
