@@ -601,6 +601,54 @@
         <section class="card">
           <h2>1. Quản lý nền Blog 2.0</h2>
           <p class="hint">Kết nối blog qua <b>API</b> (không lưu mật khẩu đăng nhập). Lưu lại để lần sau chỉ cần tick chọn. Tự đăng: <b>WordPress</b> (App Password), <b>Dev.to</b>, <b>Hashnode</b>. "Khác" = chỉ xuất bài để bạn dán tay.</p>
+
+          <details style="margin:0 0 16px;border:1px solid var(--glass-border);border-radius:14px;padding:12px 16px;background:var(--card-soft)">
+            <summary style="cursor:pointer;font-weight:800;font-size:14px;color:var(--orange-text)">📖 Hướng dẫn lấy thông tin kết nối &amp; tự đăng (bấm để xem chi tiết)</summary>
+            <div style="margin-top:10px;font-size:13.5px;line-height:1.75">
+              <p class="muted" style="margin:0 0 10px">Chỉ các nền dưới đây <b>tự đăng được</b> (bấm Đăng là lên bài + trả link). Các nền không có API (Wix, Weebly, Site123, WordPress.com, Blogger qua app, exblog, pixnet, forumvi…) hãy chọn loại <b>"Khác"</b> rồi dùng nút <b>📋 Copy (giữ định dạng)</b> để dán vào trình soạn blog.</p>
+
+              <details style="margin:8px 0;border:1px solid var(--line);border-radius:10px;padding:10px 12px">
+                <summary style="cursor:pointer;font-weight:700">🟢 Dev.to — dễ nhất (khuyên dùng để thử)</summary>
+                <ol style="margin:8px 0 0;padding-left:20px">
+                  <li>Đăng nhập <a href="https://dev.to" target="_blank" rel="noopener">dev.to</a>.</li>
+                  <li>Mở <a href="https://dev.to/settings/extensions" target="_blank" rel="noopener">dev.to/settings/extensions</a>.</li>
+                  <li>Tới mục <b>"DEV Community API Keys"</b> → nhập tên (vd <i>SeoShark</i>) → bấm <b>Generate API Key</b>.</li>
+                  <li><b>Copy</b> chuỗi key vừa tạo.</li>
+                  <li>Tại đây: Loại nền = <b>Dev.to</b> → dán <b>API key</b> → đặt Tên gợi nhớ → <b>+ Lưu blog</b>.</li>
+                </ol>
+              </details>
+
+              <details style="margin:8px 0;border:1px solid var(--line);border-radius:10px;padding:10px 12px">
+                <summary style="cursor:pointer;font-weight:700">🔵 WordPress (TỰ HOST — có domain riêng)</summary>
+                <ol style="margin:8px 0 0;padding-left:20px">
+                  <li>Đăng nhập WordPress Admin: <code>https://tenmiencuaban.com/wp-admin</code>.</li>
+                  <li>Vào <b>Users → Profile</b> (Thành viên → Hồ sơ của bạn).</li>
+                  <li>Kéo xuống mục <b>"Application Passwords"</b> (Mật khẩu ứng dụng).</li>
+                  <li>Nhập tên (vd <i>SeoShark</i>) → bấm <b>Add New Application Password</b>.</li>
+                  <li><b>Copy</b> chuỗi hiện ra (dạng <code>abcd efgh ijkl mnop</code> — GIỮ NGUYÊN cả dấu cách).</li>
+                  <li>Tại đây: Loại = <b>WordPress</b> → URL site (<code>https://tenmiencuaban.com</code>) + <b>Username</b> (tên đăng nhập WP) + dán <b>App Password</b> → <b>+ Lưu blog</b>.</li>
+                </ol>
+                <p class="muted" style="margin:8px 0 0">⚠️ Cần WordPress 5.6+ và site chạy HTTPS. KHÔNG dùng được với <b>wordpress.com</b> (bản hosted) — chỉ dùng cho WP bạn tự cài trên hosting/domain riêng.</p>
+              </details>
+
+              <details style="margin:8px 0;border:1px solid var(--line);border-radius:10px;padding:10px 12px">
+                <summary style="cursor:pointer;font-weight:700">🟣 Hashnode</summary>
+                <ol style="margin:8px 0 0;padding-left:20px">
+                  <li>Đăng nhập <a href="https://hashnode.com" target="_blank" rel="noopener">hashnode.com</a> (tạo sẵn 1 blog/publication).</li>
+                  <li>Lấy token: mở <a href="https://hashnode.com/settings/developer" target="_blank" rel="noopener">hashnode.com/settings/developer</a> → <b>Generate New Token</b> (Personal Access Token) → Copy.</li>
+                  <li>Lấy <b>Publication ID</b>: vào <b>Dashboard</b> blog của bạn → mục cài đặt publication; ID nằm trong đường dẫn dashboard (chuỗi chữ-số). Nếu không chắc, hỏi tôi gửi cách lấy nhanh.</li>
+                  <li>Tại đây: Loại = <b>Hashnode</b> → dán <b>token</b> + <b>Publication ID</b> → <b>+ Lưu blog</b>.</li>
+                </ol>
+              </details>
+
+              <details style="margin:8px 0;border:1px solid var(--line);border-radius:10px;padding:10px 12px">
+                <summary style="cursor:pointer;font-weight:700">⚪ Telegra.ph (0 cấu hình — ở tab "Tự động Share Link")</summary>
+                <p style="margin:8px 0 0">Không cần kết nối gì. Vào tab <b>📣 Tự động Share Link</b> → tạo nội dung → bấm <b>📝 Đăng Telegra.ph</b> là tự tạo trang có nội dung + link (backlink) và trả về link ngay.</p>
+              </details>
+
+              <p class="muted" style="margin:10px 0 0">💡 <b>Mẹo dán giữ định dạng:</b> với nền loại "Khác", bấm <b>📋 Copy (giữ định dạng)</b> rồi vào trình soạn bài của blog → bấm vào ô nội dung → <b>Ctrl + V</b>: tiêu đề, link anchor và ảnh sẽ giữ nguyên. Nhớ đặt bài ở chế độ <b>Public</b> khi đăng.</p>
+            </div>
+          </details>
           <div class="grid cols-2">
             <div>
               <label>Loại nền</label>
