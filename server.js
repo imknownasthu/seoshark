@@ -19,6 +19,7 @@ import { telegraphPublish, telegramPost } from "./src/autopost.js";
 import { slugify, mdToHtml, pollinationsImage, insertImage, postWordPress, postDevto, postHashnode } from "./src/blog2.js";
 import { diigoSave, instapaperSave } from "./src/social-auto.js";
 import { expandSeeds, domainSeeds } from "./src/keywords.js";
+import { googleTrends, bingVolume } from "./src/volume.js";
 import {
   ONPAGE_SYSTEM, RECOMMEND_SCHEMA, OPTIMIZE_SCHEMA, SUGGEST_SCHEMA,
   buildRecommendPrompt, buildOptimizePrompt, buildSuggestPrompt, mechanicalRecommendations,
@@ -900,7 +901,7 @@ app.post("/api/social/autopost", requireAuth, async (req, res) => {
 // ====== NGHIEN CUU TU KHOA (free: Google Autocomplete + on-page + AI lam giau) ======
 app.post("/api/keywords/research", requireAuth, async (req, res) => {
   try {
-    const { mode, input, gl, hl, deep, expand, aiEnrich, engine, model, apiKey } = req.body || {};
+    const { mode, input, gl, hl, deep, expand, aiEnrich, engine, model, apiKey, bingKey, wantVolume } = req.body || {};
     const region = { gl: gl || "vn", hl: hl || "vi" };
     let keywords = [];
     if (mode === "domain") {
@@ -938,7 +939,26 @@ app.post("/api/keywords/research", requireAuth, async (req, res) => {
         }
       } catch (e) { /* giu danh sach khong lam giau */ }
     }
-    res.json({ keywords: rows, count: rows.length, enriched });
+
+    // Volume tim kiem: Google Trends (0-100, khong key) + Bing (so that, neu co key).
+    let trendUsed = false, bingUsed = false;
+    if (wantVolume !== false) {
+      const kwList = rows.map((r) => r.keyword);
+      const bKey = (bingKey || process.env.BING_API_KEY || "").trim();
+      const [trendMap, bingMap] = await Promise.all([
+        googleTrends(kwList, { ...region, cap: 30 }).catch(() => new Map()),
+        bKey ? bingVolume(kwList, { key: bKey, ...region, cap: 120 }).catch(() => new Map()) : Promise.resolve(new Map()),
+      ]);
+      trendUsed = trendMap.size > 0;
+      bingUsed = bingMap.size > 0;
+      rows.forEach((r) => {
+        const t = trendMap.get(r.keyword);
+        const v = bingMap.get(r.keyword);
+        r.trend = Number.isFinite(t) ? t : null;
+        r.volume = Number.isFinite(v) ? v : null;
+      });
+    }
+    res.json({ keywords: rows, count: rows.length, enriched, trendUsed, bingUsed });
   } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
 });
 

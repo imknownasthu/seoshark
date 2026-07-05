@@ -1821,17 +1821,29 @@ $("#opClearSkill").addEventListener("click", () => {
     if (!input) return toast(mode === "domain" ? "Nhập domain website." : "Nhập ít nhất 1 từ khóa.");
     const gl = $("#kwGl").value, hl = $("#kwHl").value;
     const deep = $("#kwDeep").checked, expand = $("#kwExpand").checked, aiEnrich = $("#kwAi").checked;
+    const wantVolume = $("#kwVolume").checked, bingKey = $("#kwBingKey").value.trim();
     const engine = $("#engine").value, model = $("#model").value, apiKey = $("#apiKey").value.trim();
     runBtn.disabled = true;
     $("#kwResultCard").classList.add("hidden");
-    $("#kwMsg").innerHTML = `<div class="alert info"><span class="spinner" style="border-top-color:transparent"></span>Đang lấy gợi ý & phân tích...${aiEnrich ? " (AI làm giàu — có thể mất ~15s)" : ""}</div>`;
+    const waits = [];
+    if (aiEnrich) waits.push("AI làm giàu");
+    if (wantVolume) waits.push("lấy volume (Google Trends ~15-25s)");
+    $("#kwMsg").innerHTML = `<div class="alert info"><span class="spinner" style="border-top-color:transparent"></span>Đang lấy gợi ý & phân tích...${waits.length ? " (" + waits.join(" + ") + ")" : ""}</div>`;
     try {
-      const r = await fetch("/api/keywords/research", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode, input, gl, hl, deep, expand, aiEnrich, engine, model, apiKey }) });
+      const r = await fetch("/api/keywords/research", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode, input, gl, hl, deep, expand, aiEnrich, wantVolume, bingKey, engine, model, apiKey }) });
       const d = await r.json();
       if (d.needAuth) { $("#kwMsg").innerHTML = `<div class="alert err">Phiên hết hạn, tải lại trang.</div>`; return; }
       if (!r.ok) { $("#kwMsg").innerHTML = `<div class="alert err">${esc(d.error || "Lỗi")}</div>`; return; }
       rows = d.keywords || [];
-      $("#kwMsg").innerHTML = rows.length ? `<div class="alert info">✓ Tìm được ${rows.length} từ khóa${d.enriched ? " (đã AI làm giàu)" : (aiEnrich ? " — AI chưa chạy (cần bật engine Gemini + key ở ⚙️)" : "")}.</div>` : `<div class="alert warn">Không tìm được từ khóa nào.</div>`;
+      const notes = [];
+      if (d.enriched) notes.push("đã AI làm giàu");
+      else if (aiEnrich) notes.push("AI chưa chạy (cần bật engine Gemini + key ở ⚙️)");
+      if (wantVolume) {
+        if (d.bingUsed) notes.push("có số lượt/tháng (Bing)");
+        if (d.trendUsed) notes.push("có mức quan tâm (Google Trends, top ~30)");
+        if (!d.bingUsed && !d.trendUsed) notes.push("volume chưa lấy được (Trends bị giới hạn/không có dữ liệu)");
+      }
+      $("#kwMsg").innerHTML = rows.length ? `<div class="alert info">✓ Tìm được ${rows.length} từ khóa${notes.length ? " — " + notes.join("; ") : ""}.</div>` : `<div class="alert warn">Không tìm được từ khóa nào.</div>`;
       if (rows.length) { $("#kwResultCard").classList.remove("hidden"); render(); }
     } catch (e) { $("#kwMsg").innerHTML = `<div class="alert err">Lỗi: ${esc(e.message || e)}</div>`; }
     finally { runBtn.disabled = false; }
@@ -1842,19 +1854,31 @@ $("#opClearSkill").addEventListener("click", () => {
     const intent = $("#kwFilterIntent").value;
     let list = rows.filter((r) => (!q || r.keyword.includes(q)) && (!intent || (r.intent || "") === intent));
     const sort = $("#kwSort").value;
+    const num = (x) => (Number.isFinite(x) ? x : -1);
     if (sort === "az") list.sort((a, b) => a.keyword.localeCompare(b.keyword, "vi"));
     else if (sort === "za") list.sort((a, b) => b.keyword.localeCompare(a.keyword, "vi"));
     else if (sort === "len") list.sort((a, b) => a.keyword.length - b.keyword.length);
     else if (sort === "lend") list.sort((a, b) => b.keyword.length - a.keyword.length);
+    else if (sort === "vol") list.sort((a, b) => num(b.volume) - num(a.volume) || num(b.trend) - num(a.trend));
+    else if (sort === "trend") list.sort((a, b) => num(b.trend) - num(a.trend) || num(b.volume) - num(a.volume));
     return list;
   }
+  // Thanh do truc quan cho diem quan tam 0-100
+  function trendBar(t) {
+    if (!Number.isFinite(t)) return '<span class="muted">—</span>';
+    const c = t >= 66 ? "var(--green)" : t >= 33 ? "var(--orange)" : "#9aa0a6";
+    return `<div style="display:flex;align-items:center;gap:6px"><div style="flex:1;min-width:52px;height:7px;background:#e6e6e6;border-radius:4px;overflow:hidden"><div style="width:${t}%;height:100%;background:${c}"></div></div><span style="font-size:.82rem;min-width:24px;text-align:right">${t}</span></div>`;
+  }
+  const fmtVol = (v) => (Number.isFinite(v) ? v.toLocaleString("vi-VN") : '<span class="muted">—</span>');
   function render() {
     const list = filtered();
     $("#kwCount").textContent = rows.length;
     $("#kwShown").textContent = `Hiển thị: ${list.length}`;
     const enriched = rows.some((r) => r.intent || r.cluster);
-    $("#kwTable").innerHTML = `<table class="cmp"><thead><tr><th>#</th><th>Từ khóa</th>${enriched ? "<th>Ý định</th><th>Nhóm chủ đề</th><th>Độ khó</th><th>Độ phổ biến</th>" : ""}</tr></thead><tbody>${
-      list.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.keyword)}</td>${enriched ? `<td>${esc(r.intent || "")}</td><td>${esc(r.cluster || "")}</td><td>${esc(r.difficulty || "")}</td><td>${esc(r.popularity || "")}</td>` : ""}</tr>`).join("")
+    const hasVol = rows.some((r) => Number.isFinite(r.volume));
+    const hasTrend = rows.some((r) => Number.isFinite(r.trend));
+    $("#kwTable").innerHTML = `<table class="cmp"><thead><tr><th>#</th><th>Từ khóa</th>${hasVol ? "<th>Volume/tháng<br><small class='muted'>Bing</small></th>" : ""}${hasTrend ? "<th style='min-width:110px'>Mức quan tâm<br><small class='muted'>Google Trends</small></th>" : ""}${enriched ? "<th>Ý định</th><th>Nhóm chủ đề</th><th>Độ khó</th>" : ""}</tr></thead><tbody>${
+      list.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.keyword)}</td>${hasVol ? `<td style="text-align:right">${fmtVol(r.volume)}</td>` : ""}${hasTrend ? `<td>${trendBar(r.trend)}</td>` : ""}${enriched ? `<td>${esc(r.intent || "")}</td><td>${esc(r.cluster || "")}</td><td>${esc(r.difficulty || "")}</td>` : ""}</tr>`).join("")
     }</tbody></table>`;
   }
   $("#kwFilter").addEventListener("input", render);
@@ -1865,9 +1889,20 @@ $("#opClearSkill").addEventListener("click", () => {
     if (!rows.length) return toast("Chưa có kết quả.");
     if (typeof XLSX === "undefined") return toast("Thư viện Excel chưa tải xong.");
     const enriched = rows.some((r) => r.intent || r.cluster);
+    const hasVol = rows.some((r) => Number.isFinite(r.volume));
+    const hasTrend = rows.some((r) => Number.isFinite(r.trend));
     const list = filtered();
-    const head = enriched ? ["Từ khóa", "Ý định", "Nhóm chủ đề", "Độ khó", "Độ phổ biến"] : ["Từ khóa"];
-    const aoa = [head].concat(list.map((r) => enriched ? [r.keyword, r.intent || "", r.cluster || "", r.difficulty || "", r.popularity || ""] : [r.keyword]));
+    const head = ["Từ khóa"];
+    if (hasVol) head.push("Volume/tháng (Bing)");
+    if (hasTrend) head.push("Mức quan tâm (Trends 0-100)");
+    if (enriched) head.push("Ý định", "Nhóm chủ đề", "Độ khó");
+    const aoa = [head].concat(list.map((r) => {
+      const row = [r.keyword];
+      if (hasVol) row.push(Number.isFinite(r.volume) ? r.volume : "");
+      if (hasTrend) row.push(Number.isFinite(r.trend) ? r.trend : "");
+      if (enriched) row.push(r.intent || "", r.cluster || "", r.difficulty || "");
+      return row;
+    }));
     const ws = XLSX.utils.aoa_to_sheet(aoa); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "TuKhoa"); XLSX.writeFile(wb, "seoshark-tu-khoa.xlsx");
   });
 })();
