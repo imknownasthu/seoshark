@@ -86,7 +86,7 @@ function showSection(section, title) {
   if (el) el.classList.add("active");
   $("#sectionTitle").textContent = title;
 }
-const SECTION_TITLES = { "internal-link": "Tối ưu Internal link", "onpage": "Tối ưu Onpage", "serp": "Check Index & Thứ hạng", "share": "Tự động Share Link", "blog2": "Tự động đăng Blog 2.0" };
+const SECTION_TITLES = { "internal-link": "Tối ưu Internal link", "onpage": "Tối ưu Onpage", "serp": "Check Index & Thứ hạng", "share": "Tự động Share Link", "blog2": "Tự động đăng Blog 2.0", "keywords": "Nghiên cứu từ khóa" };
 $$("#menu .menu-item").forEach((mi) => {
   mi.addEventListener("click", () => {
     $$("#menu .menu-item").forEach((x) => x.classList.remove("active"));
@@ -1801,4 +1801,73 @@ $("#opClearSkill").addEventListener("click", () => {
       box.innerHTML = `<div class="alert" style="background:var(--green-light);color:var(--green)">✅ Đã đăng: <a href="${esc(d.link)}" target="_blank" rel="noopener">${esc(d.link)}</a></div>`;
     } catch (e) { box.innerHTML = `<div class="alert err">❌ ${esc(e.message || e)}</div>`; pb.disabled = false; }
   }
+})();
+
+/* ===================== NGHIÊN CỨU TỪ KHÓA ===================== */
+(function () {
+  const runBtn = $("#kwRun");
+  if (!runBtn) return;
+  let rows = [];
+  let mode = "seed";
+
+  $$("#kwTabs .tab").forEach((t) => t.addEventListener("click", () => {
+    $$("#kwTabs .tab").forEach((x) => x.classList.toggle("active", x === t));
+    mode = t.dataset.kwmode;
+    $$("[data-kwpane]").forEach((p) => p.classList.toggle("active", p.dataset.kwpane === mode));
+  }));
+
+  runBtn.addEventListener("click", async () => {
+    const input = mode === "domain" ? $("#kwDomainInput").value.trim() : $("#kwSeedInput").value.trim();
+    if (!input) return toast(mode === "domain" ? "Nhập domain website." : "Nhập ít nhất 1 từ khóa.");
+    const gl = $("#kwGl").value, hl = $("#kwHl").value;
+    const deep = $("#kwDeep").checked, expand = $("#kwExpand").checked, aiEnrich = $("#kwAi").checked;
+    const engine = $("#engine").value, model = $("#model").value, apiKey = $("#apiKey").value.trim();
+    runBtn.disabled = true;
+    $("#kwResultCard").classList.add("hidden");
+    $("#kwMsg").innerHTML = `<div class="alert info"><span class="spinner" style="border-top-color:transparent"></span>Đang lấy gợi ý & phân tích...${aiEnrich ? " (AI làm giàu — có thể mất ~15s)" : ""}</div>`;
+    try {
+      const r = await fetch("/api/keywords/research", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode, input, gl, hl, deep, expand, aiEnrich, engine, model, apiKey }) });
+      const d = await r.json();
+      if (d.needAuth) { $("#kwMsg").innerHTML = `<div class="alert err">Phiên hết hạn, tải lại trang.</div>`; return; }
+      if (!r.ok) { $("#kwMsg").innerHTML = `<div class="alert err">${esc(d.error || "Lỗi")}</div>`; return; }
+      rows = d.keywords || [];
+      $("#kwMsg").innerHTML = rows.length ? `<div class="alert info">✓ Tìm được ${rows.length} từ khóa${d.enriched ? " (đã AI làm giàu)" : (aiEnrich ? " — AI chưa chạy (cần bật engine Gemini + key ở ⚙️)" : "")}.</div>` : `<div class="alert warn">Không tìm được từ khóa nào.</div>`;
+      if (rows.length) { $("#kwResultCard").classList.remove("hidden"); render(); }
+    } catch (e) { $("#kwMsg").innerHTML = `<div class="alert err">Lỗi: ${esc(e.message || e)}</div>`; }
+    finally { runBtn.disabled = false; }
+  });
+
+  function filtered() {
+    const q = ($("#kwFilter").value || "").trim().toLowerCase();
+    const intent = $("#kwFilterIntent").value;
+    let list = rows.filter((r) => (!q || r.keyword.includes(q)) && (!intent || (r.intent || "") === intent));
+    const sort = $("#kwSort").value;
+    if (sort === "az") list.sort((a, b) => a.keyword.localeCompare(b.keyword, "vi"));
+    else if (sort === "za") list.sort((a, b) => b.keyword.localeCompare(a.keyword, "vi"));
+    else if (sort === "len") list.sort((a, b) => a.keyword.length - b.keyword.length);
+    else if (sort === "lend") list.sort((a, b) => b.keyword.length - a.keyword.length);
+    return list;
+  }
+  function render() {
+    const list = filtered();
+    $("#kwCount").textContent = rows.length;
+    $("#kwShown").textContent = `Hiển thị: ${list.length}`;
+    const enriched = rows.some((r) => r.intent || r.cluster);
+    $("#kwTable").innerHTML = `<table class="cmp"><thead><tr><th>#</th><th>Từ khóa</th>${enriched ? "<th>Ý định</th><th>Nhóm chủ đề</th><th>Độ khó</th><th>Độ phổ biến</th>" : ""}</tr></thead><tbody>${
+      list.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.keyword)}</td>${enriched ? `<td>${esc(r.intent || "")}</td><td>${esc(r.cluster || "")}</td><td>${esc(r.difficulty || "")}</td><td>${esc(r.popularity || "")}</td>` : ""}</tr>`).join("")
+    }</tbody></table>`;
+  }
+  $("#kwFilter").addEventListener("input", render);
+  $("#kwFilterIntent").addEventListener("change", render);
+  $("#kwSort").addEventListener("change", render);
+
+  $("#kwExport").addEventListener("click", () => {
+    if (!rows.length) return toast("Chưa có kết quả.");
+    if (typeof XLSX === "undefined") return toast("Thư viện Excel chưa tải xong.");
+    const enriched = rows.some((r) => r.intent || r.cluster);
+    const list = filtered();
+    const head = enriched ? ["Từ khóa", "Ý định", "Nhóm chủ đề", "Độ khó", "Độ phổ biến"] : ["Từ khóa"];
+    const aoa = [head].concat(list.map((r) => enriched ? [r.keyword, r.intent || "", r.cluster || "", r.difficulty || "", r.popularity || ""] : [r.keyword]));
+    const ws = XLSX.utils.aoa_to_sheet(aoa); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "TuKhoa"); XLSX.writeFile(wb, "seoshark-tu-khoa.xlsx");
+  });
 })();

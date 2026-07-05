@@ -18,6 +18,7 @@ import { fetchOgMeta } from "./src/sharekit.js";
 import { telegraphPublish, telegramPost } from "./src/autopost.js";
 import { slugify, mdToHtml, pollinationsImage, insertImage, postWordPress, postDevto, postHashnode } from "./src/blog2.js";
 import { diigoSave, instapaperSave } from "./src/social-auto.js";
+import { expandSeeds, domainSeeds } from "./src/keywords.js";
 import {
   ONPAGE_SYSTEM, RECOMMEND_SCHEMA, OPTIMIZE_SCHEMA, SUGGEST_SCHEMA,
   buildRecommendPrompt, buildOptimizePrompt, buildSuggestPrompt, mechanicalRecommendations,
@@ -894,6 +895,51 @@ app.post("/api/social/autopost", requireAuth, async (req, res) => {
     }
     res.json(r);
   } catch (e) { res.status(500).json({ error: e.message || "Lỗi tự đăng" }); }
+});
+
+// ====== NGHIEN CUU TU KHOA (free: Google Autocomplete + on-page + AI lam giau) ======
+app.post("/api/keywords/research", requireAuth, async (req, res) => {
+  try {
+    const { mode, input, gl, hl, deep, expand, aiEnrich, engine, model, apiKey } = req.body || {};
+    const region = { gl: gl || "vn", hl: hl || "vi" };
+    let keywords = [];
+    if (mode === "domain") {
+      if (!input || !String(input).trim()) return res.status(400).json({ error: "Thiếu domain." });
+      keywords = await domainSeeds(String(input).trim(), { ...region, expand: !!expand });
+    } else {
+      const seeds = String(input || "").split(/[,\n]/).map((s) => s.trim()).filter(Boolean);
+      if (!seeds.length) return res.status(400).json({ error: "Nhập ít nhất 1 từ khóa." });
+      keywords = await expandSeeds(seeds, { ...region, deep: !!deep });
+    }
+    keywords = Array.from(new Set(keywords.map((k) => String(k).trim().toLowerCase()).filter(Boolean)));
+    if (!keywords.length) return res.json({ keywords: [], count: 0, enriched: false });
+
+    let rows = keywords.map((k) => ({ keyword: k }));
+    let enriched = false;
+    const eng = (engine || "local").toLowerCase();
+    if (aiEnrich && (eng === "gemini" || eng === "claude")) {
+      const top = keywords.slice(0, 150);
+      const sys =
+        "Bạn là chuyên gia SEO. Với DANH SÁCH từ khóa dưới đây, với MỖI từ khóa hãy phân loại: " +
+        "intent (một trong: Thông tin, Thương mại, Giao dịch, Điều hướng), cluster (tên nhóm chủ đề ngắn gọn), " +
+        "difficulty (Thấp/Trung bình/Cao — ước lượng độ cạnh tranh), popularity (Thấp/Trung bình/Cao — ước lượng lượng tìm kiếm tương đối). " +
+        "Trả JSON {items:[{keyword, intent, cluster, difficulty, popularity}]} đúng từ khóa đã cho, KHÔNG bịa từ khóa mới.";
+      const user = "Danh sách từ khóa:\n" + top.map((k) => "- " + k).join("\n");
+      const schema = { type: "object", properties: { items: { type: "array", items: { type: "object", properties: { keyword: { type: "string" }, intent: { type: "string" }, cluster: { type: "string" }, difficulty: { type: "string" }, popularity: { type: "string" } }, required: ["keyword"] } } }, required: ["items"] };
+      try {
+        let d = null;
+        if (eng === "gemini") { const k = (apiKey || process.env.GEMINI_API_KEY || "").trim(); if (k) d = await geminiJson({ apiKey: k, model: (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim(), system: sys, user, schema, maxTokens: 8192 }); }
+        else { const k = (apiKey || process.env.ANTHROPIC_API_KEY || "").trim(); if (k) d = await claudeJson({ apiKey: k, model: (model || process.env.SEOSHARK_MODEL || "claude-sonnet-4-6").trim(), system: sys, user, schema, maxTokens: 8000 }); }
+        if (d && Array.isArray(d.items)) {
+          const map = {};
+          d.items.forEach((it) => { if (it && it.keyword) map[String(it.keyword).trim().toLowerCase()] = it; });
+          rows = keywords.map((k) => { const m = map[k] || {}; return { keyword: k, intent: m.intent || "", cluster: m.cluster || "", difficulty: m.difficulty || "", popularity: m.popularity || "" }; });
+          enriched = true;
+        }
+      } catch (e) { /* giu danh sach khong lam giau */ }
+    }
+    res.json({ keywords: rows, count: rows.length, enriched });
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
 });
 
 const PORT = process.env.PORT || 5173;

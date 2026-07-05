@@ -86,8 +86,8 @@
         <div class="menu-item" data-section="blog2">
           <span class="mi-ic">📝</span> Tự động đăng Blog 2.0
         </div>
-        <div class="menu-item disabled" data-section="soon" data-name="Nghiên cứu từ khóa">
-          <span class="mi-ic">🔑</span> Nghiên cứu từ khóa <span class="soon">Sắp ra mắt</span>
+        <div class="menu-item" data-section="keywords">
+          <span class="mi-ic">🔑</span> Nghiên cứu từ khóa
         </div>
         <div class="menu-item disabled" data-section="soon" data-name="Theo dõi thứ hạng">
           <span class="mi-ic">📈</span> Theo dõi thứ hạng <span class="soon">Sắp ra mắt</span>
@@ -720,6 +720,58 @@
           <h2>3. Bài viết &amp; đăng</h2>
           <p class="muted" style="margin:0 0 12px">Mỗi blog 1 bài riêng. Kiểm tra anchor/link/ảnh rồi bấm <b>Đăng</b> — bài lên blog, trả về link (slug sạch không dấu không số theo tiêu đề).</p>
           <div id="blogResults"></div>
+        </section>
+      </div>
+
+      <!-- ===== SECTION: NGHIÊN CỨU TỪ KHÓA ===== -->
+      <div class="section page" data-section="keywords">
+        <section class="card">
+          <h2>1. Nghiên cứu từ khóa</h2>
+          <p class="hint">Free: <b>Google Autocomplete</b> (gợi ý thật của Google) + phân tích <b>on-page domain</b> + <b>AI</b> phân loại ý định/nhóm/độ khó. <i>(Volume số chính xác cần Google Keyword Planner — sẽ bổ sung ở giai đoạn 2 khi bạn có Google Ads developer token.)</i></p>
+
+          <div class="tabs subtabs" id="kwTabs">
+            <div class="tab active" data-kwmode="seed">🔤 Nhập từ khóa</div>
+            <div class="tab" data-kwmode="domain">🌐 Nhập domain</div>
+          </div>
+
+          <div class="featpane active" data-kwpane="seed">
+            <label>Nhập từ khóa (nhiều từ cách nhau bởi dấu phẩy)</label>
+            <textarea id="kwSeedInput" rows="3" placeholder="bọc răng sứ, niềng răng thẩm mỹ, trồng răng implant"></textarea>
+            <label style="margin-top:8px;display:flex;gap:6px;align-items:center;font-weight:400;cursor:pointer"><input type="checkbox" id="kwDeep" style="width:16px;height:16px;accent-color:var(--orange)"> Mở rộng SÂU (A–Z) — ra nhiều từ hơn nhưng chậm hơn</label>
+          </div>
+          <div class="featpane" data-kwpane="domain">
+            <label>Nhập domain website cần phân tích</label>
+            <input id="kwDomainInput" type="text" placeholder="https://nhakhoashark.vn/" />
+            <label style="margin-top:8px;display:flex;gap:6px;align-items:center;font-weight:400;cursor:pointer"><input type="checkbox" id="kwExpand" style="width:16px;height:16px;accent-color:var(--orange)"> Mở rộng thêm bằng Autocomplete</label>
+            <p class="muted" style="margin-top:6px">Chế độ này lấy từ khóa <b>TRÊN TRANG</b> (site đang nhắm). Từ khóa <b>đang xếp hạng</b> (như Ahrefs) cần API trả phí — sẽ bổ sung sau.</p>
+          </div>
+
+          <div class="grid cols-2" style="margin-top:12px">
+            <div><label>Quốc gia (Google)</label>
+              <select id="kwGl"><option value="vn">Việt Nam</option><option value="us">Hoa Kỳ</option><option value="gb">Anh</option><option value="sg">Singapore</option><option value="th">Thái Lan</option><option value="jp">Nhật Bản</option><option value="kr">Hàn Quốc</option><option value="au">Úc</option><option value="in">Ấn Độ</option></select>
+            </div>
+            <div><label>Ngôn ngữ</label>
+              <select id="kwHl"><option value="vi">Tiếng Việt</option><option value="en">English</option><option value="th">ไทย</option><option value="ja">日本語</option><option value="ko">한국어</option></select>
+            </div>
+          </div>
+          <label style="margin-top:10px;display:flex;gap:6px;align-items:center;font-weight:400;cursor:pointer"><input type="checkbox" id="kwAi" checked style="width:16px;height:16px;accent-color:var(--orange)"> Dùng AI (Gemini/Claude) làm giàu: ý định + nhóm chủ đề + độ khó + độ phổ biến</label>
+
+          <div style="margin-top:14px"><button id="kwRun">🔍 Nghiên cứu từ khóa</button></div>
+          <div id="kwMsg" style="margin-top:10px"></div>
+        </section>
+
+        <section class="card hidden" id="kwResultCard">
+          <div class="flexbar">
+            <h2 style="margin:0">2. Kết quả (<span id="kwCount">0</span> từ khóa)</h2>
+            <button class="ghost small" id="kwExport">⬇ Xuất Excel</button>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:10px 0">
+            <input id="kwFilter" type="text" placeholder="🔍 Lọc theo từ..." style="max-width:240px" />
+            <select id="kwFilterIntent" style="max-width:180px"><option value="">Mọi ý định</option><option>Thông tin</option><option>Thương mại</option><option>Giao dịch</option><option>Điều hướng</option></select>
+            <select id="kwSort" style="max-width:200px"><option value="az">Sắp xếp: A→Z</option><option value="za">Z→A</option><option value="len">Ngắn → dài</option><option value="lend">Dài → ngắn</option></select>
+            <span class="muted" id="kwShown"></span>
+          </div>
+          <div id="kwTable" style="overflow:auto"></div>
         </section>
       </div>
 
