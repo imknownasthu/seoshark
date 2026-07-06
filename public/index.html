@@ -760,7 +760,6 @@
           <div class="featpane active" data-kwpane="seed">
             <label>Nhập từ khóa (nhiều từ cách nhau bởi dấu phẩy)</label>
             <textarea id="kwSeedInput" rows="3" placeholder="bọc răng sứ, niềng răng thẩm mỹ, trồng răng implant"></textarea>
-            <label style="margin-top:8px;display:flex;gap:6px;align-items:center;font-weight:400;cursor:pointer"><input type="checkbox" id="kwDeep" style="width:16px;height:16px;accent-color:var(--orange)"> Mở rộng SÂU (A–Z) — ra nhiều từ hơn nhưng chậm hơn</label>
           </div>
           <div class="featpane" data-kwpane="domain">
             <label>Nhập domain website cần phân tích</label>
@@ -777,11 +776,22 @@
               <select id="kwHl"><option value="vi">Tiếng Việt</option><option value="en">English</option><option value="th">ไทย</option><option value="ja">日本語</option><option value="ko">한국어</option></select>
             </div>
           </div>
-          <label style="margin-top:10px;display:flex;gap:6px;align-items:center;font-weight:400;cursor:pointer"><input type="checkbox" id="kwAi" checked style="width:16px;height:16px;accent-color:var(--orange)"> Dùng AI (Gemini/Claude) làm giàu: ý định + nhóm chủ đề + độ khó + độ phổ biến</label>
+          <label style="margin-top:10px;display:flex;gap:6px;align-items:center;font-weight:400;cursor:pointer"><input type="checkbox" id="kwBoost" checked style="width:16px;height:16px;accent-color:var(--orange)"> 🚀 <b>Mở rộng sâu + phân tích AI</b> — đào sâu (A–Z) ra nhiều từ liên quan hơn <i>và</i> AI phân loại ý định · nhóm chủ đề · độ khó (chậm hơn chút)</label>
           <label style="margin-top:8px;display:flex;gap:6px;align-items:center;font-weight:400;cursor:pointer"><input type="checkbox" id="kwVolume" checked style="width:16px;height:16px;accent-color:var(--orange)"> Lấy <b>Volume tìm kiếm</b> — <b>Mức quan tâm</b> (Google Trends, miễn phí, top ~30 từ) + <b>Số lượt/tháng</b> thật nếu có Bing key</label>
           <div style="margin-top:8px">
-            <label class="muted" style="font-size:.85rem;display:block;margin-bottom:4px">🔑 Bing Webmaster API key (tùy chọn — để có số lượt/tháng thật). Lấy free tại <a href="https://www.bing.com/webmasters/" target="_blank" rel="noopener">bing.com/webmasters</a> → Settings → API access.</label>
+            <label class="muted" style="font-size:.85rem;display:block;margin-bottom:4px">🔑 Bing Webmaster API key (tùy chọn — để có số lượt/tháng thật)</label>
             <input id="kwBingKey" type="text" placeholder="Dán Bing API key (bỏ trống nếu chỉ dùng Google Trends)" style="max-width:420px" />
+            <details style="margin-top:8px;font-size:.85rem">
+              <summary style="cursor:pointer;color:var(--orange);font-weight:600">📖 Hướng dẫn lấy Bing API key MIỄN PHÍ (bấm để mở)</summary>
+              <ol style="margin:8px 0 0;padding-left:20px;line-height:1.7">
+                <li>Truy cập <a href="https://www.bing.com/webmasters/" target="_blank" rel="noopener">bing.com/webmasters</a> và đăng nhập bằng tài khoản Microsoft (tạo mới miễn phí nếu chưa có).</li>
+                <li>Bấm <b>Add a site</b> → nhập URL website của bạn (VD <code>https://nhakhoashark.vn</code>) và <b>xác minh sở hữu</b> (dán thẻ meta vào trang, hoặc upload file XML, hoặc qua DNS). Cần ít nhất 1 site đã xác minh mới dùng được API.</li>
+                <li>Vào <b>Settings</b> (biểu tượng ⚙️ góc trên phải) → chọn <b>API access</b> → <b>API Key</b>.</li>
+                <li>Bấm <b>Generate</b> để tạo khóa, rồi <b>Copy</b> chuỗi key.</li>
+                <li>Dán key vào ô 🔑 phía trên. Xong! Từ giờ kết quả sẽ có thêm cột <b>Số lượt/tháng</b> thật.</li>
+              </ol>
+              <p class="muted" style="margin:8px 0 0">Lưu ý: số liệu là của <b>Bing</b> (không phải Google) nhưng sát thực tế và hoàn toàn miễn phí. Nếu bỏ trống, công cụ vẫn cho <b>Mức quan tâm 0–100</b> qua Google Trends (không cần key).</p>
+            </details>
           </div>
 
           <div style="margin-top:14px"><button id="kwRun">🔍 Nghiên cứu từ khóa</button></div>
@@ -871,7 +881,7 @@
             <input id="olSerperKey" type="text" placeholder="dán API key từ serper.dev (free 2.500 lượt)" style="max-width:420px" />
           </div>
           <div class="featpane" data-olpane="manual">
-            <label>Dán 1–6 URL đối thủ TOP đầu (mỗi URL 1 dòng)</label>
+            <label>Dán 1–10 URL đối thủ TOP đầu (mỗi URL 1 dòng)</label>
             <textarea id="olManualUrls" rows="4" placeholder="https://doithu-1.com/bai-viet&#10;https://doithu-2.com/bai-viet"></textarea>
           </div>
           <div style="margin-top:12px"><button id="olAnalyze">🔎 Phân tích đối thủ</button></div>

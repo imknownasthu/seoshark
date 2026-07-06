@@ -20,7 +20,7 @@ import { slugify, mdToHtml, pollinationsImage, insertImage, postWordPress, postD
 import { diigoSave, instapaperSave } from "./src/social-auto.js";
 import { expandSeeds, domainSeeds } from "./src/keywords.js";
 import { googleTrends, bingVolume } from "./src/volume.js";
-import { fetchCompetitors, extractManyHeadings, mergeOutlinesLocal, markKeywords } from "./src/outline.js";
+import { fetchCompetitors, extractManyHeadings, mergeOutlinesLocal, markKeywords, normalizeOutline } from "./src/outline.js";
 import { buildOutlinePrompt, OUTLINE_SCHEMA } from "./src/outline-prompt.js";
 import * as store from "./src/store.js";
 import {
@@ -1044,16 +1044,18 @@ app.post("/api/outline/competitors", requireAuth, async (req, res) => {
   try {
     const { keyword, gl, hl, serperKey, urls } = req.body || {};
     const region = { gl: gl || "vn", hl: hl || "vi" };
-    let competitors = [], source = "manual";
-    const manual = (Array.isArray(urls) ? urls : []).map((u) => String(u || "").trim()).filter(Boolean).slice(0, 6);
+    let competitors = [], source = "manual", cap = 6;
+    // Dan tay: cho 1-10 URL. Tu dong: chi 1-6 (top SERP).
+    const manual = (Array.isArray(urls) ? urls : []).map((u) => String(u || "").trim()).filter(Boolean).slice(0, 10);
     if (manual.length) {
+      cap = 10;
       competitors = manual.map((u, i) => ({ url: u, title: u, position: i + 1 }));
     } else {
       const r = await fetchCompetitors(keyword, { ...region, num: 6, serperKey });
       source = r.source; competitors = r.competitors;
     }
-    // Boc tach heading tung doi thu
-    const outlines = await extractManyHeadings(competitors.map((c) => c.url));
+    // Boc tach heading tung doi thu (chi noi dung chinh)
+    const outlines = await extractManyHeadings(competitors.map((c) => c.url), cap);
     const merged = outlines.map((o, i) => ({
       ...competitors[i],
       ...o,
@@ -1104,6 +1106,9 @@ app.post("/api/outline/generate", requireAuth, async (req, res) => {
       outline = mergeOutlinesLocal(comp, { mainKw: main, subKws: subs });
       engineUsed = eng === "gemini" || eng === "claude" ? "Local (AI chưa chạy — cần key ở ⚙️)" : "Local";
     }
+
+    // Chuan hoa cau truc (level 2-4; cha co 0 hoac >=2 con -> con don le nang len cung cap) + danh dau tu khoa
+    outline = normalizeOutline(outline).map((it) => ({ ...it, ...markKeywords(it.text, main, subs) }));
 
     res.json({ outline, engineUsed, count: outline.length });
   } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }

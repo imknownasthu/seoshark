@@ -1893,7 +1893,8 @@ $("#opClearSkill").addEventListener("click", () => {
     const input = mode === "domain" ? $("#kwDomainInput").value.trim() : $("#kwSeedInput").value.trim();
     if (!input) return toast(mode === "domain" ? "Nhập domain website." : "Nhập ít nhất 1 từ khóa.");
     const gl = $("#kwGl").value, hl = $("#kwHl").value;
-    const deep = $("#kwDeep").checked, expand = $("#kwExpand").checked, aiEnrich = $("#kwAi").checked;
+    const boost = $("#kwBoost").checked;
+    const deep = boost, expand = $("#kwExpand").checked, aiEnrich = boost;
     const wantVolume = $("#kwVolume").checked, bingKey = $("#kwBingKey").value.trim();
     const engine = $("#engine").value, model = $("#model").value, apiKey = $("#apiKey").value.trim();
     runBtn.disabled = true;

@@ -35,29 +35,38 @@ function competitorsBlock(competitorOutlines) {
 
 export function buildOutlinePrompt({ mainKw, subKws = [], refOutline = "", knowledge = "", websiteName = "", competitorOutlines = [] }) {
   const system =
-    "Bạn là chuyên gia SEO content, chuyên lên OUTLINE (dàn ý heading) chuẩn Google cho bài viết. " +
-    "Nhiệm vụ: từ outline của các đối thủ TOP đầu SERP, tổng hợp ra MỘT outline tốt nhất cho từ khóa chính. " +
-    "NGUYÊN TẮC BẮT BUỘC:\n" +
-    "1. BÁM SÁT outline của các đối thủ: chỉ đưa vào các mục (heading) mà đối thủ top đã chứng minh là cần thiết; " +
-    "ưu tiên mục xuất hiện ở NHIỀU đối thủ. KHÔNG tự suy diễn, KHÔNG bịa mục không ai có.\n" +
-    "2. KHÔNG DƯ THỪA: gộp các heading trùng ý, bỏ mục lặp/không liên quan/quảng cáo/điều hướng.\n" +
-    "3. Cấu trúc phân cấp H2 > H3 > H4 hợp lý theo chuẩn SEO (H3 nằm trong H2, H4 nằm trong H3). Chỉ dùng H4 khi thật cần.\n" +
-    "4. Heading phải tự nhiên, rõ ràng; heading chính NÊN chứa TỪ KHÓA CHÍNH hoặc TỪ KHÓA PHỤ khi hợp lý (không nhồi nhét gượng ép).\n" +
-    "5. Hướng NON-COMMODITY: nếu có 'Kiến thức website', hãy khéo léo đưa các điểm khác biệt/độc quyền/thế mạnh của website vào các heading phù hợp để bài đi đúng định vị, KHÔNG chung chung như mọi bài.\n" +
-    "6. Nếu người dùng cung cấp 'Outline tham khảo', hãy ƯU TIÊN đưa các heading đó vào (nếu hợp lý) và sắp xếp đúng vị trí.\n" +
-    "7. Viết cùng NGÔN NGỮ với từ khóa chính. Chỉ trả outline heading, KHÔNG viết nội dung chi tiết.\n" +
-    "Trả JSON {outline:[{level, text}]} theo đúng thứ tự đọc từ trên xuống.";
+    "Bạn là chuyên gia SEO content chiến lược, làm việc ĐA LĨNH VỰC (y tế, TMĐT, bất động sản, giáo dục, du lịch, tài chính, pháp lý, công nghệ, làm đẹp...). " +
+    "Nhiệm vụ: từ outline của các đối thủ TOP SERP, TỔNG HỢP ra MỘT outline heading (H2/H3/H4) TỐT NHẤT cho từ khóa chính.\n\n" +
+    "⚠️ QUAN TRỌNG: Tự nhận diện ĐÚNG lĩnh vực của từ khóa rồi áp dụng phương pháp cho phù hợp lĩnh vực ĐÓ. " +
+    "Các khung dưới đây là PHƯƠNG PHÁP THAM KHẢO tổng quát, KHÔNG mặc định ngành nào.\n\n" +
+    "PHƯƠNG PHÁP (chắt lọc, không áp cứng):\n" +
+    "• Xác định SEARCH INTENT chủ đạo của từ khóa; toàn bộ cấu trúc phải phục vụ intent đó.\n" +
+    "• CHẮT LỌC, KHÔNG GỘP TẤT CẢ: phân tích đối thủ để tạo outline TỐT NHẤT, KHÔNG phải đối thủ có bao nhiêu thì đưa vào bấy nhiêu. " +
+    "Chỉ giữ heading THỰC SỰ phục vụ intent và hữu ích cho người đọc; BỎ mục trùng ý, rác, quảng cáo, điều hướng, ngoài lề. Mỗi H2 phải có lý do tồn tại rõ ràng.\n" +
+    "• Content gap: chỉ thêm heading nếu nó trả lời thêm một nhu cầu THẬT của người đọc cho từ khóa này (đừng thêm chỉ vì 1 đối thủ có).\n" +
+    "• Chất lượng theo Google: E-E-A-T + khung Unique/Specific/Authentic. Nếu có 'Kiến thức website', khéo léo lồng điểm khác biệt/thế mạnh vào heading phù hợp để đi hướng NON-COMMODITY (không chung chung như mọi bài). Nếu không có, vẫn giữ outline hữu ích, không bịa.\n" +
+    "• Trình bày rõ ràng phục vụ NGƯỜI ĐỌC (không nhồi nhét, không chunking hình thức cho AI).\n\n" +
+    "QUY TẮC CẤU TRÚC HEADING (BẮT BUỘC):\n" +
+    "1. Phân cấp đúng: H3 nằm trong H2, H4 nằm trong H3. Chỉ dùng H4 khi thật cần.\n" +
+    "2. Mỗi heading cha có 0 HOẶC ≥2 con — TUYỆT ĐỐI KHÔNG để 1 H2 chỉ có đúng 1 H3, hay 1 H3 chỉ có đúng 1 H4. Nếu chỉ có 1 ý con, đừng tạo heading con lẻ (để nội dung đó nằm trong phần cha).\n" +
+    "3. VIẾT HOA kiểu 'sentence case': chỉ viết hoa CHỮ CÁI ĐẦU heading và TÊN RIÊNG/thương hiệu/từ viết tắt (VD: Invisalign, Google, iPhone). KHÔNG viết hoa mọi từ, KHÔNG VIẾT HOA TOÀN BỘ.\n" +
+    "4. KHÔNG dùng dấu gạch ngang (-, –, —) để giải thích/bổ nghĩa trong heading. Dùng dấu phẩy, hai chấm hoặc viết lại.\n" +
+    "5. Heading NÊN chứa từ khóa chính hoặc từ khóa phụ khi TỰ NHIÊN (không gượng ép, không nhồi).\n" +
+    "6. SỐ LƯỢNG heading do search intent quyết định — bài đơn giản thì ít, phức tạp thì nhiều; không ép con số.\n" +
+    "7. Nếu có 'Outline tham khảo', ưu tiên đưa các heading đó vào (nếu hợp lý) và đặt đúng vị trí.\n" +
+    "8. Viết cùng NGÔN NGỮ với từ khóa chính. Chỉ trả OUTLINE HEADING, không viết nội dung.\n\n" +
+    "Trả JSON {outline:[{level, text}]} theo đúng thứ tự đọc từ trên xuống (level = 2|3|4).";
 
   const parts = [];
   parts.push(`TỪ KHÓA CHÍNH: ${mainKw}`);
   if (subKws.length) parts.push(`TỪ KHÓA PHỤ: ${subKws.join(", ")}`);
   if (websiteName) parts.push(`WEBSITE cần soạn: ${websiteName}`);
   if (refOutline && String(refOutline).trim()) parts.push(`OUTLINE THAM KHẢO (heading mong muốn của người dùng):\n${String(refOutline).trim()}`);
-  if (knowledge && String(knowledge).trim()) parts.push(`KIẾN THỨC WEBSITE (dùng để đi đúng hướng non-commodity):\n${String(knowledge).trim().slice(0, 6000)}`);
-  parts.push(`OUTLINE CỦA CÁC ĐỐI THỦ TOP SERP (phân tích thật kỹ, đây là căn cứ chính):\n${competitorsBlock(competitorOutlines)}`);
+  if (knowledge && String(knowledge).trim()) parts.push(`KIẾN THỨC WEBSITE (dùng để đi đúng hướng non-commodity, KHÔNG nhồi chi tiết vào heading):\n${String(knowledge).trim().slice(0, 6000)}`);
+  parts.push(`OUTLINE CÁC ĐỐI THỦ TOP SERP (phân tích kỹ làm CĂN CỨ, nhưng CHẮT LỌC chứ không copy toàn bộ):\n${competitorsBlock(competitorOutlines)}`);
   parts.push(
-    "YÊU CẦU: Tổng hợp outline cuối cùng (H2/H3/H4) cho từ khóa chính — bám sát đối thủ, không dư thừa, không bịa, " +
-    "heading nên chứa từ khóa chính/phụ, đi đúng hướng non-commodity nếu có kiến thức website."
+    "YÊU CẦU: Xuất outline cuối cùng (H2/H3/H4) TỐT NHẤT cho từ khóa chính — chắt lọc heading thiết yếu, đúng search intent, " +
+    "tuân thủ mọi QUY TẮC CẤU TRÚC ở trên (đặc biệt: cha có 0 hoặc ≥2 con; sentence case; không gạch ngang)."
   );
 
   return { system, user: parts.join("\n\n"), schema: OUTLINE_SCHEMA };

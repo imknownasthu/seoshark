@@ -31,16 +31,32 @@ function cleanText(s) {
   return String(s || "").replace(/\s+/g, " ").trim();
 }
 
-// Parse tho tat ca h1-h4 tu 1 document (khi Readability that bai)
-function headingsFromDom(doc) {
+// Parse tat ca h1-h4 trong 1 phan tu (theo thu tu doc)
+function headingsFromEl(el) {
   const out = [];
-  doc.querySelectorAll("h1, h2, h3, h4").forEach((el) => {
-    const text = cleanText(el.textContent);
-    const level = Number(el.tagName.substring(1));
+  el.querySelectorAll("h1, h2, h3, h4").forEach((h) => {
+    const text = cleanText(h.textContent);
+    const level = Number(h.tagName.substring(1));
     if (!text || text.length < 2 || text.length > 200) return;
     out.push({ level, text });
   });
   return out;
+}
+
+// Lay heading CHI trong NOI DUNG CHINH: bo nav/header/footer/sidebar..., uu tien <main>/<article>.
+function mainContentHeadings(doc) {
+  const clone = doc.cloneNode(true);
+  clone.querySelectorAll(
+    "nav, header, footer, aside, form, script, style, noscript, template, " +
+    "[role=navigation], [role=banner], [role=contentinfo], [role=complementary], [role=search], " +
+    ".nav, .navbar, .menu, .sidebar, .side-bar, .footer, .site-footer, .header, .site-header, " +
+    ".breadcrumb, .breadcrumbs, .comment, .comments, .related, .related-posts, .widget, .widgets, " +
+    ".toc, .table-of-contents, .share, .social, .pagination, .cookie, .popup, .modal, .newsletter"
+  ).forEach((el) => el.remove());
+  const main = clone.querySelector(
+    "main, article, [role=main], #content, #main, .content, .main-content, .post-content, .entry-content, .article-content, .article-body, .single-content"
+  ) || clone.body || clone;
+  return headingsFromEl(main);
 }
 
 export async function extractHeadings(url) {
@@ -61,13 +77,13 @@ export async function extractHeadings(url) {
     const article = reader.parse();
     if (article && article.content) {
       const cdom = new JSDOM(`<body>${article.content}</body>`);
-      headings = headingsFromDom(cdom.window.document);
+      headings = headingsFromEl(cdom.window.document.body);
       if (article.title && !base.title) base.title = cleanText(article.title);
     }
   } catch { /* fallthrough */ }
 
-  // 2) Fallback: parse tho toan trang neu Readability khong ra heading
-  if (headings.length < 2) headings = headingsFromDom(doc);
+  // 2) Fallback: CHI noi dung chinh (bo nav/header/footer/sidebar), khong lay toan trang
+  if (headings.length < 2) headings = mainContentHeadings(doc);
 
   // Bo trung lien tiep
   const dedup = [];
@@ -80,9 +96,9 @@ export async function extractHeadings(url) {
   return base;
 }
 
-// Boc tach nhieu URL song song (gioi han loi tung cai)
-export async function extractManyHeadings(urls) {
-  const list = (Array.isArray(urls) ? urls : []).map((u) => String(u || "").trim()).filter(Boolean).slice(0, 6);
+// Boc tach nhieu URL song song (gioi han loi tung cai). cap: so URL toi da (auto=6, manual=10).
+export async function extractManyHeadings(urls, cap = 10) {
+  const list = (Array.isArray(urls) ? urls : []).map((u) => String(u || "").trim()).filter(Boolean).slice(0, cap);
   const out = [];
   for (let i = 0; i < list.length; i += 3) {
     const chunk = list.slice(i, i + 3);
@@ -101,6 +117,48 @@ export function markKeywords(text, mainKw, subKws) {
   const subs = (subKws || []).map(norm).filter(Boolean);
   const hitSubs = subs.filter((s) => t.includes(s));
   return { hasMain, hitSubs };
+}
+
+// ---- Sentence case: chi sua heading VIET HOA TOAN BO (shouting) ve dang sentence case ----
+export function toSentenceCaseIfShouting(text) {
+  const s = String(text || "");
+  const letters = [...s].filter((c) => c.toLowerCase() !== c.toUpperCase());
+  if (letters.length < 2) return s;
+  const upper = letters.filter((c) => c === c.toUpperCase()).length;
+  if (upper / letters.length < 0.7) return s; // khong phai VIET HOA TOAN BO -> giu nguyen
+  const lower = s.toLowerCase();
+  return lower.replace(/\p{L}/u, (m) => m.toUpperCase());
+}
+
+// ---- Chuan hoa cau truc outline: level 2..4; cha co 0 HOAC >=2 con (con don le -> nang len cung cap cha) ----
+export function normalizeOutline(items) {
+  const clean = (Array.isArray(items) ? items : [])
+    .filter((it) => it && it.text && String(it.text).trim())
+    .map((it) => ({ level: Math.min(4, Math.max(2, Number(it.level) || 2)), text: String(it.text).trim() }));
+  if (!clean.length) return [];
+
+  // Dung tree theo level (moc theo phan tu cha gan nhat co level nho hon)
+  const roots = [];
+  const stack = [];
+  for (const it of clean) {
+    const node = { level: it.level, text: it.text, children: [] };
+    while (stack.length && stack[stack.length - 1].level >= node.level) stack.pop();
+    if (stack.length) stack[stack.length - 1].children.push(node);
+    else roots.push(node);
+    stack.push(node);
+  }
+
+  // Phat lai: cha co dung 1 con -> con do thanh ANH EM cung cap (nang len); cap toi da H4
+  const out = [];
+  const emit = (nodes, level) => {
+    for (const n of nodes) {
+      out.push({ level, text: n.text });
+      if (n.children.length === 1) emit(n.children, level);              // con don le -> cung cap cha
+      else if (n.children.length >= 2) emit(n.children, Math.min(4, level + 1));
+    }
+  };
+  emit(roots, 2);
+  return out;
 }
 
 // ---- Gop co hoc outline nhieu doi thu (Local, khong AI) ----
@@ -149,6 +207,9 @@ export function mergeOutlinesLocal(competitorOutlines, { mainKw, subKws } = {}) 
       .forEach((ch) => items.push({ level: ch.level, text: ch.text, count: ch.count }));
   });
 
-  // Danh dau tu khoa
-  return items.map((it) => ({ ...it, ...markKeywords(it.text, mainKw, subKws) }));
+  // Sentence-case cho heading VIET HOA TOAN BO + danh dau tu khoa
+  return items.map((it) => {
+    const text = toSentenceCaseIfShouting(it.text);
+    return { level: it.level, text, ...markKeywords(text, mainKw, subKws) };
+  });
 }
