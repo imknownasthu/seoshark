@@ -59,6 +59,24 @@ export async function serperIndex({ key, url, gl, hl }) {
   return { url: clean, indexed: organic.length > 0, found: organic[0]?.link || "" };
 }
 
+// Lay danh sach organic top `num` cho 1 tu khoa (de phan tich doi thu).
+export async function serperOrganic({ key, keyword, gl, hl, num = 6, excludeHost }) {
+  const data = await serperSearch({ key, q: String(keyword || "").trim(), gl, hl, num: Math.min(10, num + 2) });
+  const organic = Array.isArray(data.organic) ? data.organic : [];
+  const out = [];
+  const seen = new Set();
+  for (const o of organic) {
+    if (!o.link) continue;
+    const host = hostOf(o.link);
+    if (excludeHost && (host === normHost(excludeHost))) continue;
+    if (seen.has(o.link)) continue;
+    seen.add(o.link);
+    out.push({ url: o.link, title: o.title || o.link, host, position: o.position || out.length + 1 });
+    if (out.length >= num) break;
+  }
+  return out;
+}
+
 // Check thu hang 1 tu khoa cho domain (trong top `num`). Tra rank=null neu ngoai top.
 export async function serperRank({ key, keyword, domain, gl, hl, num = 10 }) {
   const kw = String(keyword || "").trim();

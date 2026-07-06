@@ -20,6 +20,9 @@ import { slugify, mdToHtml, pollinationsImage, insertImage, postWordPress, postD
 import { diigoSave, instapaperSave } from "./src/social-auto.js";
 import { expandSeeds, domainSeeds } from "./src/keywords.js";
 import { googleTrends, bingVolume } from "./src/volume.js";
+import { fetchCompetitors, extractManyHeadings, mergeOutlinesLocal, markKeywords } from "./src/outline.js";
+import { buildOutlinePrompt, OUTLINE_SCHEMA } from "./src/outline-prompt.js";
+import * as store from "./src/store.js";
 import {
   ONPAGE_SYSTEM, RECOMMEND_SCHEMA, OPTIMIZE_SCHEMA, SUGGEST_SCHEMA,
   buildRecommendPrompt, buildOptimizePrompt, buildSuggestPrompt, mechanicalRecommendations,
@@ -996,6 +999,113 @@ app.post("/api/keywords/research", requireAuth, async (req, res) => {
       });
     }
     res.json({ keywords: rows, count: rows.length, enriched, trendUsed, bingUsed });
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
+});
+
+// ===================== KHO KIEN THUC WEBSITE (rieng theo tai khoan) =====================
+app.get("/api/knowledge/list", requireAuth, async (req, res) => {
+  try {
+    const owner = (req.user?.email || "guest").toLowerCase();
+    const items = await store.listKnowledge(owner);
+    res.json({ items });
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
+});
+
+app.post("/api/knowledge/save", requireAuth, async (req, res) => {
+  try {
+    const owner = (req.user?.email || "guest").toLowerCase();
+    const { id, website, title, content } = req.body || {};
+    const text = String(content || "").trim();
+    if (!text) return res.status(400).json({ error: "Nội dung kiến thức đang trống." });
+    const rec = {
+      id: id && String(id).trim() ? String(id).trim() : randomUUID(),
+      owner,
+      website: String(website || "").trim(),
+      title: String(title || "").trim() || (String(website || "").trim() || "Kiến thức website"),
+      content: text.slice(0, 200000),
+    };
+    await store.putKnowledge(rec);
+    res.json({ ok: true, id: rec.id });
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
+});
+
+app.post("/api/knowledge/delete", requireAuth, async (req, res) => {
+  try {
+    const owner = (req.user?.email || "guest").toLowerCase();
+    const { id } = req.body || {};
+    const ok = await store.deleteKnowledge(String(id || "").trim(), owner);
+    res.json({ ok });
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
+});
+
+// ===================== LEN OUTLINE CHUAN SEO =====================
+// Buoc 1: lay + boc tach outline cua doi thu (auto SERP hoac dan URL thu cong)
+app.post("/api/outline/competitors", requireAuth, async (req, res) => {
+  try {
+    const { keyword, gl, hl, serperKey, urls } = req.body || {};
+    const region = { gl: gl || "vn", hl: hl || "vi" };
+    let competitors = [], source = "manual";
+    const manual = (Array.isArray(urls) ? urls : []).map((u) => String(u || "").trim()).filter(Boolean).slice(0, 6);
+    if (manual.length) {
+      competitors = manual.map((u, i) => ({ url: u, title: u, position: i + 1 }));
+    } else {
+      const r = await fetchCompetitors(keyword, { ...region, num: 6, serperKey });
+      source = r.source; competitors = r.competitors;
+    }
+    // Boc tach heading tung doi thu
+    const outlines = await extractManyHeadings(competitors.map((c) => c.url));
+    const merged = outlines.map((o, i) => ({
+      ...competitors[i],
+      ...o,
+      headingCount: (o.headings || []).length,
+    }));
+    res.json({ source, competitors: merged });
+  } catch (e) { res.status(400).json({ error: e.message || "Lỗi lấy đối thủ" }); }
+});
+
+// Buoc 2: tong hop outline cuoi cung (Local gop co hoc / AI Gemini-Claude)
+app.post("/api/outline/generate", requireAuth, async (req, res) => {
+  try {
+    const { mainKw, subKws, refOutline, knowledge, websiteName, competitors, engine, model, apiKey } = req.body || {};
+    const main = String(mainKw || "").trim();
+    if (!main) return res.status(400).json({ error: "Thiếu từ khóa chính." });
+    const subs = (Array.isArray(subKws) ? subKws : String(subKws || "").split(/[,\n]/)).map((s) => String(s || "").trim()).filter(Boolean);
+    const comp = (Array.isArray(competitors) ? competitors : []).filter((c) => c && Array.isArray(c.headings) && c.headings.length);
+    if (!comp.length) return res.status(400).json({ error: "Chưa có outline đối thủ nào (hãy phân tích đối thủ trước)." });
+
+    const clampLevel = (l) => (l === 3 ? 3 : l === 4 ? 4 : 2);
+    let outline = [], engineUsed = "Local";
+    const eng = (engine || "local").toLowerCase();
+
+    if (eng === "gemini" || eng === "claude") {
+      const { system, user, schema } = buildOutlinePrompt({ mainKw: main, subKws: subs, refOutline, knowledge, websiteName, competitorOutlines: comp });
+      try {
+        let d = null;
+        if (eng === "gemini") {
+          const k = (apiKey || process.env.GEMINI_API_KEY || "").trim();
+          if (k) { d = await geminiJson({ apiKey: k, model: (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim(), system, user, schema, maxTokens: 8192 }); engineUsed = "Gemini"; }
+        } else {
+          const k = (apiKey || process.env.ANTHROPIC_API_KEY || "").trim();
+          if (k) { d = await claudeJson({ apiKey: k, model: (model || process.env.SEOSHARK_MODEL || "claude-sonnet-4-6").trim(), system, user, schema, maxTokens: 8000 }); engineUsed = "Claude"; }
+        }
+        if (d && Array.isArray(d.outline)) {
+          outline = d.outline
+            .filter((it) => it && it.text && String(it.text).trim())
+            .map((it) => {
+              const text = String(it.text).trim();
+              return { level: clampLevel(Number(it.level)), text, ...markKeywords(text, main, subs) };
+            });
+        }
+      } catch (e) { /* fallback local */ }
+    }
+
+    // Fallback / Local: gop co hoc outline doi thu
+    if (!outline.length) {
+      outline = mergeOutlinesLocal(comp, { mainKw: main, subKws: subs });
+      engineUsed = eng === "gemini" || eng === "claude" ? "Local (AI chưa chạy — cần key ở ⚙️)" : "Local";
+    }
+
+    res.json({ outline, engineUsed, count: outline.length });
   } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
 });
 

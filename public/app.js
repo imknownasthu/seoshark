@@ -86,7 +86,7 @@ function showSection(section, title) {
   if (el) el.classList.add("active");
   $("#sectionTitle").textContent = title;
 }
-const SECTION_TITLES = { "internal-link": "Tối ưu Internal link", "onpage": "Tối ưu Onpage", "serp": "Check Index & Thứ hạng", "share": "Tự động Share Link", "blog2": "Tự động đăng Blog 2.0", "keywords": "Nghiên cứu từ khóa" };
+const SECTION_TITLES = { "internal-link": "Tối ưu Internal link", "onpage": "Tối ưu Onpage", "serp": "Check Index & Thứ hạng", "share": "Tự động Share Link", "blog2": "Tự động đăng Blog 2.0", "keywords": "Nghiên cứu từ khóa", "outline": "Lên outline chuẩn SEO" };
 $$("#menu .menu-item").forEach((mi) => {
   mi.addEventListener("click", () => {
     $$("#menu .menu-item").forEach((x) => x.classList.remove("active"));
@@ -1977,5 +1977,213 @@ $("#opClearSkill").addEventListener("click", () => {
       return row;
     }));
     const ws = XLSX.utils.aoa_to_sheet(aoa); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "TuKhoa"); XLSX.writeFile(wb, "seoshark-tu-khoa.xlsx");
+  });
+})();
+
+/* ===================== LÊN OUTLINE CHUẨN SEO ===================== */
+(function () {
+  const analyzeBtn = $("#olAnalyze");
+  if (!analyzeBtn) return;
+  let mode = "auto";
+  let competitors = [];   // outline đối thủ (đã bóc tách)
+  let lastOutline = [];   // kết quả outline cuối
+  let knowledge = [];     // thư viện kiến thức của tài khoản
+
+  const setMsg = (el, type, msg) => { $(el).innerHTML = msg ? alertHtml(type, msg) : ""; };
+  const splitList = (v) => String(v || "").split(/[,\n]/).map((s) => s.trim()).filter(Boolean);
+
+  // --- Tabs auto / manual ---
+  $$("#olCompTabs .tab").forEach((t) => t.addEventListener("click", () => {
+    $$("#olCompTabs .tab").forEach((x) => x.classList.toggle("active", x === t));
+    mode = t.dataset.olmode;
+    $$("[data-olpane]").forEach((p) => p.classList.toggle("active", p.dataset.olpane === mode));
+  }));
+
+  // --- Kho kiến thức ---
+  async function loadKnowledge() {
+    try {
+      const r = await _fetch("/api/knowledge/list");
+      if (!r.ok) return;
+      const d = await r.json();
+      knowledge = d.items || [];
+      const sel = $("#olKnowSelect");
+      const cur = sel.value;
+      sel.innerHTML = `<option value="">— Không dùng —</option>` +
+        knowledge.map((k) => `<option value="${esc(k.id)}">${esc((k.website ? k.website + " · " : "") + (k.title || "Kiến thức"))}</option>`).join("");
+      if (cur && knowledge.some((k) => k.id === cur)) sel.value = cur;
+    } catch {}
+  }
+  // Nạp thư viện lần đầu khi mở tab
+  let knowLoaded = false;
+  $$('#menu .menu-item').forEach((mi) => mi.addEventListener("click", () => {
+    if (mi.dataset.section === "outline" && !knowLoaded) { knowLoaded = true; loadKnowledge(); }
+  }));
+
+  $("#olKnowNew").addEventListener("click", () => {
+    const ed = $("#olKnowEditor");
+    ed.classList.toggle("hidden");
+    // Nếu đang chọn 1 mục -> nạp để sửa
+    const k = knowledge.find((x) => x.id === $("#olKnowSelect").value);
+    if (!ed.classList.contains("hidden") && k) {
+      $("#olKnowTitle").value = k.title || "";
+      $("#olKnowContent").value = k.content || "";
+      if (k.website && !$("#olWebsite").value.trim()) $("#olWebsite").value = k.website;
+    }
+  });
+
+  $("#olKnowDelete").addEventListener("click", async () => {
+    const id = $("#olKnowSelect").value;
+    if (!id) return toast("Chọn tài liệu cần xóa.");
+    if (!confirm("Xóa tài liệu kiến thức này?")) return;
+    try {
+      const r = await _fetch("/api/knowledge/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+      const d = await r.json();
+      if (d.ok) { toast("Đã xóa."); await loadKnowledge(); }
+      else toast("Không xóa được.");
+    } catch { toast("Lỗi xóa."); }
+  });
+
+  // Upload Word/Excel -> trích text vào ô nội dung
+  $("#olKnowFile").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    $("#olKnowFileMsg").textContent = "Đang đọc file...";
+    try {
+      const buf = await file.arrayBuffer();
+      let text = "";
+      if (/\.docx$/i.test(file.name)) {
+        const res = await window.mammoth.extractRawText({ arrayBuffer: buf });
+        text = res.value || "";
+      } else if (/\.xlsx?$/i.test(file.name)) {
+        const wb = XLSX.read(buf, { type: "array" });
+        text = wb.SheetNames.map((n) => XLSX.utils.sheet_to_csv(wb.Sheets[n])).join("\n");
+      } else { $("#olKnowFileMsg").textContent = "Chỉ hỗ trợ .docx/.xlsx"; return; }
+      const box = $("#olKnowContent");
+      box.value = (box.value.trim() ? box.value.trim() + "\n\n" : "") + text.trim();
+      if (!$("#olKnowTitle").value.trim()) $("#olKnowTitle").value = file.name.replace(/\.(docx|xlsx?|)$/i, "");
+      $("#olKnowFileMsg").textContent = `✓ Đã nạp ${text.trim().length.toLocaleString("vi-VN")} ký tự từ ${file.name}`;
+    } catch (err) {
+      $("#olKnowFileMsg").textContent = "Lỗi đọc file: " + (err.message || err);
+    } finally { e.target.value = ""; }
+  });
+
+  $("#olKnowSave").addEventListener("click", async () => {
+    const content = $("#olKnowContent").value.trim();
+    if (!content) return setMsg("#olKnowMsg", "err", "❌ Nội dung kiến thức đang trống.");
+    const editingId = knowledge.find((x) => x.id === $("#olKnowSelect").value) ? $("#olKnowSelect").value : "";
+    const payload = { id: editingId, website: $("#olWebsite").value.trim(), title: $("#olKnowTitle").value.trim(), content };
+    const btn = $("#olKnowSave"); busy(btn, true, "Đang lưu...");
+    try {
+      const r = await _fetch("/api/knowledge/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Lưu thất bại");
+      setMsg("#olKnowMsg", "info", "✓ Đã lưu vào thư viện.");
+      await loadKnowledge();
+      $("#olKnowSelect").value = d.id;
+      $("#olKnowEditor").classList.add("hidden");
+    } catch (err) { setMsg("#olKnowMsg", "err", "❌ " + err.message); }
+    finally { busy(btn, false); }
+  });
+
+  // --- Phân tích đối thủ ---
+  function renderCompetitors() {
+    $("#olCompCount").textContent = competitors.length;
+    $("#olCompList").innerHTML = competitors.map((c, i) => {
+      const hs = (c.headings || []);
+      const inner = c.error
+        ? `<div class="alert warn" style="margin:8px 0">⚠️ ${esc(c.error)}</div>`
+        : (hs.length
+            ? `<div style="padding:6px 0">${hs.map((h) => `<div style="padding:2px 0;padding-left:${(h.level - 2) * 18}px"><span class="muted" style="font-size:.75rem">H${h.level}</span> ${esc(h.text)}</div>`).join("")}</div>`
+            : `<div class="muted" style="padding:8px 0">(không lấy được heading)</div>`);
+      return `<details style="border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin-bottom:8px">
+        <summary style="cursor:pointer;font-weight:600">#${c.position || i + 1} · ${esc(c.host || c.url)} <span class="muted" style="font-weight:400;font-size:.8rem">— ${hs.length} heading</span></summary>
+        <div style="font-size:.85rem;color:var(--muted);margin:4px 0">${esc(c.title || "")}<br><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.url)}</a></div>
+        ${inner}
+      </details>`;
+    }).join("");
+  }
+
+  analyzeBtn.addEventListener("click", async () => {
+    const keyword = $("#olMainKw").value.trim();
+    const gl = $("#olGl").value, hl = $("#olHl").value;
+    const urls = mode === "manual" ? splitList($("#olManualUrls").value) : [];
+    if (mode === "auto" && !keyword) return setMsg("#olCompMsg", "err", "❌ Nhập từ khóa chính để tìm đối thủ.");
+    if (mode === "manual" && !urls.length) return setMsg("#olCompMsg", "err", "❌ Dán ít nhất 1 URL đối thủ.");
+    const serperKey = $("#olSerperKey").value.trim();
+    busy(analyzeBtn, true, "Đang phân tích...");
+    setMsg("#olCompMsg", "info", '<span class="spinner" style="border-top-color:transparent"></span>Đang lấy & bóc tách outline đối thủ (có thể mất ~20s)...');
+    $("#olCompCard").classList.add("hidden");
+    try {
+      const r = await _fetch("/api/outline/competitors", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ keyword, gl, hl, serperKey, urls }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Lỗi phân tích");
+      competitors = d.competitors || [];
+      const ok = competitors.filter((c) => (c.headings || []).length).length;
+      setMsg("#olCompMsg", ok ? "info" : "warn", `${ok ? "✓" : "⚠️"} Đã bóc tách ${competitors.length} đối thủ (${ok} có outline). Nguồn: ${d.source}.`);
+      renderCompetitors();
+      $("#olCompCard").classList.remove("hidden");
+    } catch (err) { setMsg("#olCompMsg", "err", "❌ " + err.message); }
+    finally { busy(analyzeBtn, false); }
+  });
+
+  // --- Tạo outline cuối ---
+  function badges(it) {
+    let b = "";
+    if (it.hasMain) b += ` <span title="Chứa từ khóa chính" style="color:var(--green)">★</span>`;
+    if (it.hitSubs && it.hitSubs.length) b += ` <span title="Chứa từ khóa phụ" style="color:var(--orange)">●</span>`;
+    return b;
+  }
+  function renderTree() {
+    $("#olTree").innerHTML = lastOutline.map((it) => {
+      const pad = (it.level - 2) * 22;
+      const tag = `<span class="muted" style="font-size:.72rem;border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-right:6px">H${it.level}</span>`;
+      const weight = it.level === 2 ? "600" : it.level === 3 ? "500" : "400";
+      return `<div style="padding:4px 0;padding-left:${pad}px;font-weight:${weight}">${tag}${esc(it.text)}${badges(it)}</div>`;
+    }).join("");
+  }
+  function outlineToMarkdown() {
+    return lastOutline.map((it) => `${"#".repeat(it.level)} ${it.text}`).join("\n");
+  }
+
+  $("#olGenerate").addEventListener("click", async () => {
+    const mainKw = $("#olMainKw").value.trim();
+    if (!mainKw) return setMsg("#olGenMsg", "err", "❌ Thiếu từ khóa chính.");
+    if (!competitors.some((c) => (c.headings || []).length)) return setMsg("#olGenMsg", "err", "❌ Chưa có outline đối thủ hợp lệ.");
+    const subKws = splitList($("#olSubKws").value);
+    const refOutline = $("#olRefOutline").value.trim();
+    const websiteName = $("#olWebsite").value.trim();
+    const know = knowledge.find((x) => x.id === $("#olKnowSelect").value);
+    const knowledgeText = know ? know.content : "";
+    const engine = $("#engine").value, model = $("#model").value, apiKey = $("#apiKey").value.trim();
+    const btn = $("#olGenerate"); busy(btn, true, "Đang tạo outline...");
+    setMsg("#olGenMsg", "info", `<span class="spinner" style="border-top-color:transparent"></span>Đang tổng hợp outline${engine !== "local" ? " (AI ~15s)" : ""}...`);
+    $("#olResultCard").classList.add("hidden");
+    try {
+      const r = await _fetch("/api/outline/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mainKw, subKws, refOutline, knowledge: knowledgeText, websiteName, competitors, engine, model, apiKey }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Lỗi tạo outline");
+      lastOutline = d.outline || [];
+      if (!lastOutline.length) { setMsg("#olGenMsg", "warn", "Không tạo được outline."); return; }
+      $("#olEngineUsed").textContent = "— " + (d.engineUsed || "");
+      renderTree();
+      setMsg("#olGenMsg", "info", `✓ Đã tạo outline ${lastOutline.length} heading.`);
+      $("#olResultCard").classList.remove("hidden");
+      $("#olResultCard").scrollIntoView({ block: "start", behavior: "smooth" });
+    } catch (err) { setMsg("#olGenMsg", "err", "❌ " + err.message); }
+    finally { busy(btn, false); }
+  });
+
+  $("#olCopyMd").addEventListener("click", async () => {
+    if (!lastOutline.length) return toast("Chưa có outline.");
+    try { await navigator.clipboard.writeText(outlineToMarkdown()); toast("Đã copy Markdown!"); }
+    catch { toast("Không copy được."); }
+  });
+
+  $("#olExport").addEventListener("click", () => {
+    if (!lastOutline.length) return toast("Chưa có outline.");
+    if (typeof XLSX === "undefined") return toast("Thư viện Excel chưa tải xong.");
+    const head = ["Cấp", "Heading", "Chứa KW chính", "Chứa KW phụ"];
+    const aoa = [head].concat(lastOutline.map((it) => [`H${it.level}`, it.text, it.hasMain ? "★" : "", (it.hitSubs || []).join(", ")]));
+    const ws = XLSX.utils.aoa_to_sheet(aoa); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Outline"); XLSX.writeFile(wb, "seoshark-outline.xlsx");
   });
 })();

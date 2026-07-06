@@ -109,6 +109,9 @@
         <div class="menu-item" data-section="keywords">
           <span class="mi-ic">🔑</span> Nghiên cứu từ khóa
         </div>
+        <div class="menu-item" data-section="outline">
+          <span class="mi-ic">📋</span> Lên outline chuẩn SEO
+        </div>
         <div class="menu-item disabled" data-section="soon" data-name="Theo dõi thứ hạng">
           <span class="mi-ic">📈</span> Theo dõi thứ hạng <span class="soon">Sắp ra mắt</span>
         </div>
@@ -800,6 +803,103 @@
         </section>
       </div>
 
+      <!-- ===== SECTION: LEN OUTLINE ===== -->
+      <div class="section page" data-section="outline">
+        <section class="card">
+          <h2>1. Thông tin từ khóa</h2>
+          <p class="hint">Lên <b>outline heading (H2/H3/H4)</b> bám sát TOP 6 đối thủ trên SERP, đi đúng hướng <b>non-commodity</b>. Cần bật engine <b>Gemini/Claude</b> ở ⚙️ để AI tổng hợp tốt nhất (Local chỉ gộp cơ học).</p>
+
+          <label>Từ khóa chính <span style="color:var(--orange)">*</span></label>
+          <input id="olMainKw" type="text" placeholder="niềng răng invisalign" />
+
+          <label style="margin-top:10px">Từ khóa phụ (mỗi từ 1 dòng hoặc cách nhau dấu phẩy) — nếu có</label>
+          <textarea id="olSubKws" rows="2" placeholder="chi phí niềng invisalign, niềng răng trong suốt, invisalign giá bao nhiêu"></textarea>
+
+          <label style="margin-top:10px">Outline tham khảo (một vài heading bạn mong muốn) — nếu có</label>
+          <textarea id="olRefOutline" rows="3" placeholder="Niềng răng Invisalign là gì?&#10;Chi phí niềng răng Invisalign&#10;Quy trình niềng tại Nha khoa Shark"></textarea>
+
+          <div class="grid cols-2" style="margin-top:12px">
+            <div><label>Quốc gia (Google)</label>
+              <select id="olGl"><option value="vn">Việt Nam</option><option value="us">Hoa Kỳ</option><option value="gb">Anh</option><option value="sg">Singapore</option><option value="th">Thái Lan</option><option value="jp">Nhật Bản</option><option value="kr">Hàn Quốc</option><option value="au">Úc</option><option value="in">Ấn Độ</option></select>
+            </div>
+            <div><label>Ngôn ngữ</label>
+              <select id="olHl"><option value="vi">Tiếng Việt</option><option value="en">English</option><option value="th">ไทย</option><option value="ja">日本語</option><option value="ko">한국어</option></select>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>2. Kiến thức website <span class="muted" style="font-weight:400;font-size:.9rem">(tùy chọn — để đi đúng định vị non-commodity)</span></h2>
+          <label>Tên website muốn soạn outline</label>
+          <input id="olWebsite" type="text" placeholder="nhakhoashark.vn" />
+
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:12px">
+            <div style="flex:1;min-width:240px">
+              <label>Chọn tài liệu kiến thức đã lưu</label>
+              <select id="olKnowSelect"><option value="">— Không dùng —</option></select>
+            </div>
+            <button class="ghost small" id="olKnowNew" type="button">➕ Thêm/Sửa</button>
+            <button class="ghost small" id="olKnowDelete" type="button">🗑 Xóa</button>
+          </div>
+
+          <div id="olKnowEditor" class="hidden" style="margin-top:12px;padding:12px;border:1px dashed var(--line);border-radius:10px">
+            <label>Tiêu đề tài liệu</label>
+            <input id="olKnowTitle" type="text" placeholder="VD: Thế mạnh & USP Nha khoa Shark" />
+            <label style="margin-top:8px">Nội dung kiến thức (nhập tay) — thông tin cần thiết của website</label>
+            <textarea id="olKnowContent" rows="6" placeholder="Điểm khác biệt, USP, bác sĩ, công nghệ, cam kết, dịch vụ nổi bật, giọng văn, đối tượng khách hàng..."></textarea>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px">
+              <label class="ghost small" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;margin:0">
+                📎 Nạp từ Word/Excel
+                <input id="olKnowFile" type="file" accept=".docx,.xlsx,.xls" style="display:none" />
+              </label>
+              <span class="muted" id="olKnowFileMsg" style="font-size:.85rem"></span>
+              <button id="olKnowSave" type="button" style="margin-left:auto">💾 Lưu vào thư viện</button>
+            </div>
+          </div>
+          <div id="olKnowMsg" style="margin-top:8px"></div>
+        </section>
+
+        <section class="card">
+          <h2>3. Đối thủ TOP SERP</h2>
+          <div class="tabs subtabs" id="olCompTabs">
+            <div class="tab active" data-olmode="auto">🤖 Tự động (nhờ SERP)</div>
+            <div class="tab" data-olmode="manual">✍️ Dán URL thủ công</div>
+          </div>
+          <div class="featpane active" data-olpane="auto">
+            <p class="muted" style="margin:6px 0">Dựa trên <b>từ khóa chính</b>, hệ thống lấy TOP 6 đối thủ (rank 1–6) rồi bóc tách outline của họ.</p>
+            <label>Serper API key (tùy chọn — rank chính xác nhất). Bỏ trống sẽ dùng Google CSE nếu đã cấu hình.</label>
+            <input id="olSerperKey" type="text" placeholder="dán API key từ serper.dev (free 2.500 lượt)" style="max-width:420px" />
+          </div>
+          <div class="featpane" data-olpane="manual">
+            <label>Dán 1–6 URL đối thủ TOP đầu (mỗi URL 1 dòng)</label>
+            <textarea id="olManualUrls" rows="4" placeholder="https://doithu-1.com/bai-viet&#10;https://doithu-2.com/bai-viet"></textarea>
+          </div>
+          <div style="margin-top:12px"><button id="olAnalyze">🔎 Phân tích đối thủ</button></div>
+          <div id="olCompMsg" style="margin-top:10px"></div>
+        </section>
+
+        <section class="card hidden" id="olCompCard">
+          <div class="flexbar">
+            <h2 style="margin:0">4. Outline của <span id="olCompCount">0</span> đối thủ <span class="muted" style="font-weight:400;font-size:.85rem">(bấm để xem chi tiết)</span></h2>
+          </div>
+          <div id="olCompList" style="margin-top:10px"></div>
+          <div style="margin-top:14px"><button id="olGenerate">🧩 Tạo outline cuối cùng</button></div>
+          <div id="olGenMsg" style="margin-top:10px"></div>
+        </section>
+
+        <section class="card hidden" id="olResultCard">
+          <div class="flexbar">
+            <h2 style="margin:0">5. Outline đề xuất <span class="muted" id="olEngineUsed" style="font-weight:400;font-size:.85rem"></span></h2>
+            <div style="display:flex;gap:8px">
+              <button class="ghost small" id="olCopyMd">📋 Copy Markdown</button>
+              <button class="ghost small" id="olExport">⬇ Xuất Excel</button>
+            </div>
+          </div>
+          <p class="muted" style="margin:8px 0;font-size:.85rem">★ = chứa từ khóa chính · ● = chứa từ khóa phụ</p>
+          <div id="olTree" style="margin-top:6px"></div>
+        </section>
+      </div>
+
       <!-- ===== SECTION: COMING SOON ===== -->
       <div class="section page" data-section="soon">
         <div class="coming">
@@ -814,6 +914,7 @@
 
   <div class="toast" id="toast"></div>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -9,10 +9,12 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, "..", "data");
 const USERS_FILE = path.join(DATA_DIR, "users.json");
+const KNOW_FILE = path.join(DATA_DIR, "knowledge.json");
 
 let mode = "json"; // "json" | "pg"
 let pool = null;
 let jsonUsers = {};
+let jsonKnow = {}; // id -> { id, owner, website, title, content, createdAt }
 
 export function storeMode() {
   return mode;
@@ -26,6 +28,11 @@ function initJson() {
     jsonUsers = JSON.parse(fs.readFileSync(USERS_FILE, "utf8")) || {};
   } catch {
     jsonUsers = {};
+  }
+  try {
+    jsonKnow = fs.existsSync(KNOW_FILE) ? (JSON.parse(fs.readFileSync(KNOW_FILE, "utf8")) || {}) : {};
+  } catch {
+    jsonKnow = {};
   }
 }
 
@@ -57,6 +64,18 @@ export async function initStore() {
       `);
       // Bang cu chua co cot pwenc -> them (an toan neu da co)
       await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS pwenc TEXT`);
+      // Kho kien thuc website (rieng theo tai khoan)
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS knowledge (
+          id         TEXT PRIMARY KEY,
+          owner      TEXT NOT NULL,
+          website    TEXT,
+          title      TEXT,
+          content    TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS knowledge_owner_idx ON knowledge(owner)`);
       mode = "pg";
       console.log("  [store] Dung Postgres (DATABASE_URL) - tai khoan luu vinh vien.");
       return;
@@ -104,4 +123,49 @@ export async function putUser(u) {
     verified: u.verified !== false, createdAt: prev.createdAt || new Date().toISOString(),
   };
   saveJson();
+}
+
+// ===== Kho kien thuc website (rieng theo tai khoan) =====
+function saveJsonKnow() {
+  fs.writeFileSync(KNOW_FILE, JSON.stringify(jsonKnow, null, 2), "utf8");
+}
+
+// Liet ke kien thuc cua 1 owner (moi nhat truoc)
+export async function listKnowledge(owner) {
+  if (mode === "pg") {
+    const r = await pool.query("SELECT id, owner, website, title, content, created_at FROM knowledge WHERE owner=$1 ORDER BY created_at DESC", [owner]);
+    return r.rows.map((x) => ({ ...x, createdAt: x.created_at }));
+  }
+  return Object.values(jsonKnow)
+    .filter((k) => k.owner === owner)
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+
+// Them/cap nhat 1 muc kien thuc (upsert theo id)
+export async function putKnowledge(k) {
+  if (mode === "pg") {
+    await pool.query(
+      `INSERT INTO knowledge (id, owner, website, title, content)
+       VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (id) DO UPDATE SET website=$3, title=$4, content=$5`,
+      [k.id, k.owner, k.website || "", k.title || "", k.content || ""]
+    );
+    return;
+  }
+  const prev = jsonKnow[k.id] || {};
+  jsonKnow[k.id] = {
+    id: k.id, owner: k.owner, website: k.website || "", title: k.title || "",
+    content: k.content || "", createdAt: prev.createdAt || new Date().toISOString(),
+  };
+  saveJsonKnow();
+}
+
+// Xoa 1 muc (chi khi dung owner)
+export async function deleteKnowledge(id, owner) {
+  if (mode === "pg") {
+    const r = await pool.query("DELETE FROM knowledge WHERE id=$1 AND owner=$2", [id, owner]);
+    return r.rowCount > 0;
+  }
+  if (jsonKnow[id] && jsonKnow[id].owner === owner) { delete jsonKnow[id]; saveJsonKnow(); return true; }
+  return false;
 }
