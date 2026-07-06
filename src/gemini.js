@@ -54,7 +54,7 @@ function toGeminiSchema(s) {
 }
 
 // Goi Gemini tra ve JSON theo schema (dung cho On-page va cac tac vu khac)
-export async function geminiJson({ apiKey, model, system, user, schema, maxTokens = 8192, timeout = 60000 }) {
+export async function geminiJson({ apiKey, model, system, user, schema, maxTokens = 8192, timeout = 45000 }) {
   const mdl = model || "gemini-3.5-flash";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${mdl}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const body = {

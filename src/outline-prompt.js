@@ -67,14 +67,18 @@ export function buildUniquePrompt({ mainKw, subKws = [], websiteName = "", knowl
   return { system, user: parts.join("\n\n"), schema: UNIQUE_SCHEMA };
 }
 
+// Gon prompt: toi da 8 doi thu (co outline), moi doi thu toi da 24 heading, cat text dai.
 function competitorsBlock(competitorOutlines) {
   return (competitorOutlines || [])
+    .filter((c) => (c.headings || []).some((h) => h.level >= 2 && h.level <= 4))
+    .slice(0, 8)
     .map((c, i) => {
       const hs = (c.headings || [])
         .filter((h) => h.level >= 2 && h.level <= 4)
-        .map((h) => `${"  ".repeat(h.level - 2)}${"#".repeat(h.level)} ${h.text}`)
+        .slice(0, 24)
+        .map((h) => `${"  ".repeat(h.level - 2)}${"#".repeat(h.level)} ${String(h.text).slice(0, 120)}`)
         .join("\n");
-      return `— ĐỐI THỦ ${i + 1} (rank ${c.position || i + 1}): ${c.title || c.url}\n${c.url}\n${hs || "(không lấy được heading)"}`;
+      return `— ĐỐI THỦ ${i + 1}: ${String(c.title || c.url).slice(0, 100)}\n${hs}`;
     })
     .join("\n\n");
 }
@@ -87,10 +91,14 @@ export function buildOutlinePrompt({ mainKw, subKws = [], refOutline = "", knowl
     "Các khung dưới đây là PHƯƠNG PHÁP THAM KHẢO tổng quát, KHÔNG mặc định ngành nào.\n\n" +
     "PHƯƠNG PHÁP (chắt lọc, không áp cứng):\n" +
     "• Xác định SEARCH INTENT chủ đạo của từ khóa; toàn bộ cấu trúc phải phục vụ intent đó.\n" +
-    "• CHẮT LỌC MẠNH, TUYỆT ĐỐI KHÔNG COPY 1-1: KHÔNG được lấy hợp (union) tất cả heading của đối thủ rồi liệt kê ra. " +
-    "Hãy chọn ra bộ heading TINH GỌN, tốt nhất — outline cuối thường ÍT heading hơn tổng số heading của các đối thủ cộng lại. " +
-    "GỘP các heading trùng/gần nghĩa thành 1; BỎ mục rác, quảng cáo, điều hướng, lặp, ngoài lề, hoặc chỉ 1 đối thủ có mà không thực sự cần. " +
-    "Mỗi heading phải 'xứng đáng có mặt': phục vụ đúng intent + hữu ích thật cho người đọc + đáp ứng tiêu chí chất lượng của Google. Nếu phân vân, BỎ.\n" +
+    "• CHẮT LỌC MẠNH, TUYỆT ĐỐI KHÔNG COPY 1-1: KHÔNG lấy hợp (union) tất cả heading của đối thủ rồi liệt kê. " +
+    "Chọn bộ heading TINH GỌN, tốt nhất — outline cuối thường ÍT heading hơn tổng heading đối thủ cộng lại. Mỗi heading phải 'xứng đáng có mặt' (đúng intent + hữu ích thật + đạt tiêu chí Google). Phân vân thì BỎ.\n" +
+    "• HIỂU NGỮ NGHĨA & GỘP heading ĐỒNG NGHĨA/TRÙNG Ý thành DUY NHẤT 1 heading tối ưu (đây là yêu cầu quan trọng nhất). Nhìn Ý ĐỊNH của heading, không nhìn câu chữ. Ví dụ:\n" +
+    "   - 'Răng sứ có ưu điểm gì nổi bật?' ≡ 'Ưu nhược điểm của răng sứ' ⇒ chỉ giữ 1 heading (vd 'Ưu, nhược điểm của răng sứ Cercon').\n" +
+    "   - 'Khi nào nên bọc răng sứ Cercon?' ≡ 'Trường hợp sử dụng răng sứ Cercon' ⇒ chỉ giữ 1 heading.\n" +
+    "   - 'Răng sứ Cercon là gì?' ≡ 'Răng sứ Cercon như thế nào?' ⇒ 1 heading.\n" +
+    "   BỎ mục rác, quảng cáo, điều hướng, lặp, ngoài lề, hoặc chỉ 1 đối thủ có mà không thực sự cần.\n" +
+    "• TỐI ƯU HƠN ĐỐI THỦ: không chỉ trùng khớp mà phải NHỈNH HƠN — sắp xếp logic theo hành trình người đọc, bổ sung 1–2 mục giá trị mà đa số đối thủ còn thiếu nhưng người đọc thực sự cần (đúng intent), để outline nổi bật và hữu ích hơn.\n" +
     "• Content gap: chỉ thêm heading nếu nó trả lời thêm một nhu cầu THẬT của người đọc cho từ khóa này (đừng thêm chỉ vì 1 đối thủ có).\n" +
     "• Chất lượng theo Google: E-E-A-T + khung Unique/Specific/Authentic. Nếu có 'Kiến thức website', khéo léo lồng điểm khác biệt/thế mạnh vào heading phù hợp để đi hướng NON-COMMODITY (không chung chung như mọi bài). Nếu không có, vẫn giữ outline hữu ích, không bịa.\n" +
     "• Trình bày rõ ràng phục vụ NGƯỜI ĐỌC (không nhồi nhét, không chunking hình thức cho AI).\n\n" +

@@ -223,7 +223,7 @@ function attachKwStats(a, mainKeyword) {
 
 // Cac model Gemini FREE (thu lan luot neu model chon bi loi/khong ton tai/quota)
 const FREE_FLASH = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
-const RECOVERABLE = /quota|exceeded|limit: 0|RESOURCE_EXHAUSTED|429|not found|404|NOT_FOUND|not supported|unavailable|is not found|does not exist|overload|high demand|experiencing high|try again later|temporar|\b503\b|\b500\b|INTERNAL/i;
+const RECOVERABLE = /quota|exceeded|limit: 0|RESOURCE_EXHAUSTED|429|not found|404|NOT_FOUND|not supported|unavailable|is not found|does not exist|overload|high demand|experiencing high|try again later|temporar|\b503\b|\b500\b|INTERNAL|qua lau|timeout|timed out|aborted|AbortError|ETIMEDOUT|ECONNRESET|fetch failed|network/i;
 
 // Loi QUA TAI TAM THOI (nen thu lai cung model) vs loi model KHONG hop le (chuyen model khac ngay)
 const TRANSIENT = /overload|high demand|experiencing high|try again later|temporar|429|RESOURCE_EXHAUSTED|\b503\b|\b500\b|INTERNAL|unavailable/i;
