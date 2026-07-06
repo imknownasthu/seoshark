@@ -27,6 +27,7 @@
         <label>Mật khẩu</label>
         <input id="loginPassword" type="password" placeholder="••••••" />
         <button id="btnLogin" type="submit" style="width:100%;margin-top:8px">Đăng nhập</button>
+        <div style="text-align:right;margin-top:8px"><a id="linkForgot" class="muted" style="cursor:pointer">Quên mật khẩu?</a></div>
       </form>
 
       <form class="auth-form" data-aform="register" autocomplete="on">
@@ -48,6 +49,25 @@
         <div style="display:flex;justify-content:space-between;margin-top:10px;align-items:center">
           <a id="backToRegister" class="muted" style="cursor:pointer">← Quay lại</a>
           <button class="ghost small" id="btnResend" type="button">Gửi lại mã</button>
+        </div>
+      </form>
+
+      <form class="auth-form" data-aform="forgot" autocomplete="on">
+        <p style="font-size:14px">Nhập email đã đăng ký. Chúng tôi sẽ gửi <b>mã khôi phục</b> tới email đó.</p>
+        <label>Email</label>
+        <input id="forgotEmail" type="text" placeholder="email@example.com" />
+        <button id="btnForgot" type="submit" style="width:100%;margin-top:8px">Gửi mã khôi phục</button>
+        <div style="margin-top:10px"><a id="forgotBackLogin" class="muted" style="cursor:pointer">← Quay lại đăng nhập</a></div>
+      </form>
+
+      <form class="auth-form" data-aform="forgotVerify" autocomplete="off">
+        <p style="font-size:14px">Nhập mã khôi phục đã gửi tới <b id="forgotEmailLabel"></b>:</p>
+        <label>Mã khôi phục (6 số)</label>
+        <input id="forgotCode" type="text" inputmode="numeric" maxlength="6" placeholder="123456" />
+        <button id="btnForgotVerify" type="submit" style="width:100%;margin-top:8px">Lấy lại mật khẩu</button>
+        <div style="display:flex;justify-content:space-between;margin-top:10px;align-items:center">
+          <a id="forgotBackLogin2" class="muted" style="cursor:pointer">← Đăng nhập</a>
+          <button class="ghost small" id="btnForgotResend" type="button">Gửi lại mã</button>
         </div>
       </form>
     </div>

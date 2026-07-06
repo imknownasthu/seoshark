@@ -50,10 +50,13 @@ export async function initStore() {
           name       TEXT,
           salt       TEXT NOT NULL,
           hash       TEXT NOT NULL,
+          pwenc      TEXT,
           verified   BOOLEAN NOT NULL DEFAULT TRUE,
           created_at TIMESTAMPTZ NOT NULL DEFAULT now()
         )
       `);
+      // Bang cu chua co cot pwenc -> them (an toan neu da co)
+      await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS pwenc TEXT`);
       mode = "pg";
       console.log("  [store] Dung Postgres (DATABASE_URL) - tai khoan luu vinh vien.");
       return;
@@ -86,17 +89,19 @@ export async function getUser(email) {
 export async function putUser(u) {
   if (mode === "pg") {
     await pool.query(
-      `INSERT INTO users (email, name, salt, hash, verified)
-       VALUES ($1,$2,$3,$4,$5)
+      `INSERT INTO users (email, name, salt, hash, pwenc, verified)
+       VALUES ($1,$2,$3,$4,$5,$6)
        ON CONFLICT (email) DO UPDATE
-       SET name=$2, salt=$3, hash=$4, verified=$5`,
-      [u.email, u.name || "", u.salt, u.hash, u.verified !== false]
+       SET name=$2, salt=$3, hash=$4, pwenc=$5, verified=$6`,
+      [u.email, u.name || "", u.salt, u.hash, u.pwenc || null, u.verified !== false]
     );
     return;
   }
+  const prev = jsonUsers[u.email] || {};
   jsonUsers[u.email] = {
     email: u.email, name: u.name || "", salt: u.salt, hash: u.hash,
-    verified: u.verified !== false, createdAt: new Date().toISOString(),
+    pwenc: u.pwenc || prev.pwenc || "",
+    verified: u.verified !== false, createdAt: prev.createdAt || new Date().toISOString(),
   };
   saveJson();
 }

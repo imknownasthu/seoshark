@@ -783,6 +783,79 @@ $("#btnResend").addEventListener("click", async () => {
   } finally { busy(btn, false); }
 });
 
+// ===== Quên mật khẩu =====
+let pendingForgotEmail = "";
+$("#linkForgot").addEventListener("click", () => { setAuthMsg(); $("#forgotEmail").value = $("#loginEmail").value.trim(); showAform("forgot"); });
+$("#forgotBackLogin").addEventListener("click", () => { switchAtab("login"); });
+$("#forgotBackLogin2").addEventListener("click", () => { switchAtab("login"); });
+
+// Bước 1: gửi mã khôi phục
+$('[data-aform="forgot"]').addEventListener("submit", async (e) => {
+  e.preventDefault();
+  setAuthMsg();
+  const email = $("#forgotEmail").value.trim();
+  if (!email) return setAuthMsg("err", "❌ Nhập email đã đăng ký.");
+  const btn = $("#btnForgot");
+  busy(btn, true, "Đang gửi mã...");
+  try {
+    const res = await _fetch("/api/auth/forgot", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || "Không gửi được mã");
+    pendingForgotEmail = email;
+    $("#forgotEmailLabel").textContent = email;
+    showAform("forgotVerify");
+    setAuthMsg("info", "✉️ " + d.message);
+  } catch (err) {
+    setAuthMsg("err", "❌ " + err.message);
+  } finally { busy(btn, false); }
+});
+
+// Bước 2: xác nhận mã -> lấy lại mật khẩu
+$('[data-aform="forgotVerify"]').addEventListener("submit", async (e) => {
+  e.preventDefault();
+  setAuthMsg();
+  const code = $("#forgotCode").value.trim();
+  const btn = $("#btnForgotVerify");
+  busy(btn, true, "Đang xác nhận...");
+  try {
+    const res = await _fetch("/api/auth/forgot/verify", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: pendingForgotEmail, code }),
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || "Xác nhận thất bại");
+    // Điền sẵn form đăng nhập + hiện mật khẩu để người dùng lưu lại
+    $("#loginEmail").value = pendingForgotEmail;
+    $("#loginPassword").value = d.password || "";
+    switchAtab("login");
+    setAuthMsg("info", `✅ ${d.message} Mật khẩu của bạn: <b style="font-size:1.05em">${esc(d.password || "")}</b> — đã điền sẵn, bấm Đăng nhập.`);
+  } catch (err) {
+    setAuthMsg("err", "❌ " + err.message);
+  } finally { busy(btn, false); }
+});
+
+// Gửi lại mã khôi phục
+$("#btnForgotResend").addEventListener("click", async () => {
+  if (!pendingForgotEmail) return;
+  setAuthMsg();
+  const btn = $("#btnForgotResend");
+  busy(btn, true, "Đang gửi...");
+  try {
+    const res = await _fetch("/api/auth/forgot", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: pendingForgotEmail }),
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error || "Lỗi");
+    setAuthMsg("info", "✉️ Đã gửi lại mã khôi phục.");
+  } catch (err) {
+    setAuthMsg("err", "❌ " + err.message);
+  } finally { busy(btn, false); }
+});
+
 // Đăng xuất
 $("#btnLogout").addEventListener("click", async () => {
   await _fetch("/api/auth/logout", { method: "POST" });

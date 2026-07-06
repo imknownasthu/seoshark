@@ -3,9 +3,15 @@
 // Luu user qua src/store.js (Postgres hoac JSON). Mat khau hash bang scrypt.
 
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import * as store from "./store.js";
 
-const pending = new Map(); // email -> { name, salt, hash, code, expires, attempts }
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const pending = new Map(); // email -> { name, salt, hash, pw, code, expires, attempts }
+const resets = new Map();  // email -> { code, expires, attempts, name }
 const sessions = new Map(); // token -> { email, name, created }
 
 const CODE_TTL = 1000 * 60 * 30; // 30 phut
@@ -13,6 +19,52 @@ const SESSION_TTL = 1000 * 60 * 60 * 24 * 7; // 7 ngay
 
 export async function initAuth() {
   await store.initStore();
+}
+
+// --- Khoa bi mat de MA HOA mat khau (khoi phuc duoc) ---
+// Uu tien env SEOSHARK_SECRET; neu khong co -> tu sinh & luu data/secret.key (ton tai qua restart/redeploy).
+let _key = null;
+function getSecretKey() {
+  if (_key) return _key;
+  let secret = (process.env.SEOSHARK_SECRET || "").trim();
+  if (!secret) {
+    const keyFile = path.join(__dirname, "..", "data", "secret.key");
+    try {
+      if (fs.existsSync(keyFile)) secret = fs.readFileSync(keyFile, "utf8").trim();
+      if (!secret) {
+        secret = crypto.randomBytes(32).toString("hex");
+        fs.mkdirSync(path.dirname(keyFile), { recursive: true });
+        fs.writeFileSync(keyFile, secret, "utf8");
+      }
+    } catch { secret = secret || "seoshark-fallback-secret-please-set-SEOSHARK_SECRET"; }
+  }
+  _key = crypto.scryptSync(secret, "seoshark-pw-enc", 32);
+  return _key;
+}
+// AES-256-GCM -> "iv:tag:ciphertext" (hex). Tra "" neu loi.
+function encPw(plain) {
+  try {
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv("aes-256-gcm", getSecretKey(), iv);
+    const enc = Buffer.concat([cipher.update(String(plain), "utf8"), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    return `${iv.toString("hex")}:${tag.toString("hex")}:${enc.toString("hex")}`;
+  } catch { return ""; }
+}
+// Giai ma. Tra null neu sai khoa / hong / khong phai dinh dang hop le.
+function decPw(blob) {
+  try {
+    const [ivh, tagh, ench] = String(blob || "").split(":");
+    if (!ivh || !tagh || !ench) return null;
+    const decipher = crypto.createDecipheriv("aes-256-gcm", getSecretKey(), Buffer.from(ivh, "hex"));
+    decipher.setAuthTag(Buffer.from(tagh, "hex"));
+    const dec = Buffer.concat([decipher.update(Buffer.from(ench, "hex")), decipher.final()]);
+    return dec.toString("utf8");
+  } catch { return null; }
+}
+// Sinh mat khau ngau nhien de doc (cho user cu khong khoi phuc duoc mat khau goc)
+function genPassword() {
+  return crypto.randomBytes(6).toString("base64url").replace(/[^a-zA-Z0-9]/g, "").slice(0, 10) || "Seo" + genCode();
 }
 
 const normEmail = (e) => (e || "").trim().toLowerCase();
@@ -42,7 +94,7 @@ export async function registerStart({ email, name, password }) {
 
   const { salt, hash } = hashPassword(password);
   const code = genCode();
-  pending.set(email, { name: (name || "").trim(), salt, hash, code, expires: Date.now() + CODE_TTL, attempts: 0 });
+  pending.set(email, { name: (name || "").trim(), salt, hash, pw: password, code, expires: Date.now() + CODE_TTL, attempts: 0 });
   return { email, code };
 }
 
@@ -57,7 +109,7 @@ export async function verifyCode({ email, code }) {
     p.attempts++;
     throw new Error("Mã xác nhận không đúng.");
   }
-  await store.putUser({ email, name: p.name, salt: p.salt, hash: p.hash, verified: true });
+  await store.putUser({ email, name: p.name, salt: p.salt, hash: p.hash, pwenc: encPw(p.pw), verified: true });
   pending.delete(email);
   return { email, name: p.name };
 }
@@ -70,7 +122,44 @@ export function regenerateCode(email) {
   p.code = genCode();
   p.expires = Date.now() + CODE_TTL;
   p.attempts = 0;
-  return { email, code: p.code };
+  return { email, code: p.code, password: p.pw };
+}
+
+// --- Quen mat khau buoc 1: gui ma khoi phuc toi email da dang ky ---
+export async function startPasswordReset({ email }) {
+  email = normEmail(email);
+  if (!validEmail(email)) throw new Error("Email không hợp lệ.");
+  const u = await store.getUser(email);
+  if (!u || !u.verified) throw new Error("Email này chưa có tài khoản đã xác nhận.");
+  const code = genCode();
+  resets.set(email, { code, expires: Date.now() + CODE_TTL, attempts: 0, name: u.name || "" });
+  return { email, code, name: u.name || "" };
+}
+
+// --- Quen mat khau buoc 2: xac nhan ma -> lay lai mat khau ---
+// Neu co pwenc -> giai ma tra mat khau CU. Neu khong (user cu) -> sinh mat khau MOI va luu.
+export async function recoverPassword({ email, code }) {
+  email = normEmail(email);
+  const r = resets.get(email);
+  if (!r) throw new Error("Chưa có yêu cầu khôi phục cho email này. Hãy bấm 'Quên mật khẩu' trước.");
+  if (Date.now() > r.expires) { resets.delete(email); throw new Error("Mã đã hết hạn. Hãy thử lại."); }
+  if (r.attempts >= 5) { resets.delete(email); throw new Error("Nhập sai quá nhiều lần. Hãy thử lại."); }
+  if (String(code).trim() !== r.code) { r.attempts++; throw new Error("Mã xác nhận không đúng."); }
+
+  const u = await store.getUser(email);
+  if (!u) { resets.delete(email); throw new Error("Không tìm thấy tài khoản."); }
+
+  let password = u.pwenc ? decPw(u.pwenc) : null;
+  let reset = false;
+  if (!password) {
+    // User cu (chi co hash, khong khoi phuc duoc) -> dat mat khau MOI
+    password = genPassword();
+    const { salt, hash } = hashPassword(password);
+    await store.putUser({ email: u.email, name: u.name, salt, hash, pwenc: encPw(password), verified: true });
+    reset = true;
+  }
+  resets.delete(email);
+  return { email, name: u.name || "", password, reset };
 }
 
 // --- Dang nhap ---

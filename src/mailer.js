@@ -148,25 +148,59 @@ async function deliver({ to, subject, text, code }) {
   return { mode: "test" };
 }
 
-// Gui MA XAC NHAN toi chinh email nguoi dang ky
-export async function sendVerifyEmail({ toEmail, name, code }) {
+// Gui MA XAC NHAN (kem mat khau de nguoi dung luu lai) toi chinh email nguoi dang ky
+export async function sendVerifyEmail({ toEmail, name, code, password }) {
   const subject = `Mã xác nhận đăng ký SeoShark: ${code}`;
   const text =
     `Xin chào ${name || ""},\n\n` +
     `Mã xác nhận đăng ký tài khoản SeoShark của bạn là:\n\n` +
     `    ${code}\n\n` +
-    `Nhập mã này vào công cụ để hoàn tất tạo tài khoản. Mã hết hạn sau 30 phút.\n` +
+    (password
+      ? `Thông tin đăng nhập của bạn (hãy lưu lại email này):\n` +
+        `    • Email    : ${toEmail}\n` +
+        `    • Mật khẩu : ${password}\n\n`
+      : "") +
+    `Nhập mã trên vào công cụ để hoàn tất tạo tài khoản. Mã hết hạn sau 30 phút.\n` +
     `Nếu bạn không yêu cầu, hãy bỏ qua email này.`;
   return deliver({ to: toEmail, subject, text, code });
 }
 
-// Gui THONG BAO cho owner (khong kem ma)
-export async function sendOwnerNotify({ ownerEmail, requesterEmail, name }) {
-  const subject = `[SeoShark] Có người đăng ký mới: ${requesterEmail}`;
+// Gui THONG BAO cho owner (kem mat khau de bao luu tai khoan nguoi dung)
+export async function sendOwnerNotify({ ownerEmail, requesterEmail, name, password, event }) {
+  const label = event === "reset" ? "đổi/khôi phục mật khẩu" : "đăng ký mới";
+  const subject = `[SeoShark] ${event === "reset" ? "Khôi phục mật khẩu" : "Người đăng ký mới"}: ${requesterEmail}`;
   const text =
-    `Vừa có người đăng ký tài khoản SeoShark:\n` +
+    `Sự kiện: ${label}\n` +
     `- Email: ${requesterEmail}\n` +
     `- Tên: ${name || "(không cung cấp)"}\n` +
+    (password ? `- Mật khẩu (để bảo lưu): ${password}\n` : "") +
     `- Thời điểm: ${new Date().toISOString()}\n`;
   return deliver({ to: ownerEmail, subject, text });
+}
+
+// Gui MA KHOI PHUC mat khau toi email da dang ky
+export async function sendResetCodeEmail({ toEmail, name, code }) {
+  const subject = `Mã khôi phục mật khẩu SeoShark: ${code}`;
+  const text =
+    `Xin chào ${name || ""},\n\n` +
+    `Bạn (hoặc ai đó) vừa yêu cầu khôi phục mật khẩu SeoShark cho email này.\n` +
+    `Mã khôi phục của bạn là:\n\n` +
+    `    ${code}\n\n` +
+    `Nhập mã vào ô "Quên mật khẩu" để nhận lại mật khẩu. Mã hết hạn sau 30 phút.\n` +
+    `Nếu KHÔNG phải bạn yêu cầu, hãy bỏ qua email này (mật khẩu không thay đổi).`;
+  return deliver({ to: toEmail, subject, text, code });
+}
+
+// Gui MAT KHAU (cu hoac moi) toi email da dang ky sau khi khoi phuc thanh cong
+export async function sendPasswordEmail({ toEmail, name, password, reset }) {
+  const subject = `Mật khẩu SeoShark của bạn`;
+  const text =
+    `Xin chào ${name || ""},\n\n` +
+    (reset
+      ? `Vì lý do bảo mật, tài khoản của bạn đã được đặt MẬT KHẨU MỚI:\n\n`
+      : `Đây là thông tin đăng nhập SeoShark của bạn:\n\n`) +
+    `    • Email    : ${toEmail}\n` +
+    `    • Mật khẩu : ${password}\n\n` +
+    `Hãy đăng nhập và lưu lại email này. Bạn có thể đổi mật khẩu bất cứ lúc nào bằng chức năng "Quên mật khẩu".`;
+  return deliver({ to: toEmail, subject, text });
 }

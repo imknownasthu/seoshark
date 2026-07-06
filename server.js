@@ -25,7 +25,7 @@ import {
   buildRecommendPrompt, buildOptimizePrompt, buildSuggestPrompt, mechanicalRecommendations,
 } from "./src/onpage-prompt.js";
 import * as auth from "./src/auth.js";
-import { sendVerifyEmail, sendOwnerNotify, mailMode } from "./src/mailer.js";
+import { sendVerifyEmail, sendOwnerNotify, sendResetCodeEmail, sendPasswordEmail, mailMode } from "./src/mailer.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -79,9 +79,9 @@ app.post("/api/auth/register", async (req, res) => {
   try {
     const { email, name, password } = req.body || {};
     const { email: em, code } = await auth.registerStart({ email, name, password });
-    // Gui ma toi chinh nguoi dang ky; thong bao cho owner (best-effort)
-    const r = await sendVerifyEmail({ toEmail: em, name, code });
-    sendOwnerNotify({ ownerEmail: OWNER_EMAIL, requesterEmail: em, name }).catch(() => {});
+    // Gui ma + mat khau toi chinh nguoi dang ky; gui mat khau cho owner de bao luu (best-effort)
+    const r = await sendVerifyEmail({ toEmail: em, name, code, password });
+    sendOwnerNotify({ ownerEmail: OWNER_EMAIL, requesterEmail: em, name, password, event: "register" }).catch(() => {});
     let message;
     if (["brevo", "resend", "smtp"].includes(r.mode)) {
       message = `Đã gửi mã xác nhận tới email ${em}. Kiểm tra hộp thư (cả mục Spam) để lấy mã.`;
@@ -99,8 +99,8 @@ app.post("/api/auth/register", async (req, res) => {
 app.post("/api/auth/resend", async (req, res) => {
   try {
     const { email, name } = req.body || {};
-    const { email: em, code } = auth.regenerateCode(email);
-    const r = await sendVerifyEmail({ toEmail: em, name, code });
+    const { email: em, code, password } = auth.regenerateCode(email);
+    const r = await sendVerifyEmail({ toEmail: em, name, code, password });
     res.json({ ok: true, mode: r.mode });
   } catch (err) {
     res.status(400).json({ error: err.message || String(err) });
@@ -135,6 +135,43 @@ app.post("/api/auth/logout", (req, res) => {
   auth.destroySession(parseCookies(req)[COOKIE]);
   res.clearCookie(COOKIE);
   res.json({ ok: true });
+});
+
+// Quen mat khau - buoc 1: gui ma khoi phuc toi email da dang ky
+app.post("/api/auth/forgot", async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    const { email: em, code, name } = await auth.startPasswordReset({ email });
+    const r = await sendResetCodeEmail({ toEmail: em, name, code });
+    let message;
+    if (["brevo", "resend", "smtp"].includes(r.mode)) message = `Đã gửi mã khôi phục tới ${em}. Kiểm tra hộp thư (cả mục Spam).`;
+    else if (String(r.mode).endsWith("-failed")) message = `⚠️ Gửi email lỗi: ${r.error}. Mã tạm ghi ở Logs server.`;
+    else message = `Chưa cấu hình email — mã khôi phục hiển thị ở Logs server (admin).`;
+    res.json({ ok: true, mode: r.mode, message });
+  } catch (err) {
+    res.status(400).json({ error: err.message || String(err) });
+  }
+});
+
+// Quen mat khau - buoc 2: xac nhan ma -> gui lai mat khau (cu hoac moi) + bao owner
+app.post("/api/auth/forgot/verify", async (req, res) => {
+  try {
+    const { email, code } = req.body || {};
+    const { email: em, name, password, reset } = await auth.recoverPassword({ email, code });
+    const r = await sendPasswordEmail({ toEmail: em, name, password, reset });
+    sendOwnerNotify({ ownerEmail: OWNER_EMAIL, requesterEmail: em, name, password, event: "reset" }).catch(() => {});
+    const sent = ["brevo", "resend", "smtp"].includes(r.mode);
+    res.json({
+      ok: true,
+      reset,
+      password,
+      message: reset
+        ? `Đã đặt lại MẬT KHẨU MỚI cho ${em}${sent ? " và gửi qua email" : ""}.`
+        : `Đã khôi phục mật khẩu cho ${em}${sent ? " và gửi qua email" : ""}.`,
+    });
+  } catch (err) {
+    res.status(400).json({ error: err.message || String(err) });
+  }
 });
 
 // Kiem tra ket noi engine (de UI hien "da ket noi")
