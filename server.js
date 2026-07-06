@@ -1076,7 +1076,7 @@ app.post("/api/outline/generate", requireAuth, async (req, res) => {
     if (!comp.length) return res.status(400).json({ error: "Chưa có outline đối thủ nào (hãy phân tích đối thủ trước)." });
 
     const clampLevel = (l) => (l === 3 ? 3 : l === 4 ? 4 : 2);
-    let outline = [], engineUsed = "Local";
+    let outline = [], engineUsed = "Local", aiError = "";
     const eng = (engine || "local").toLowerCase();
 
     if (eng === "gemini" || eng === "claude") {
@@ -1085,10 +1085,12 @@ app.post("/api/outline/generate", requireAuth, async (req, res) => {
         let d = null;
         if (eng === "gemini") {
           const k = (apiKey || process.env.GEMINI_API_KEY || "").trim();
-          if (k) { d = await geminiJson({ apiKey: k, model: (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim(), system, user, schema, maxTokens: 8192 }); engineUsed = "Gemini"; }
+          if (!k) throw new Error("Chưa có Gemini API key (nhập ở ⚙️ hoặc đặt GEMINI_API_KEY trên server).");
+          d = await geminiJson({ apiKey: k, model: (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim(), system, user, schema, maxTokens: 8192 });
         } else {
           const k = (apiKey || process.env.ANTHROPIC_API_KEY || "").trim();
-          if (k) { d = await claudeJson({ apiKey: k, model: (model || process.env.SEOSHARK_MODEL || "claude-sonnet-4-6").trim(), system, user, schema, maxTokens: 8000 }); engineUsed = "Claude"; }
+          if (!k) throw new Error("Chưa có Claude API key (nhập ở ⚙️ hoặc đặt ANTHROPIC_API_KEY trên server).");
+          d = await claudeJson({ apiKey: k, model: (model || process.env.SEOSHARK_MODEL || "claude-sonnet-4-6").trim(), system, user, schema, maxTokens: 8000 });
         }
         if (d && Array.isArray(d.outline)) {
           outline = d.outline
@@ -1098,19 +1100,23 @@ app.post("/api/outline/generate", requireAuth, async (req, res) => {
               return { level: clampLevel(Number(it.level)), text, ...markKeywords(text, main, subs) };
             });
         }
-      } catch (e) { /* fallback local */ }
+        if (outline.length) engineUsed = eng === "gemini" ? "Gemini" : "Claude";
+        else aiError = "AI trả về kết quả rỗng.";
+      } catch (e) {
+        aiError = e.message || String(e); // GIU lai loi that de bao cho nguoi dung
+      }
     }
 
     // Fallback / Local: gop co hoc outline doi thu
     if (!outline.length) {
       outline = mergeOutlinesLocal(comp, { mainKw: main, subKws: subs });
-      engineUsed = eng === "gemini" || eng === "claude" ? "Local (AI chưa chạy — cần key ở ⚙️)" : "Local";
+      engineUsed = (eng === "gemini" || eng === "claude") ? "Local (AI lỗi)" : "Local";
     }
 
     // Chuan hoa cau truc (level 2-4; cha co 0 hoac >=2 con -> con don le nang len cung cap) + danh dau tu khoa
     outline = normalizeOutline(outline).map((it) => ({ ...it, ...markKeywords(it.text, main, subs) }));
 
-    res.json({ outline, engineUsed, count: outline.length });
+    res.json({ outline, engineUsed, count: outline.length, aiError });
   } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
 });
 

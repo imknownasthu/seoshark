@@ -2171,7 +2171,8 @@ $("#opClearSkill").addEventListener("click", () => {
       $("#olUniqueList").innerHTML = ""; $("#olUniqueMsg").innerHTML = "";
       $("#olEngineUsed").textContent = "— " + (d.engineUsed || "");
       renderTree();
-      setMsg("#olGenMsg", "info", `✓ Đã tạo outline ${lastOutline.length} heading.`);
+      if (d.aiError) setMsg("#olGenMsg", "warn", `⚠️ AI (Gemini/Claude) không chạy được nên đã dùng Local. Lý do: <b>${esc(d.aiError)}</b>. Kiểm tra lại API key & model ở ⚙️ (nút "Kiểm tra kết nối").`);
+      else setMsg("#olGenMsg", "info", `✓ Đã tạo outline ${lastOutline.length} heading.`);
       $("#olResultCard").classList.remove("hidden");
       $("#olResultCard").scrollIntoView({ block: "start", behavior: "smooth" });
     } catch (err) { setMsg("#olGenMsg", "err", "❌ " + err.message); }

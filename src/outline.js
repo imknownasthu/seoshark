@@ -218,9 +218,17 @@ export function normalizeOutline(items) {
 }
 
 // ---- Gop co hoc outline nhieu doi thu (Local, khong AI) ----
+// Bo tien to danh so o dau heading: "3. ", "3.1. ", "3) ", "IV. ", "Buoc 1: "
+export function stripLeadNum(s) {
+  return String(s || "")
+    .replace(/^\s*\d+([.)]\d+)*[.)]?\s+/, "")
+    .replace(/^\s*[IVXLCDM]+[.)]\s+/i, "")
+    .replace(/^\s*(b[uư][oơ]c|m[uụ]c|ph[aâ]n|step|part)\s+\d+\s*[:.)-]?\s+/i, "")
+    .trim();
+}
 // Y tuong: gom cac H2 theo tan suat + vi tri trung binh; H3/H4 gom duoi H2 gan nhat.
 function keyOf(text) {
-  return norm(text).replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
+  return norm(stripLeadNum(text)).replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
 }
 
 // Heading rac/boilerplate thuong gap (Wikipedia, menu, footer...) -> bo khi gop Local
@@ -237,14 +245,14 @@ export function mergeOutlinesLocal(competitorOutlines, { mainKw, subKws } = {}) 
       if (h.level === 2) {
         const k = keyOf(h.text);
         if (!k || JUNK_RE.test(norm(h.text))) { curH2 = null; return; }
-        if (!h2map.has(k)) h2map.set(k, { text: h.text, count: 0, posSum: 0, children: new Map() });
+        if (!h2map.has(k)) h2map.set(k, { text: stripLeadNum(h.text), count: 0, posSum: 0, children: new Map() });
         const node = h2map.get(k);
         node.count++; node.posSum += idx++;
         curH2 = node;
       } else if (curH2 && (h.level === 3 || h.level === 4)) {
         const k = keyOf(h.text);
         if (!k || JUNK_RE.test(norm(h.text))) return;
-        if (!curH2.children.has(k)) curH2.children.set(k, { text: h.text, count: 0, level: h.level });
+        if (!curH2.children.has(k)) curH2.children.set(k, { text: stripLeadNum(h.text), count: 0, level: h.level });
         curH2.children.get(k).count++;
       }
     });
