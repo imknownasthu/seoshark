@@ -67,23 +67,28 @@ export async function extractHeadings(url) {
   catch (e) { return { ...base, error: e.message || "Không tải được trang" }; }
 
   const dom = new JSDOM(html, { url });
-  const doc = dom.window.document;
-  base.title = cleanText(doc.querySelector("title")?.textContent) || "";
-
-  // 1) Uu tien Readability (bo boilerplate) -> lay heading trong noi dung chinh
   let headings = [];
   try {
-    const reader = new Readability(doc.cloneNode(true));
-    const article = reader.parse();
-    if (article && article.content) {
-      const cdom = new JSDOM(`<body>${article.content}</body>`);
-      headings = headingsFromEl(cdom.window.document.body);
-      if (article.title && !base.title) base.title = cleanText(article.title);
-    }
-  } catch { /* fallthrough */ }
+    const doc = dom.window.document;
+    base.title = cleanText(doc.querySelector("title")?.textContent) || "";
 
-  // 2) Fallback: CHI noi dung chinh (bo nav/header/footer/sidebar), khong lay toan trang
-  if (headings.length < 2) headings = mainContentHeadings(doc);
+    // 1) Uu tien Readability (bo boilerplate) -> lay heading trong noi dung chinh
+    try {
+      const reader = new Readability(doc.cloneNode(true));
+      const article = reader.parse();
+      if (article && article.content) {
+        const cdom = new JSDOM(`<body>${article.content}</body>`);
+        headings = headingsFromEl(cdom.window.document.body);
+        if (article.title && !base.title) base.title = cleanText(article.title);
+        cdom.window.close();
+      }
+    } catch { /* fallthrough */ }
+
+    // 2) Fallback: CHI noi dung chinh (bo nav/header/footer/sidebar), khong lay toan trang
+    if (headings.length < 2) headings = mainContentHeadings(doc);
+  } finally {
+    dom.window.close(); // giai phong tai nguyen JSDOM (tranh ro ri qua nhieu lan chay)
+  }
 
   // Bo trung lien tiep
   const dedup = [];
@@ -96,13 +101,29 @@ export async function extractHeadings(url) {
   return base;
 }
 
+// Chay 1 promise voi gioi han thoi gian cung (chong treo triet de)
+function withTimeout(promise, ms, onTimeout) {
+  return Promise.race([
+    promise,
+    new Promise((resolve) => setTimeout(() => resolve(onTimeout()), ms)),
+  ]);
+}
+
 // Boc tach nhieu URL song song (gioi han loi tung cai). cap: so URL toi da (auto=6, manual=10).
 export async function extractManyHeadings(urls, cap = 10) {
   const list = (Array.isArray(urls) ? urls : []).map((u) => String(u || "").trim()).filter(Boolean).slice(0, cap);
   const out = [];
   for (let i = 0; i < list.length; i += 3) {
     const chunk = list.slice(i, i + 3);
-    const r = await Promise.all(chunk.map((u) => extractHeadings(u).catch((e) => ({ url: u, host: "", title: "", headings: [], error: e.message || String(e) }))));
+    const r = await Promise.all(chunk.map((u) => {
+      const host = (() => { try { return new URL(u).host; } catch { return ""; } })();
+      // Gioi han cung 20s/URL: du fetchHtml da co timeout, van bao ve neu parse/Readability treo
+      return withTimeout(
+        extractHeadings(u).catch((e) => ({ url: u, host, title: "", headings: [], error: e.message || String(e) })),
+        20000,
+        () => ({ url: u, host, title: "", headings: [], error: "Quá lâu, đã bỏ qua (timeout 20s)" })
+      );
+    }));
     out.push(...r);
   }
   return out;

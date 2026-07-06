@@ -21,7 +21,7 @@ import { diigoSave, instapaperSave } from "./src/social-auto.js";
 import { expandSeeds, domainSeeds } from "./src/keywords.js";
 import { googleTrends, bingVolume } from "./src/volume.js";
 import { fetchCompetitors, extractManyHeadings, mergeOutlinesLocal, markKeywords, normalizeOutline } from "./src/outline.js";
-import { buildOutlinePrompt, OUTLINE_SCHEMA } from "./src/outline-prompt.js";
+import { buildOutlinePrompt, OUTLINE_SCHEMA, buildUniquePrompt, UNIQUE_SCHEMA } from "./src/outline-prompt.js";
 import * as store from "./src/store.js";
 import {
   ONPAGE_SYSTEM, RECOMMEND_SCHEMA, OPTIMIZE_SCHEMA, SUGGEST_SCHEMA,
@@ -1111,6 +1111,41 @@ app.post("/api/outline/generate", requireAuth, async (req, res) => {
     outline = normalizeOutline(outline).map((it) => ({ ...it, ...markKeywords(it.text, main, subs) }));
 
     res.json({ outline, engineUsed, count: outline.length });
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
+});
+
+// Goi y noi dung UNIQUE (non-commodity) tu tai lieu kien thuc -> them vao heading phu hop (BAT BUOC AI)
+app.post("/api/outline/unique", requireAuth, async (req, res) => {
+  try {
+    const { mainKw, subKws, websiteName, knowledge, outline, engine, model, apiKey } = req.body || {};
+    const main = String(mainKw || "").trim();
+    const know = String(knowledge || "").trim();
+    const list = (Array.isArray(outline) ? outline : []).filter((it) => it && it.text);
+    if (!main) return res.status(400).json({ error: "Thiếu từ khóa chính." });
+    if (!know) return res.status(400).json({ error: "Hãy chọn một tài liệu kiến thức website (có nội dung) trước." });
+    if (!list.length) return res.status(400).json({ error: "Chưa có outline để gợi ý." });
+
+    const eng = (engine || "local").toLowerCase();
+    if (eng !== "gemini" && eng !== "claude") {
+      return res.status(400).json({ error: "Gợi ý nội dung unique cần engine Gemini hoặc Claude (bật ở ⚙️)." });
+    }
+    const subs = (Array.isArray(subKws) ? subKws : String(subKws || "").split(/[,\n]/)).map((s) => String(s || "").trim()).filter(Boolean);
+    const { system, user, schema } = buildUniquePrompt({ mainKw: main, subKws: subs, websiteName, knowledge: know, outline: list });
+
+    let d = null;
+    if (eng === "gemini") {
+      const k = (apiKey || process.env.GEMINI_API_KEY || "").trim();
+      if (!k) return res.status(400).json({ error: "Thiếu Gemini API key (nhập ở ⚙️)." });
+      d = await geminiJson({ apiKey: k, model: (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim(), system, user, schema, maxTokens: 6000 });
+    } else {
+      const k = (apiKey || process.env.ANTHROPIC_API_KEY || "").trim();
+      if (!k) return res.status(400).json({ error: "Thiếu Claude API key (nhập ở ⚙️)." });
+      d = await claudeJson({ apiKey: k, model: (model || process.env.SEOSHARK_MODEL || "claude-sonnet-4-6").trim(), system, user, schema, maxTokens: 6000 });
+    }
+    const suggestions = (d && Array.isArray(d.suggestions) ? d.suggestions : [])
+      .filter((s) => s && s.heading && (s.what || s.how))
+      .map((s) => ({ heading: String(s.heading).trim(), what: String(s.what || "").trim(), how: String(s.how || "").trim() }));
+    res.json({ suggestions, count: suggestions.length });
   } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
 });
 

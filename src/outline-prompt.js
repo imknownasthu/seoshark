@@ -21,6 +21,52 @@ export const OUTLINE_SCHEMA = {
   required: ["outline"],
 };
 
+// Schema goi y noi dung UNIQUE (non-commodity) cho tung heading
+export const UNIQUE_SCHEMA = {
+  type: "object",
+  properties: {
+    suggestions: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          heading: { type: "string", description: "Heading trong outline nên thêm yếu tố unique" },
+          what: { type: "string", description: "Yếu tố unique/non-commodity cụ thể nên thêm (rút từ kiến thức website)" },
+          how: { type: "string", description: "Cách lồng vào heading đó cho tự nhiên" },
+        },
+        required: ["heading", "what", "how"],
+      },
+    },
+  },
+  required: ["suggestions"],
+};
+
+// Prompt goi y noi dung UNIQUE: chi cho heading PHU HOP, rut tu kien thuc website
+export function buildUniquePrompt({ mainKw, subKws = [], websiteName = "", knowledge = "", outline = [] }) {
+  const system =
+    "Bạn là chuyên gia SEO content chiến lược, đa lĩnh vực. Nhiệm vụ: dựa trên OUTLINE đã chốt và KIẾN THỨC WEBSITE, " +
+    "gợi ý CHÍNH XÁC nên thêm yếu tố NỘI DUNG UNIQUE / NON-COMMODITY (dữ liệu độc quyền, case thật, quan điểm chuyên gia, số liệu cụ thể, USP, thế mạnh riêng) " +
+    "vào HEADING NÀO là phù hợp nhất và thêm NHƯ THẾ NÀO, để đáp ứng khung Unique/Specific/Authentic của Google.\n" +
+    "NGUYÊN TẮC:\n" +
+    "• CHỈ gợi ý cho heading THỰC SỰ phù hợp để lồng kiến thức website đó vào; KHÔNG ép mọi heading, KHÔNG bịa thông tin không có trong kiến thức.\n" +
+    "• Mỗi gợi ý phải RÚT từ KIẾN THỨC WEBSITE (điểm khác biệt/thế mạnh/số liệu/quy trình/uy tín cụ thể), không nói chung chung.\n" +
+    "• 'what' = yếu tố unique cụ thể; 'how' = cách lồng vào heading tự nhiên (dạng đoạn, bullet, số liệu, câu chốt...).\n" +
+    "• Số lượng gợi ý theo mức phù hợp thực tế (thường 2–6), chất lượng hơn số lượng. Nếu kiến thức không đủ để tạo yếu tố unique, trả mảng rỗng.\n" +
+    "• Viết cùng ngôn ngữ với từ khóa chính.\n" +
+    "Trả JSON {suggestions:[{heading, what, how}]}. 'heading' phải TRÙNG KHỚP một heading trong outline đã cho.";
+
+  const outlineText = (outline || []).map((it) => `${"#".repeat(it.level || 2)} ${it.text || it}`).join("\n");
+  const parts = [];
+  parts.push(`TỪ KHÓA CHÍNH: ${mainKw}`);
+  if (subKws.length) parts.push(`TỪ KHÓA PHỤ: ${subKws.join(", ")}`);
+  if (websiteName) parts.push(`WEBSITE: ${websiteName}`);
+  parts.push(`KIẾN THỨC WEBSITE (nguồn để rút yếu tố unique):\n${String(knowledge || "").trim().slice(0, 8000)}`);
+  parts.push(`OUTLINE ĐÃ CHỐT (chỉ gợi ý cho heading trong đây):\n${outlineText}`);
+  parts.push("YÊU CẦU: Gợi ý thêm nội dung unique vào các heading phù hợp nhất (heading phải trùng khớp outline), nêu rõ 'what' và 'how'.");
+
+  return { system, user: parts.join("\n\n"), schema: UNIQUE_SCHEMA };
+}
+
 function competitorsBlock(competitorOutlines) {
   return (competitorOutlines || [])
     .map((c, i) => {

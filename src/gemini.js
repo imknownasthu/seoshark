@@ -54,7 +54,7 @@ function toGeminiSchema(s) {
 }
 
 // Goi Gemini tra ve JSON theo schema (dung cho On-page va cac tac vu khac)
-export async function geminiJson({ apiKey, model, system, user, schema, maxTokens = 8192 }) {
+export async function geminiJson({ apiKey, model, system, user, schema, maxTokens = 8192, timeout = 60000 }) {
   const mdl = model || "gemini-3.5-flash";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${mdl}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const body = {
@@ -67,13 +67,24 @@ export async function geminiJson({ apiKey, model, system, user, schema, maxToken
       responseSchema: toGeminiSchema(schema),
     },
   };
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json();
-  if (!res.ok) throw new Error(`Gemini loi: ${data?.error?.message || res.status}`);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeout);
+  let data;
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    });
+    data = await res.json();
+    if (!res.ok) throw new Error(`Gemini loi: ${data?.error?.message || res.status}`);
+  } catch (e) {
+    if (e.name === "AbortError") throw new Error(`Gemini qua lau (>${Math.round(timeout / 1000)}s).`);
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
   const text = data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") || "";
   if (!text) throw new Error(`Gemini khong tra ve noi dung (${data?.candidates?.[0]?.finishReason || "?"}).`);
   return JSON.parse(text);

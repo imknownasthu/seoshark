@@ -907,6 +907,16 @@
           </div>
           <p class="muted" style="margin:8px 0;font-size:.85rem">★ = chứa từ khóa chính · ● = chứa từ khóa phụ</p>
           <div id="olTree" style="margin-top:6px"></div>
+
+          <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
+            <label style="display:flex;gap:6px;align-items:center;font-weight:400;cursor:pointer"><input type="checkbox" id="olUniqueTick" style="width:16px;height:16px;accent-color:var(--orange)"> 💎 <b>Gợi ý nội dung unique</b> — chắt lọc từ tài liệu kiến thức để thêm yếu tố non-commodity vào heading phù hợp nhất</label>
+            <div id="olUniqueBox" class="hidden" style="margin-top:10px">
+              <p class="muted" style="font-size:.85rem;margin:0 0 8px">Cần <b>chọn tài liệu kiến thức</b> ở mục 2 và bật engine <b>Gemini/Claude</b> ở ⚙️.</p>
+              <button class="ghost small" id="olUniqueRun">💎 Tạo gợi ý unique</button>
+              <div id="olUniqueMsg" style="margin-top:10px"></div>
+              <div id="olUniqueList" style="margin-top:8px"></div>
+            </div>
+          </div>
         </section>
       </div>
 

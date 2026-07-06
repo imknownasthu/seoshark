@@ -1989,6 +1989,7 @@ $("#opClearSkill").addEventListener("click", () => {
   let competitors = [];   // outline đối thủ (đã bóc tách)
   let lastOutline = [];   // kết quả outline cuối
   let knowledge = [];     // thư viện kiến thức của tài khoản
+  let analyzedKw = "";    // từ khóa đã phân tích đối thủ (để phát hiện đổi từ khóa)
 
   const setMsg = (el, type, msg) => { $(el).innerHTML = msg ? alertHtml(type, msg) : ""; };
   const splitList = (v) => String(v || "").split(/[,\n]/).map((s) => s.trim()).filter(Boolean);
@@ -2119,6 +2120,7 @@ $("#opClearSkill").addEventListener("click", () => {
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Lỗi phân tích");
       competitors = d.competitors || [];
+      analyzedKw = keyword;
       const ok = competitors.filter((c) => (c.headings || []).length).length;
       setMsg("#olCompMsg", ok ? "info" : "warn", `${ok ? "✓" : "⚠️"} Đã bóc tách ${competitors.length} đối thủ (${ok} có outline). Nguồn: ${d.source}.`);
       renderCompetitors();
@@ -2165,6 +2167,8 @@ $("#opClearSkill").addEventListener("click", () => {
       if (!r.ok) throw new Error(d.error || "Lỗi tạo outline");
       lastOutline = d.outline || [];
       if (!lastOutline.length) { setMsg("#olGenMsg", "warn", "Không tạo được outline."); return; }
+      // reset gợi ý unique cũ
+      $("#olUniqueList").innerHTML = ""; $("#olUniqueMsg").innerHTML = "";
       $("#olEngineUsed").textContent = "— " + (d.engineUsed || "");
       renderTree();
       setMsg("#olGenMsg", "info", `✓ Đã tạo outline ${lastOutline.length} heading.`);
@@ -2186,5 +2190,52 @@ $("#opClearSkill").addEventListener("click", () => {
     const head = ["Cấp", "Heading", "Chứa KW chính", "Chứa KW phụ"];
     const aoa = [head].concat(lastOutline.map((it) => [`H${it.level}`, it.text, it.hasMain ? "★" : "", (it.hitSubs || []).join(", ")]));
     const ws = XLSX.utils.aoa_to_sheet(aoa); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Outline"); XLSX.writeFile(wb, "seoshark-outline.xlsx");
+  });
+
+  // --- Đổi từ khóa chính sau khi đã phân tích -> buộc phân tích lại (tránh trộn đối thủ cũ) ---
+  $("#olMainKw").addEventListener("input", () => {
+    const kw = $("#olMainKw").value.trim();
+    if (analyzedKw && kw && kw !== analyzedKw && competitors.length) {
+      competitors = [];
+      analyzedKw = "";
+      $("#olCompCard").classList.add("hidden");
+      $("#olResultCard").classList.add("hidden");
+      $("#olCompList").innerHTML = "";
+      setMsg("#olCompMsg", "warn", "⚠️ Từ khóa đã đổi — hãy bấm <b>Phân tích đối thủ</b> lại cho từ khóa mới.");
+    }
+  });
+
+  // --- Gợi ý nội dung unique (non-commodity) từ tài liệu kiến thức ---
+  $("#olUniqueTick").addEventListener("change", () => {
+    $("#olUniqueBox").classList.toggle("hidden", !$("#olUniqueTick").checked);
+  });
+
+  $("#olUniqueRun").addEventListener("click", async () => {
+    if (!lastOutline.length) return setMsg("#olUniqueMsg", "err", "❌ Chưa có outline.");
+    const know = knowledge.find((x) => x.id === $("#olKnowSelect").value);
+    if (!know || !(know.content || "").trim()) return setMsg("#olUniqueMsg", "err", "❌ Hãy chọn một tài liệu kiến thức (ở mục 2) trước.");
+    const engine = $("#engine").value, model = $("#model").value, apiKey = $("#apiKey").value.trim();
+    if (engine !== "gemini" && engine !== "claude") return setMsg("#olUniqueMsg", "err", "❌ Cần bật engine Gemini/Claude ở ⚙️ cho gợi ý unique.");
+    const mainKw = $("#olMainKw").value.trim();
+    const subKws = splitList($("#olSubKws").value);
+    const websiteName = $("#olWebsite").value.trim();
+    const btn = $("#olUniqueRun"); busy(btn, true, "Đang gợi ý...");
+    setMsg("#olUniqueMsg", "info", '<span class="spinner" style="border-top-color:transparent"></span>AI đang chắt lọc kiến thức & gợi ý (~15s)...');
+    $("#olUniqueList").innerHTML = "";
+    try {
+      const r = await _fetch("/api/outline/unique", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mainKw, subKws, websiteName, knowledge: know.content, outline: lastOutline, engine, model, apiKey }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Lỗi gợi ý");
+      const list = d.suggestions || [];
+      if (!list.length) { setMsg("#olUniqueMsg", "warn", "Tài liệu kiến thức chưa đủ dữ liệu độc quyền để tạo gợi ý unique phù hợp."); return; }
+      setMsg("#olUniqueMsg", "info", `✓ ${list.length} gợi ý nội dung unique.`);
+      $("#olUniqueList").innerHTML = list.map((s) => `
+        <div style="border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:8px">
+          <div style="font-weight:600">💎 Ở heading: <span style="color:var(--orange)">${esc(s.heading)}</span></div>
+          <div style="margin-top:4px"><b>Thêm gì:</b> ${esc(s.what)}</div>
+          <div style="margin-top:2px"><b>Cách thêm:</b> ${esc(s.how)}</div>
+        </div>`).join("");
+    } catch (err) { setMsg("#olUniqueMsg", "err", "❌ " + err.message); }
+    finally { busy(btn, false); }
   });
 })();

@@ -9,15 +9,25 @@ const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
   "(KHTML, like Gecko) Chrome/124.0 Safari/537.36 SeoShark/0.1";
 
-export async function fetchHtml(url) {
-  const res = await fetch(url, {
-    headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml" },
-    redirect: "follow",
-  });
-  if (!res.ok) {
-    throw new Error(`Khong tai duoc URL (HTTP ${res.status}) - ${url}`);
+export async function fetchHtml(url, { timeout = 15000 } = {}) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeout);
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml" },
+      redirect: "follow",
+      signal: ctrl.signal,
+    });
+    if (!res.ok) {
+      throw new Error(`Khong tai duoc URL (HTTP ${res.status}) - ${url}`);
+    }
+    return await res.text();
+  } catch (e) {
+    if (e.name === "AbortError") throw new Error(`Tai URL qua lau (>${Math.round(timeout / 1000)}s) - ${url}`);
+    throw e;
+  } finally {
+    clearTimeout(timer);
   }
-  return await res.text();
 }
 
 // Chuyen inner HTML cua mot block thanh markdown inline (giu lien ket & in dam/nghieng)
