@@ -225,20 +225,31 @@ function attachKwStats(a, mainKeyword) {
 const FREE_FLASH = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
 const RECOVERABLE = /quota|exceeded|limit: 0|RESOURCE_EXHAUSTED|429|not found|404|NOT_FOUND|not supported|unavailable|is not found|does not exist|overload|high demand|experiencing high|try again later|temporar|\b503\b|\b500\b|INTERNAL/i;
 
-// Goi callFn(model) lan luot voi model chon -> cac Flash free, tra ve { result, model }
-async function geminiWithFallback(callFn, chosenModel) {
+// Loi QUA TAI TAM THOI (nen thu lai cung model) vs loi model KHONG hop le (chuyen model khac ngay)
+const TRANSIENT = /overload|high demand|experiencing high|try again later|temporar|429|RESOURCE_EXHAUSTED|\b503\b|\b500\b|INTERNAL|unavailable/i;
+const _sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Goi callFn(model) lan luot voi model chon -> cac Flash free; moi model thu lai neu qua tai tam thoi.
+// Tra ve { result, model, switched }. Nem lastErr neu tat ca that bai.
+async function geminiWithFallback(callFn, chosenModel, { attemptsPerModel = 3, backoffMs = 1500 } = {}) {
   const chain = [chosenModel, ...FREE_FLASH].filter(Boolean);
   const tried = new Set();
   let lastErr;
   for (const m of chain) {
     if (tried.has(m)) continue;
     tried.add(m);
-    try {
-      const result = await callFn(m);
-      return { result, model: m, switched: m !== chosenModel };
-    } catch (e) {
-      lastErr = e;
-      if (!RECOVERABLE.test(e.message || "")) throw e; // loi khac (vd sai key) -> nem ngay
+    for (let attempt = 1; attempt <= attemptsPerModel; attempt++) {
+      try {
+        const result = await callFn(m);
+        return { result, model: m, switched: m !== chosenModel };
+      } catch (e) {
+        lastErr = e;
+        const msg = e.message || "";
+        if (!RECOVERABLE.test(msg)) throw e; // loi khac (vd sai key) -> nem ngay
+        // Qua tai tam thoi -> nghi roi thu lai CUNG model; loi model khac (404/not found) -> qua model tiep
+        if (TRANSIENT.test(msg) && attempt < attemptsPerModel) { await _sleep(backoffMs * attempt); continue; }
+        break;
+      }
     }
   }
   throw lastErr;
@@ -969,7 +980,7 @@ app.post("/api/keywords/research", requireAuth, async (req, res) => {
       const schema = { type: "object", properties: { items: { type: "array", items: { type: "object", properties: { keyword: { type: "string" }, intent: { type: "string" }, cluster: { type: "string" }, difficulty: { type: "string" }, popularity: { type: "string" } }, required: ["keyword"] } } }, required: ["items"] };
       try {
         let d = null;
-        if (eng === "gemini") { const k = (apiKey || process.env.GEMINI_API_KEY || "").trim(); if (k) d = await geminiJson({ apiKey: k, model: (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim(), system: sys, user, schema, maxTokens: 8192 }); }
+        if (eng === "gemini") { const k = (apiKey || process.env.GEMINI_API_KEY || "").trim(); if (k) { const r = await geminiWithFallback((m) => geminiJson({ apiKey: k, model: m, system: sys, user, schema, maxTokens: 8192 }), (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim()); d = r.result; } }
         else { const k = (apiKey || process.env.ANTHROPIC_API_KEY || "").trim(); if (k) d = await claudeJson({ apiKey: k, model: (model || process.env.SEOSHARK_MODEL || "claude-sonnet-4-6").trim(), system: sys, user, schema, maxTokens: 8000 }); }
         if (d && Array.isArray(d.items)) {
           const map = {};
@@ -1082,15 +1093,18 @@ app.post("/api/outline/generate", requireAuth, async (req, res) => {
     if (eng === "gemini" || eng === "claude") {
       const { system, user, schema } = buildOutlinePrompt({ mainKw: main, subKws: subs, refOutline, knowledge, websiteName, competitorOutlines: comp });
       try {
-        let d = null;
+        let d = null, usedModel = "";
         if (eng === "gemini") {
           const k = (apiKey || process.env.GEMINI_API_KEY || "").trim();
           if (!k) throw new Error("Chưa có Gemini API key (nhập ở ⚙️ hoặc đặt GEMINI_API_KEY trên server).");
-          d = await geminiJson({ apiKey: k, model: (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim(), system, user, schema, maxTokens: 8192 });
+          const gModel = (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim();
+          const r = await geminiWithFallback((m) => geminiJson({ apiKey: k, model: m, system, user, schema, maxTokens: 8192 }), gModel);
+          d = r.result; usedModel = `Gemini (${r.model})${r.switched ? " — tự chuyển model" : ""}`;
         } else {
           const k = (apiKey || process.env.ANTHROPIC_API_KEY || "").trim();
           if (!k) throw new Error("Chưa có Claude API key (nhập ở ⚙️ hoặc đặt ANTHROPIC_API_KEY trên server).");
           d = await claudeJson({ apiKey: k, model: (model || process.env.SEOSHARK_MODEL || "claude-sonnet-4-6").trim(), system, user, schema, maxTokens: 8000 });
+          usedModel = "Claude";
         }
         if (d && Array.isArray(d.outline)) {
           outline = d.outline
@@ -1100,7 +1114,7 @@ app.post("/api/outline/generate", requireAuth, async (req, res) => {
               return { level: clampLevel(Number(it.level)), text, ...markKeywords(text, main, subs) };
             });
         }
-        if (outline.length) engineUsed = eng === "gemini" ? "Gemini" : "Claude";
+        if (outline.length) engineUsed = usedModel;
         else aiError = "AI trả về kết quả rỗng.";
       } catch (e) {
         aiError = e.message || String(e); // GIU lai loi that de bao cho nguoi dung
@@ -1142,7 +1156,9 @@ app.post("/api/outline/unique", requireAuth, async (req, res) => {
     if (eng === "gemini") {
       const k = (apiKey || process.env.GEMINI_API_KEY || "").trim();
       if (!k) return res.status(400).json({ error: "Thiếu Gemini API key (nhập ở ⚙️)." });
-      d = await geminiJson({ apiKey: k, model: (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim(), system, user, schema, maxTokens: 6000 });
+      const gModel = (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim();
+      const r = await geminiWithFallback((m) => geminiJson({ apiKey: k, model: m, system, user, schema, maxTokens: 6000 }), gModel);
+      d = r.result;
     } else {
       const k = (apiKey || process.env.ANTHROPIC_API_KEY || "").trim();
       if (!k) return res.status(400).json({ error: "Thiếu Claude API key (nhập ở ⚙️)." });
