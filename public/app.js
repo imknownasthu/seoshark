@@ -1988,6 +1988,7 @@ $("#opClearSkill").addEventListener("click", () => {
   let mode = "auto";
   let competitors = [];   // outline đối thủ (đã bóc tách)
   let lastOutline = [];   // kết quả outline cuối
+  let lastTitle = "", lastMeta = ""; // Title SEO + Meta description
   let knowledge = [];     // thư viện kiến thức của tài khoản
   let analyzedKw = "";    // từ khóa đã phân tích đối thủ (để phát hiện đổi từ khóa)
 
@@ -2144,8 +2145,35 @@ $("#opClearSkill").addEventListener("click", () => {
       return `<div style="padding:4px 0;padding-left:${pad}px;font-weight:${weight}">${tag}${esc(it.text)}${badges(it)}</div>`;
     }).join("");
   }
+  // Title SEO + Meta description với đếm ký tự (xanh nếu trong khoảng chuẩn) + nút copy
+  function renderTitleMeta() {
+    const box = $("#olTitleMeta");
+    if (!lastTitle && !lastMeta) { box.innerHTML = ""; return; }
+    const badge = (len, min, max) => {
+      const ok = len >= min && len <= max;
+      const c = ok ? "var(--green)" : "var(--orange)";
+      return `<span style="font-size:.75rem;color:${c};font-weight:600">${len} ký tự${ok ? " ✓" : ` (chuẩn ${min}–${max})`}</span>`;
+    };
+    const field = (label, val, min, max, id) => `
+      <div style="border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px">
+          <b style="font-size:.82rem">${label}</b>
+          <div style="display:flex;gap:10px;align-items:center">${badge((val || "").length, min, max)}<a class="muted" data-copy="${id}" style="cursor:pointer;font-size:.8rem">📋 Copy</a></div>
+        </div>
+        <div id="${id}" style="line-height:1.5">${esc(val || "")}</div>
+      </div>`;
+    box.innerHTML = field("🔖 Title SEO", lastTitle, 50, 60, "olTitleVal") + field("📝 Meta description", lastMeta, 140, 160, "olMetaVal");
+    box.querySelectorAll("[data-copy]").forEach((a) => a.addEventListener("click", async () => {
+      const t = $("#" + a.dataset.copy).textContent;
+      try { await navigator.clipboard.writeText(t); toast("Đã copy!"); } catch { toast("Không copy được."); }
+    }));
+  }
   function outlineToMarkdown() {
-    return lastOutline.map((it) => `${"#".repeat(it.level)} ${it.text}`).join("\n");
+    const head = [];
+    if (lastTitle) head.push(`Title: ${lastTitle}`);
+    if (lastMeta) head.push(`Meta description: ${lastMeta}`);
+    const body = lastOutline.map((it) => `${"#".repeat(it.level)} ${it.text}`).join("\n");
+    return (head.length ? head.join("\n") + "\n\n" : "") + body;
   }
 
   $("#olGenerate").addEventListener("click", async () => {
@@ -2167,9 +2195,11 @@ $("#opClearSkill").addEventListener("click", () => {
       if (!r.ok) throw new Error(d.error || "Lỗi tạo outline");
       lastOutline = d.outline || [];
       if (!lastOutline.length) { setMsg("#olGenMsg", "warn", "Không tạo được outline."); return; }
+      lastTitle = d.title || ""; lastMeta = d.metaDescription || "";
       // reset gợi ý unique cũ
       $("#olUniqueList").innerHTML = ""; $("#olUniqueMsg").innerHTML = "";
       $("#olEngineUsed").textContent = "— " + (d.engineUsed || "");
+      renderTitleMeta();
       renderTree();
       if (d.aiError) setMsg("#olGenMsg", "warn", `⚠️ AI (Gemini/Claude) không chạy được nên đã dùng Local. Lý do: <b>${esc(d.aiError)}</b>. Kiểm tra lại API key & model ở ⚙️ (nút "Kiểm tra kết nối").`);
       else setMsg("#olGenMsg", "info", `✓ Đã tạo outline ${lastOutline.length} heading.`);
@@ -2189,7 +2219,12 @@ $("#opClearSkill").addEventListener("click", () => {
     if (!lastOutline.length) return toast("Chưa có outline.");
     if (typeof XLSX === "undefined") return toast("Thư viện Excel chưa tải xong.");
     const head = ["Cấp", "Heading", "Chứa KW chính", "Chứa KW phụ"];
-    const aoa = [head].concat(lastOutline.map((it) => [`H${it.level}`, it.text, it.hasMain ? "★" : "", (it.hitSubs || []).join(", ")]));
+    const aoa = [];
+    if (lastTitle) aoa.push(["Title SEO", lastTitle, `${lastTitle.length} ký tự`, ""]);
+    if (lastMeta) aoa.push(["Meta description", lastMeta, `${lastMeta.length} ký tự`, ""]);
+    if (aoa.length) aoa.push(["", "", "", ""]);
+    aoa.push(head);
+    lastOutline.forEach((it) => aoa.push([`H${it.level}`, it.text, it.hasMain ? "★" : "", (it.hitSubs || []).join(", ")]));
     const ws = XLSX.utils.aoa_to_sheet(aoa); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Outline"); XLSX.writeFile(wb, "seoshark-outline.xlsx");
   });
 

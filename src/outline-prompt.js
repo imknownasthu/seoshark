@@ -2,10 +2,12 @@
 // Prompt + schema cho AI tong hop OUTLINE chuan SEO tu outline cua doi thu top SERP.
 // Trung thanh voi phuong phap: bam sat doi thu, khong du thua, khong bia; huong non-commodity.
 
-// Schema: danh sach heading phang, moi item co level (2|3|4) + text.
+// Schema: Title SEO + Meta description + danh sach heading phang (level 2|3|4 + text).
 export const OUTLINE_SCHEMA = {
   type: "object",
   properties: {
+    title: { type: "string", description: "SEO Title 50-60 ký tự, chứa từ khóa chính (ưu tiên đầu)" },
+    metaDescription: { type: "string", description: "Meta description 140-160 ký tự, có từ khóa chính + lợi ích + CTA mềm" },
     outline: {
       type: "array",
       items: {
@@ -18,7 +20,7 @@ export const OUTLINE_SCHEMA = {
       },
     },
   },
-  required: ["outline"],
+  required: ["title", "metaDescription", "outline"],
 };
 
 // Schema goi y noi dung UNIQUE (non-commodity) cho tung heading
@@ -111,7 +113,10 @@ export function buildOutlinePrompt({ mainKw, subKws = [], refOutline = "", knowl
     "6. SỐ LƯỢNG heading do search intent quyết định — bài đơn giản thì ít, phức tạp thì nhiều; không ép con số.\n" +
     "7. Nếu có 'Outline tham khảo', ưu tiên đưa các heading đó vào (nếu hợp lý) và đặt đúng vị trí.\n" +
     "8. Viết cùng NGÔN NGỮ với từ khóa chính. Chỉ trả OUTLINE HEADING, không viết nội dung.\n\n" +
-    "Trả JSON {outline:[{level, text}]} theo đúng thứ tự đọc từ trên xuống (level = 2|3|4).";
+    "NGOÀI OUTLINE, tạo thêm:\n" +
+    "• TITLE SEO (title): 50–60 ký tự (tính cả khoảng trắng), CHỨA TỪ KHÓA CHÍNH và ưu tiên đặt ở ĐẦU, hấp dẫn để click, có thể thêm lợi ích/năm nếu phù hợp; sentence/title tự nhiên, KHÔNG dùng dấu gạch ngang để bổ nghĩa.\n" +
+    "• META DESCRIPTION (metaDescription): 140–160 ký tự, CHỨA TỪ KHÓA CHÍNH, nêu lợi ích rõ ràng, có CTA mềm, KHÔNG lặp nguyên văn Title.\n\n" +
+    "Trả JSON {title, metaDescription, outline:[{level, text}]} — outline theo đúng thứ tự đọc từ trên xuống (level = 2|3|4).";
 
   const parts = [];
   parts.push(`TỪ KHÓA CHÍNH: ${mainKw}`);
@@ -121,8 +126,8 @@ export function buildOutlinePrompt({ mainKw, subKws = [], refOutline = "", knowl
   if (knowledge && String(knowledge).trim()) parts.push(`KIẾN THỨC WEBSITE (dùng để đi đúng hướng non-commodity, KHÔNG nhồi chi tiết vào heading):\n${String(knowledge).trim().slice(0, 6000)}`);
   parts.push(`OUTLINE CÁC ĐỐI THỦ TOP SERP (phân tích kỹ làm CĂN CỨ, nhưng CHẮT LỌC chứ không copy toàn bộ):\n${competitorsBlock(competitorOutlines)}`);
   parts.push(
-    "YÊU CẦU: Xuất outline cuối cùng (H2/H3/H4) TỐT NHẤT cho từ khóa chính — chắt lọc heading thiết yếu, đúng search intent, " +
-    "tuân thủ mọi QUY TẮC CẤU TRÚC ở trên (đặc biệt: cha có 0 hoặc ≥2 con; sentence case; không gạch ngang)."
+    "YÊU CẦU: Xuất Title SEO + Meta description + outline (H2/H3/H4) TỐT NHẤT cho từ khóa chính — chắt lọc heading thiết yếu, đúng search intent, " +
+    "tuân thủ mọi QUY TẮC CẤU TRÚC ở trên (đặc biệt: cha có 0 hoặc ≥2 con; sentence case; không gạch ngang; Title 50–60 ký tự; Meta 140–160 ký tự)."
   );
 
   return { system, user: parts.join("\n\n"), schema: OUTLINE_SCHEMA };

@@ -1087,7 +1087,7 @@ app.post("/api/outline/generate", requireAuth, async (req, res) => {
     if (!comp.length) return res.status(400).json({ error: "Chưa có outline đối thủ nào (hãy phân tích đối thủ trước)." });
 
     const clampLevel = (l) => (l === 3 ? 3 : l === 4 ? 4 : 2);
-    let outline = [], engineUsed = "Local", aiError = "";
+    let outline = [], engineUsed = "Local", aiError = "", title = "", metaDescription = "";
     const eng = (engine || "local").toLowerCase();
 
     if (eng === "gemini" || eng === "claude") {
@@ -1114,8 +1114,11 @@ app.post("/api/outline/generate", requireAuth, async (req, res) => {
               return { level: clampLevel(Number(it.level)), text, ...markKeywords(text, main, subs) };
             });
         }
-        if (outline.length) engineUsed = usedModel;
-        else aiError = "AI trả về kết quả rỗng.";
+        if (outline.length) {
+          engineUsed = usedModel;
+          title = String(d.title || "").trim();
+          metaDescription = String(d.metaDescription || "").trim();
+        } else aiError = "AI trả về kết quả rỗng.";
       } catch (e) {
         aiError = e.message || String(e); // GIU lai loi that de bao cho nguoi dung
       }
@@ -1130,7 +1133,16 @@ app.post("/api/outline/generate", requireAuth, async (req, res) => {
     // Chuan hoa cau truc (level 2-4; cha co 0 hoac >=2 con -> con don le nang len cung cap) + danh dau tu khoa
     outline = normalizeOutline(outline).map((it) => ({ ...it, ...markKeywords(it.text, main, subs) }));
 
-    res.json({ outline, engineUsed, count: outline.length, aiError });
+    // Title/Meta co ban khi AI khong chay (de field khong rong) — AI cho chat luong tot hon nhieu
+    if (!title) {
+      const cap = main.charAt(0).toUpperCase() + main.slice(1);
+      title = `${cap}: chi tiết A-Z ${new Date().getFullYear()}`.slice(0, 60);
+    }
+    if (!metaDescription) {
+      metaDescription = `Tìm hiểu ${main}${subs.length ? ", " + subs.slice(0, 2).join(", ") : ""}. Thông tin đầy đủ, dễ hiểu giúp bạn quyết định đúng. Xem ngay!`.slice(0, 160);
+    }
+
+    res.json({ outline, engineUsed, count: outline.length, aiError, title, metaDescription });
   } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
 });
 
