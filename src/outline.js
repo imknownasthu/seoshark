@@ -59,37 +59,30 @@ function mainContentHeadings(doc) {
   return headingsFromEl(main);
 }
 
-export async function extractHeadings(url) {
-  const u = (() => { try { return new URL(url); } catch { return null; } })();
-  const base = { url, host: u ? u.host : "", title: "", headings: [] };
-  let html;
-  try { html = await fetchHtml(url); }
-  catch (e) { return { ...base, error: e.message || "Không tải được trang" }; }
+// UA Googlebot: nhieu site render FULL HTML cho Googlebot (de SEO) du la trang JS.
+const GOOGLEBOT_UA = "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)";
 
+// Boc tach heading tu 1 chuoi HTML (Readability -> fallback noi dung chinh). Tra {title, headings}.
+function parseHeadingsFromHtml(html, url) {
   const dom = new JSDOM(html, { url });
-  let headings = [];
+  let title = "", headings = [];
   try {
     const doc = dom.window.document;
-    base.title = cleanText(doc.querySelector("title")?.textContent) || "";
-
-    // 1) Uu tien Readability (bo boilerplate) -> lay heading trong noi dung chinh
+    title = cleanText(doc.querySelector("title")?.textContent) || "";
     try {
       const reader = new Readability(doc.cloneNode(true));
       const article = reader.parse();
       if (article && article.content) {
         const cdom = new JSDOM(`<body>${article.content}</body>`);
         headings = headingsFromEl(cdom.window.document.body);
-        if (article.title && !base.title) base.title = cleanText(article.title);
+        if (article.title && !title) title = cleanText(article.title);
         cdom.window.close();
       }
     } catch { /* fallthrough */ }
-
-    // 2) Fallback: CHI noi dung chinh (bo nav/header/footer/sidebar), khong lay toan trang
     if (headings.length < 2) headings = mainContentHeadings(doc);
   } finally {
-    dom.window.close(); // giai phong tai nguyen JSDOM (tranh ro ri qua nhieu lan chay)
+    dom.window.close();
   }
-
   // Bo trung lien tiep
   const dedup = [];
   for (const h of headings) {
@@ -97,7 +90,49 @@ export async function extractHeadings(url) {
     if (prev && prev.level === h.level && prev.text.toLowerCase() === h.text.toLowerCase()) continue;
     dedup.push(h);
   }
-  base.headings = dedup.slice(0, 60);
+  return { title, headings: dedup.slice(0, 60) };
+}
+
+// Doan HTML co dau hieu la SPA/JS-rendered (noi dung nap dong)?
+function looksJsRendered(html) {
+  return /__NEXT_DATA__|id=["']root["']|id=["']app["']|ng-app|data-reactroot|window\.__NUXT__/i.test(html || "");
+}
+
+export async function extractHeadings(url) {
+  const u = (() => { try { return new URL(url); } catch { return null; } })();
+  const base = { url, host: u ? u.host : "", title: "", headings: [] };
+
+  // Lan 1: UA trinh duyet thuong
+  let html;
+  try { html = await fetchHtml(url); }
+  catch (e) {
+    const st = e.httpStatus;
+    let reason = e.message || "Không tải được trang";
+    if (st === 403 || st === 401) reason = `Bị chặn bot (HTTP ${st}) — trang không cho tải tự động.`;
+    else if (st === 404) reason = `Trang không tồn tại (HTTP 404).`;
+    else if (/qua lau/i.test(reason)) reason = "Trang phản hồi quá chậm (timeout).";
+    return { ...base, error: reason };
+  }
+
+  let { title, headings } = parseHeadingsFromHtml(html, url);
+  base.title = title;
+
+  // Lan 2 (neu it heading): thu UA Googlebot — nhieu site render full HTML cho Googlebot
+  if (headings.length < 2) {
+    try {
+      const html2 = await fetchHtml(url, { ua: GOOGLEBOT_UA });
+      const r2 = parseHeadingsFromHtml(html2, url);
+      if (r2.headings.length > headings.length) { headings = r2.headings; if (r2.title) base.title = r2.title; }
+      if (headings.length < 2 && looksJsRendered(html2)) base.reason = "Trang dựng bằng JavaScript (nội dung nạp động) nên HTML không có heading để đọc.";
+    } catch { /* giu ket qua lan 1 */ }
+    if (headings.length < 2 && !base.reason) {
+      base.reason = looksJsRendered(html)
+        ? "Trang dựng bằng JavaScript (nội dung nạp động) nên HTML không có heading để đọc."
+        : "Không tìm thấy heading trong nội dung chính (có thể không phải trang bài viết, hoặc heading không dùng thẻ H2–H4).";
+    }
+  }
+
+  base.headings = headings;
   return base;
 }
 
@@ -215,16 +250,25 @@ export function mergeOutlinesLocal(competitorOutlines, { mainKw, subKws } = {}) 
     });
   });
 
-  // Sap xep H2 theo count desc, roi vi tri trung binh asc
-  const h2list = Array.from(h2map.values())
-    .sort((a, b) => b.count - a.count || (a.posSum / a.count) - (b.posSum / b.count));
+  // Chat loc: neu co >=3 doi thu va du nhieu heading chung -> chi giu H2 xuat hien o >=2 doi thu
+  const nComp = competitorOutlines.length;
+  let h2list = Array.from(h2map.values());
+  if (nComp >= 3) {
+    const common = h2list.filter((h) => h.count >= 2);
+    if (common.length >= 4) h2list = common;
+  }
+  // Sap xep theo tan suat desc, roi vi tri trung binh asc; gioi han 12 H2
+  h2list = h2list
+    .sort((a, b) => b.count - a.count || (a.posSum / a.count) - (b.posSum / b.count))
+    .slice(0, 12);
 
   const items = [];
   h2list.forEach((h2) => {
     items.push({ level: 2, text: h2.text, count: h2.count });
     Array.from(h2.children.values())
+      .filter((ch) => nComp < 3 || ch.count >= 1) // giu con (Local chi co the loc theo tan suat)
       .sort((a, b) => b.count - a.count)
-      .slice(0, 8)
+      .slice(0, 5)
       .forEach((ch) => items.push({ level: ch.level, text: ch.text, count: ch.count }));
   });
 

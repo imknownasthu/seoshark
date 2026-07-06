@@ -87,8 +87,10 @@ export function buildOutlinePrompt({ mainKw, subKws = [], refOutline = "", knowl
     "Các khung dưới đây là PHƯƠNG PHÁP THAM KHẢO tổng quát, KHÔNG mặc định ngành nào.\n\n" +
     "PHƯƠNG PHÁP (chắt lọc, không áp cứng):\n" +
     "• Xác định SEARCH INTENT chủ đạo của từ khóa; toàn bộ cấu trúc phải phục vụ intent đó.\n" +
-    "• CHẮT LỌC, KHÔNG GỘP TẤT CẢ: phân tích đối thủ để tạo outline TỐT NHẤT, KHÔNG phải đối thủ có bao nhiêu thì đưa vào bấy nhiêu. " +
-    "Chỉ giữ heading THỰC SỰ phục vụ intent và hữu ích cho người đọc; BỎ mục trùng ý, rác, quảng cáo, điều hướng, ngoài lề. Mỗi H2 phải có lý do tồn tại rõ ràng.\n" +
+    "• CHẮT LỌC MẠNH, TUYỆT ĐỐI KHÔNG COPY 1-1: KHÔNG được lấy hợp (union) tất cả heading của đối thủ rồi liệt kê ra. " +
+    "Hãy chọn ra bộ heading TINH GỌN, tốt nhất — outline cuối thường ÍT heading hơn tổng số heading của các đối thủ cộng lại. " +
+    "GỘP các heading trùng/gần nghĩa thành 1; BỎ mục rác, quảng cáo, điều hướng, lặp, ngoài lề, hoặc chỉ 1 đối thủ có mà không thực sự cần. " +
+    "Mỗi heading phải 'xứng đáng có mặt': phục vụ đúng intent + hữu ích thật cho người đọc + đáp ứng tiêu chí chất lượng của Google. Nếu phân vân, BỎ.\n" +
     "• Content gap: chỉ thêm heading nếu nó trả lời thêm một nhu cầu THẬT của người đọc cho từ khóa này (đừng thêm chỉ vì 1 đối thủ có).\n" +
     "• Chất lượng theo Google: E-E-A-T + khung Unique/Specific/Authentic. Nếu có 'Kiến thức website', khéo léo lồng điểm khác biệt/thế mạnh vào heading phù hợp để đi hướng NON-COMMODITY (không chung chung như mọi bài). Nếu không có, vẫn giữ outline hữu ích, không bịa.\n" +
     "• Trình bày rõ ràng phục vụ NGƯỜI ĐỌC (không nhồi nhét, không chunking hình thức cho AI).\n\n" +

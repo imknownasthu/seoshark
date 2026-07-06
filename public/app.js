@@ -2096,7 +2096,7 @@ $("#opClearSkill").addEventListener("click", () => {
         ? `<div class="alert warn" style="margin:8px 0">⚠️ ${esc(c.error)}</div>`
         : (hs.length
             ? `<div style="padding:6px 0">${hs.map((h) => `<div style="padding:2px 0;padding-left:${(h.level - 2) * 18}px"><span class="muted" style="font-size:.75rem">H${h.level}</span> ${esc(h.text)}</div>`).join("")}</div>`
-            : `<div class="muted" style="padding:8px 0">(không lấy được heading)</div>`);
+            : `<div class="alert warn" style="margin:8px 0">⚠️ ${esc(c.reason || "Không lấy được heading từ trang này.")}</div>`);
       return `<details style="border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin-bottom:8px">
         <summary style="cursor:pointer;font-weight:600">#${c.position || i + 1} · ${esc(c.host || c.url)} <span class="muted" style="font-weight:400;font-size:.8rem">— ${hs.length} heading</span></summary>
         <div style="font-size:.85rem;color:var(--muted);margin:4px 0">${esc(c.title || "")}<br><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.url)}</a></div>

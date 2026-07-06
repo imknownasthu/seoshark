@@ -9,17 +9,23 @@ const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
   "(KHTML, like Gecko) Chrome/124.0 Safari/537.36 SeoShark/0.1";
 
-export async function fetchHtml(url, { timeout = 15000 } = {}) {
+export async function fetchHtml(url, { timeout = 15000, ua } = {}) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeout);
   try {
     const res = await fetch(url, {
-      headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml" },
+      headers: {
+        "User-Agent": ua || UA,
+        Accept: "text/html,application/xhtml+xml",
+        "Accept-Language": "vi,en;q=0.9",
+      },
       redirect: "follow",
       signal: ctrl.signal,
     });
     if (!res.ok) {
-      throw new Error(`Khong tai duoc URL (HTTP ${res.status}) - ${url}`);
+      const e = new Error(`Khong tai duoc URL (HTTP ${res.status}) - ${url}`);
+      e.httpStatus = res.status;
+      throw e;
     }
     return await res.text();
   } catch (e) {
