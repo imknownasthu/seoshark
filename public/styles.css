@@ -69,7 +69,6 @@ svg.ic{width:19px;height:19px;stroke:currentColor;stroke-width:1.8;fill:none;
   display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;padding:20px 16px;
 }
 .logo-area{display:flex;align-items:center;gap:12px;padding:6px 8px 18px}
-.logo-area img{display:none}          /* ẩn logo ảnh cũ, dùng mark gradient */
 .brand-mark{width:42px;height:42px;border-radius:13px;background:var(--grad-brand);overflow:hidden;
   display:flex;align-items:center;justify-content:center;color:#fff;flex:none;
   box-shadow:0 8px 20px rgba(63,200,214,.35)}
