@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SeoShark — Bộ công cụ SEO</title>
+  <title>SwiftMate SEO — Bộ công cụ SEO</title>
   <link rel="stylesheet" href="styles.css" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%233FC8D6'/><stop offset='1' stop-color='%236C8CFF'/></linearGradient></defs><rect width='32' height='32' rx='9' fill='url(%23g)'/><path d='M16 8c-5 0-8 3-8 7 0 2 1 4 1 5.5 0 1 .5 1.8 1 1.8s.7-.7.9-1.6S13 22 16 22s3.7-.4 4.1 0 .4 1.5.9 1.5 1-.8 1-1.8C22 19 23 17 23 15c0-4-3-7-7-7Z' fill='%23fff'/></svg>" />
 </head>
@@ -13,8 +13,8 @@
   <div id="authOverlay" class="auth-overlay show">
     <div class="auth-card">
       <div class="auth-logo">
-        <span class="brand-mark"><svg viewBox="0 0 24 24"><path d="M12 4c-4 0-7 2.4-7 6.4 0 2.3.9 4 .9 6.6 0 1.6.8 3 1.6 3s1-1 1.3-2.3S10.7 20 12 20s2 .3 2.2 1.7S15 24 15.8 24s1.6-1.4 1.6-3c0-2.6.9-4.3.9-6.6C18.3 6.4 15.6 4 12 4Z"/><circle cx="9" cy="10.5" r="1" fill="currentColor" stroke="none"/></svg></span>
-        <b>SeoShark</b>
+        <span class="brand-mark"><img src="logo.png" alt="SwiftMate SEO" onerror="this.remove()" /><svg viewBox="0 0 24 24"><path d="M4 13h7l-2 7 11-13h-7l2-7Z"/></svg></span>
+        <b>SwiftMate SEO</b>
       </div>
       <p class="auth-sub">Đăng nhập để sử dụng công cụ SEO</p>
       <div id="authMsg"></div>
@@ -82,9 +82,10 @@
     <aside class="sidebar">
       <div class="logo-area">
         <span class="brand-mark">
-          <svg viewBox="0 0 24 24"><path d="M12 4c-4 0-7 2.4-7 6.4 0 2.3.9 4 .9 6.6 0 1.6.8 3 1.6 3s1-1 1.3-2.3S10.7 20 12 20s2 .3 2.2 1.7S15 24 15.8 24s1.6-1.4 1.6-3c0-2.6.9-4.3.9-6.6C18.3 6.4 15.6 4 12 4Z"/><path d="M16 6c1.6-1 4-1.4 5.6-.6-.9 1-1.4 2.4-1.4 3.8-1.4-1.4-2.9-2.4-4.2-3.2Z"/><circle cx="9" cy="10.5" r="1" fill="currentColor" stroke="none"/></svg>
+          <img src="logo.png" alt="SwiftMate SEO" onerror="this.remove()" />
+          <svg viewBox="0 0 24 24"><path d="M4 13h7l-2 7 11-13h-7l2-7Z"/></svg>
         </span>
-        <span class="brand-txt"><b>SeoShark</b><span>SEO Suite</span></span>
+        <span class="brand-txt"><b>SwiftMate SEO</b><span>SEO Toolkit</span></span>
       </div>
 
       <nav class="menu" id="menu">
@@ -132,7 +133,7 @@
         </div>
       </nav>
 
-      <div class="sidebar-foot">SeoShark v0.3 | DN Group</div>
+      <div class="sidebar-foot">SwiftMate SEO v0.3 | DN Group</div>
     </aside>
 
     <!-- ============ CONTENT ============ -->
@@ -188,8 +189,9 @@
       <!-- ===== SECTION: DASHBOARD ===== -->
       <div class="section active page" data-section="dashboard">
         <div class="hero">
-          <h1>Chào mừng trở lại, SeoShark</h1>
-          <p>Bộ công cụ SEO all-in-one cho nhakhoashark.vn. Tối ưu internal link, onpage, nghiên cứu từ khóa, lên outline chuẩn Google và nhiều hơn nữa.</p>
+          <h1 id="heroGreet">Xin chào!</h1>
+          <p><b>Chào mừng bạn đến với bộ công cụ SwiftMate SEO!</b> Giải pháp này được thiết kế để đồng hành cùng bạn trong mọi giai đoạn tối ưu website. Bằng cách xử lý đồng bộ những khối lượng công việc đòi hỏi nhiều thời gian, hệ thống giúp bạn giải phóng áp lực thủ công để tập trung hoàn toàn vào chiến lược bứt phá thứ hạng.</p>
+          <p style="margin-top:10px">Để công cụ ngày một hoàn thiện và phục vụ tốt hơn, bạn có thể góp ý cải thiện qua Zalo <b>0938267574</b>. Chúc bạn chinh phục những mục tiêu tăng trưởng hiệu quả.</p>
           <div class="quota">
             <div style="display:flex;justify-content:space-between"><span class="mono" style="font-size:10px">Hạn mức Gemini hôm nay</span><span id="dashQuotaTxt">Sẵn sàng</span></div>
             <div class="quota-bar"><i style="width:38%"></i></div>
@@ -726,7 +728,7 @@
                 <ol style="margin:8px 0 0;padding-left:20px">
                   <li>Đăng nhập <a href="https://dev.to" target="_blank" rel="noopener">dev.to</a>.</li>
                   <li>Mở <a href="https://dev.to/settings/extensions" target="_blank" rel="noopener">dev.to/settings/extensions</a>.</li>
-                  <li>Tới mục <b>"DEV Community API Keys"</b> → nhập tên (vd <i>SeoShark</i>) → bấm <b>Generate API Key</b>.</li>
+                  <li>Tới mục <b>"DEV Community API Keys"</b> → nhập tên (vd <i>SwiftMate SEO</i>) → bấm <b>Generate API Key</b>.</li>
                   <li><b>Copy</b> chuỗi key vừa tạo.</li>
                   <li>Tại đây: Loại nền = <b>Dev.to</b> → dán <b>API key</b> → đặt Tên gợi nhớ → <b>+ Lưu blog</b>.</li>
                 </ol>
@@ -738,7 +740,7 @@
                   <li>Đăng nhập WordPress Admin: <code>https://tenmiencuaban.com/wp-admin</code>.</li>
                   <li>Vào <b>Users → Profile</b> (Thành viên → Hồ sơ của bạn).</li>
                   <li>Kéo xuống mục <b>"Application Passwords"</b> (Mật khẩu ứng dụng).</li>
-                  <li>Nhập tên (vd <i>SeoShark</i>) → bấm <b>Add New Application Password</b>.</li>
+                  <li>Nhập tên (vd <i>SwiftMate SEO</i>) → bấm <b>Add New Application Password</b>.</li>
                   <li><b>Copy</b> chuỗi hiện ra (dạng <code>abcd efgh ijkl mnop</code> — GIỮ NGUYÊN cả dấu cách).</li>
                   <li>Tại đây: Loại = <b>WordPress</b> → URL site (<code>https://tenmiencuaban.com</code>) + <b>Username</b> (tên đăng nhập WP) + dán <b>App Password</b> → <b>+ Lưu blog</b>.</li>
                 </ol>
@@ -980,7 +982,7 @@
         <div class="coming">
           <div class="tile"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 7.7l5.4-.8Z"/></svg></div>
           <h2 id="soonName">Tính năng sắp ra mắt</h2>
-          <p>Tính năng này đang được phát triển và sẽ sớm có mặt trong SeoShark.</p>
+          <p>Tính năng này đang được phát triển và sẽ sớm có mặt trong SwiftMate SEO.</p>
           <div class="eta mono">Dự kiến · Quý tới</div>
           <div><button class="btn-dark" id="soonNotify" type="button">Nhận thông báo khi ra mắt</button></div>
           <ul class="feats">

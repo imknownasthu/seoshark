@@ -13,9 +13,11 @@
   --shadow-lift:0 18px 44px rgba(20,26,51,.10);
   --radius:20px;
   --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
-  /* backward-compat aliases (mã cũ còn tham chiếu) */
+  /* backward-compat aliases (mã cũ còn tham chiếu) — "cam" cũ đã reroute sang XANH đồng bộ */
   --brand:var(--c-blue); --brand-dark:#4d69e0; --brand-light:#eef2ff;
-  --green:#1eae74; --green-light:#e5f8ef; --orange:#e8863f; --red:#e5484d;
+  --green:#1eae74; --green-light:#e5f8ef; --red:#e5484d;
+  --orange:#4d69e0; --orange-deep:#3f57c9; --orange-soft:#6C8CFF; --orange-text:#4d69e0;
+  --accent:#4d69e0; --coral:var(--c-rose);
   --paper:var(--bg); --text:var(--ink);
 }
 
@@ -68,10 +70,14 @@ svg.ic{width:19px;height:19px;stroke:currentColor;stroke-width:1.8;fill:none;
 }
 .logo-area{display:flex;align-items:center;gap:12px;padding:6px 8px 18px}
 .logo-area img{display:none}          /* ẩn logo ảnh cũ, dùng mark gradient */
-.brand-mark{width:42px;height:42px;border-radius:13px;background:var(--grad-brand);
+.brand-mark{width:42px;height:42px;border-radius:13px;background:var(--grad-brand);overflow:hidden;
   display:flex;align-items:center;justify-content:center;color:#fff;flex:none;
   box-shadow:0 8px 20px rgba(63,200,214,.35)}
 .brand-mark svg{width:24px;height:24px;stroke:#fff;stroke-width:1.8;fill:none}
+.brand-mark img{width:100%;height:100%;object-fit:contain}
+/* Nếu có logo.png thật -> bỏ nền gradient để hiện logo sạch */
+.brand-mark:has(img){background:#fff;box-shadow:0 8px 20px rgba(20,26,51,.12)}
+.brand-mark:has(img) svg{display:none}
 .brand-txt b{display:block;font-size:19px;font-weight:800;color:var(--ink);letter-spacing:-.01em}
 .brand-txt span{font-family:var(--mono);font-size:10px;letter-spacing:.22em;color:var(--muted);text-transform:uppercase}
 .logo-fallback{display:none !important}

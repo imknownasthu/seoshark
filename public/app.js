@@ -680,7 +680,13 @@ $("#backToRegister").addEventListener("click", () => { switchAtab("register"); }
 function applyUser(user) {
   $("#userChip").style.display = "inline-flex";
   $("#userEmail").textContent = user.email;
-  $("#userAvatar").textContent = (user.name || user.email || "U").trim().charAt(0) || "U";
+  $("#userAvatar").textContent = (user.name || user.email || "U").trim().charAt(0).toUpperCase() || "U";
+  // Lời chào cá nhân hoá ở Dashboard: ưu tiên tên, else phần trước @ của email
+  const greet = $("#heroGreet");
+  if (greet) {
+    const who = (user.name && user.name.trim()) || (user.email || "").split("@")[0] || "bạn";
+    greet.textContent = `Xin chào, ${who}!`;
+  }
   isAuthed = true;
   checkEngineConn();
 }
@@ -1179,7 +1185,7 @@ function downloadFile(name, content, mime) {
 }
 function opAfterHtmlDoc(wordMode) {
   const o = opSession.optimize; if (!o) return "";
-  const head = `<meta charset="utf-8"><title>${esc(o.after.title || "SeoShark")}</title>` +
+  const head = `<meta charset="utf-8"><title>${esc(o.after.title || "SwiftMate SEO")}</title>` +
     (o.after.metaDescription ? `<meta name="description" content="${esc(o.after.metaDescription)}">` : "");
   const body = mdToHtml(o.after.markdown || "");
   if (wordMode) {
@@ -1981,7 +1987,7 @@ $("#opClearSkill").addEventListener("click", () => {
       if (enriched) row.push(r.intent || "", r.cluster || "", r.difficulty || "");
       return row;
     }));
-    const ws = XLSX.utils.aoa_to_sheet(aoa); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "TuKhoa"); XLSX.writeFile(wb, "seoshark-tu-khoa.xlsx");
+    const ws = XLSX.utils.aoa_to_sheet(aoa); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "TuKhoa"); XLSX.writeFile(wb, "swiftmate-tu-khoa.xlsx");
   });
 })();
 
@@ -2229,7 +2235,7 @@ $("#opClearSkill").addEventListener("click", () => {
     if (aoa.length) aoa.push(["", "", "", ""]);
     aoa.push(head);
     lastOutline.forEach((it) => aoa.push([`H${it.level}`, it.text, it.hasMain ? "★" : "", (it.hitSubs || []).join(", ")]));
-    const ws = XLSX.utils.aoa_to_sheet(aoa); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Outline"); XLSX.writeFile(wb, "seoshark-outline.xlsx");
+    const ws = XLSX.utils.aoa_to_sheet(aoa); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Outline"); XLSX.writeFile(wb, "swiftmate-outline.xlsx");
   });
 
   // --- Đổi từ khóa chính sau khi đã phân tích -> buộc phân tích lại (tránh trộn đối thủ cũ) ---
