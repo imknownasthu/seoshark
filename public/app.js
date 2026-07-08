@@ -70,10 +70,10 @@ function applyEngine(engine) {
 
   // Engine pill o topbar
   const pill = {
-    local: ["Local", "var(--green)"],
-    gemini: ["Gemini", "var(--brand)"],
-    claude: ["Claude", "var(--coral)"],
-  }[engine] || ["Local", "var(--green)"];
+    local: ["Local · Sẵn sàng", "var(--c-mint)"],
+    gemini: ["Gemini · Đã kết nối", "var(--c-mint)"],
+    claude: ["Claude · Đã kết nối", "var(--c-mint)"],
+  }[engine] || ["Local · Sẵn sàng", "var(--c-mint)"];
   const pt = $("#enginePillText"), pd = $("#enginePillDot");
   if (pt) pt.textContent = pill[0];
   if (pd) pd.style.background = pill[1];
@@ -86,7 +86,11 @@ function showSection(section, title) {
   if (el) el.classList.add("active");
   $("#sectionTitle").textContent = title;
 }
-const SECTION_TITLES = { "internal-link": "Tối ưu Internal link", "onpage": "Tối ưu Onpage", "serp": "Check Index & Thứ hạng", "share": "Tự động Share Link", "blog2": "Tự động đăng Blog 2.0", "keywords": "Nghiên cứu từ khóa", "outline": "Lên outline chuẩn SEO" };
+const SECTION_TITLES = { "dashboard": "Bảng điều khiển", "internal-link": "Tối ưu Internal link", "onpage": "Tối ưu Onpage", "serp": "Check Index & Thứ hạng", "share": "Tự động Share Link", "blog2": "Tự động đăng Blog 2.0", "keywords": "Nghiên cứu từ khóa", "outline": "Lên outline chuẩn SEO" };
+// Điều hướng nhanh từ thẻ Dashboard hoặc bất kỳ đâu
+function gotoSection(sec) { const mi = document.querySelector(`#menu .menu-item[data-section="${sec}"]`); if (mi) mi.click(); }
+document.querySelectorAll("#quickTools .tool-card[data-goto]").forEach((c) => c.addEventListener("click", () => gotoSection(c.dataset.goto)));
+{ const sn = document.getElementById("soonNotify"); if (sn) sn.addEventListener("click", () => toast("Đã ghi nhận! Chúng tôi sẽ báo bạn khi tính năng ra mắt.")); }
 $$("#menu .menu-item").forEach((mi) => {
   mi.addEventListener("click", () => {
     $$("#menu .menu-item").forEach((x) => x.classList.remove("active"));

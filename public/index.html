@@ -5,14 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SeoShark — Bộ công cụ SEO</title>
   <link rel="stylesheet" href="styles.css" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>🦈</text></svg>" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%233FC8D6'/><stop offset='1' stop-color='%236C8CFF'/></linearGradient></defs><rect width='32' height='32' rx='9' fill='url(%23g)'/><path d='M16 8c-5 0-8 3-8 7 0 2 1 4 1 5.5 0 1 .5 1.8 1 1.8s.7-.7.9-1.6S13 22 16 22s3.7-.4 4.1 0 .4 1.5.9 1.5 1-.8 1-1.8C22 19 23 17 23 15c0-4-3-7-7-7Z' fill='%23fff'/></svg>" />
 </head>
 <body>
 
   <!-- ============ LOGIN OVERLAY ============ -->
   <div id="authOverlay" class="auth-overlay show">
     <div class="auth-card">
-      <div class="auth-logo">🦈 <b>SeoShark</b></div>
+      <div class="auth-logo">
+        <span class="brand-mark"><svg viewBox="0 0 24 24"><path d="M12 4c-4 0-7 2.4-7 6.4 0 2.3.9 4 .9 6.6 0 1.6.8 3 1.6 3s1-1 1.3-2.3S10.7 20 12 20s2 .3 2.2 1.7S15 24 15.8 24s1.6-1.4 1.6-3c0-2.6.9-4.3.9-6.6C18.3 6.4 15.6 4 12 4Z"/><circle cx="9" cy="10.5" r="1" fill="currentColor" stroke="none"/></svg></span>
+        <b>SeoShark</b>
+      </div>
       <p class="auth-sub">Đăng nhập để sử dụng công cụ SEO</p>
       <div id="authMsg"></div>
 
@@ -38,7 +41,7 @@
         <label>Mật khẩu (tối thiểu 6 ký tự)</label>
         <input id="regPassword" type="password" placeholder="••••••" />
         <button id="btnRegister" type="submit" style="width:100%;margin-top:8px">Gửi mã xác nhận</button>
-        <p class="muted" style="margin-top:10px">📧 Mã xác nhận sẽ được gửi tới <b>chính email bạn nhập</b> ở trên. Kiểm tra cả mục Spam.</p>
+        <p class="muted" style="margin-top:10px">Mã xác nhận sẽ được gửi tới <b>chính email bạn nhập</b> ở trên. Kiểm tra cả mục Spam.</p>
       </form>
 
       <form class="auth-form" data-aform="verify" autocomplete="off">
@@ -78,49 +81,58 @@
     <!-- ============ SIDEBAR MENU ============ -->
     <aside class="sidebar">
       <div class="logo-area">
-        <img src="logo-nhakhoasharkvn-pc.webp" alt="Shark Dental Clinic"
-             onerror="this.style.display='none';document.getElementById('logoFallback').style.display='flex';" />
-        <div class="logo-fallback" id="logoFallback" style="display:none">
-          <svg class="fish" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M24 6c-7 0-12 4-12 11 0 4 1.5 7 1.5 12 0 3 1.5 6 3 6s2-2 2.5-4.5S22 38 24 38s3 .5 3.5 2.5S29 47 30.5 47s3-3 3-6c0-5 1.5-8 1.5-12 0-7-5-11-12-11z" fill="#0097dc"/>
-            <path d="M30 9c3-2 8-3 11-1-2 2-3 5-3 8-3-3-6-5-8-7z" fill="#5cc6f0"/>
-          </svg>
-          <div class="txt"><b>SHARK</b><span>DENTAL CLINIC</span></div>
-        </div>
+        <span class="brand-mark">
+          <svg viewBox="0 0 24 24"><path d="M12 4c-4 0-7 2.4-7 6.4 0 2.3.9 4 .9 6.6 0 1.6.8 3 1.6 3s1-1 1.3-2.3S10.7 20 12 20s2 .3 2.2 1.7S15 24 15.8 24s1.6-1.4 1.6-3c0-2.6.9-4.3.9-6.6C18.3 6.4 15.6 4 12 4Z"/><path d="M16 6c1.6-1 4-1.4 5.6-.6-.9 1-1.4 2.4-1.4 3.8-1.4-1.4-2.9-2.4-4.2-3.2Z"/><circle cx="9" cy="10.5" r="1" fill="currentColor" stroke="none"/></svg>
+        </span>
+        <span class="brand-txt"><b>SeoShark</b><span>SEO Suite</span></span>
       </div>
 
       <nav class="menu" id="menu">
+        <div class="menu-label">Điều hướng</div>
+        <div class="menu-item active" data-section="dashboard">
+          <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+          Bảng điều khiển
+        </div>
         <div class="menu-label">Công cụ SEO</div>
-        <div class="menu-item active" data-section="internal-link">
-          <span class="mi-ic">🔗</span> Tối ưu Internal link
+        <div class="menu-item" data-section="internal-link">
+          <svg class="ic" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1.5-1.5"/></svg>
+          Tối ưu Internal link
         </div>
         <div class="menu-item" data-section="onpage">
-          <span class="mi-ic">🩺</span> Tối ưu Onpage
+          <svg class="ic" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 1 18 0"/><path d="M12 12l4-2.5"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/></svg>
+          Tối ưu Onpage
         </div>
         <div class="menu-item" data-section="serp">
-          <span class="mi-ic">📑</span> Check Index &amp; Thứ hạng
+          <svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/><path d="M8 11l2 2 3.5-4"/></svg>
+          Check Index &amp; Thứ hạng
         </div>
         <div class="menu-item" data-section="share">
-          <span class="mi-ic">📣</span> Tự động Share Link
+          <svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.5l6.8-4M8.6 13.5l6.8 4"/></svg>
+          Tự động Share Link
         </div>
         <div class="menu-item" data-section="blog2">
-          <span class="mi-ic">📝</span> Tự động đăng Blog 2.0
+          <svg class="ic" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          Tự động đăng Blog 2.0
         </div>
         <div class="menu-item" data-section="keywords">
-          <span class="mi-ic">🔑</span> Nghiên cứu từ khóa
+          <svg class="ic" viewBox="0 0 24 24"><circle cx="8" cy="14" r="4"/><path d="M11 11l7-7 3 3M17 9l2 2"/></svg>
+          Nghiên cứu từ khóa
         </div>
         <div class="menu-item" data-section="outline">
-          <span class="mi-ic">📋</span> Lên outline chuẩn SEO
+          <svg class="ic" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>
+          Lên outline chuẩn SEO
         </div>
         <div class="menu-item disabled" data-section="soon" data-name="Theo dõi thứ hạng">
-          <span class="mi-ic">📈</span> Theo dõi thứ hạng <span class="soon">Sắp ra mắt</span>
+          <svg class="ic" viewBox="0 0 24 24"><path d="M4 18l5-5 3 3 8-8"/><path d="M20 8v4h-4"/></svg>
+          Theo dõi thứ hạng <span class="soon">Sắp ra mắt</span>
         </div>
         <div class="menu-item disabled" data-section="soon" data-name="Phân tích đối thủ">
-          <span class="mi-ic">🥊</span> Phân tích đối thủ <span class="soon">Sắp ra mắt</span>
+          <svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></svg>
+          Phân tích đối thủ <span class="soon">Sắp ra mắt</span>
         </div>
       </nav>
 
-      <div class="sidebar-foot"><b>SeoShark</b> v0.3 · DN Group</div>
+      <div class="sidebar-foot">SeoShark v0.3 | DN Group</div>
     </aside>
 
     <!-- ============ CONTENT ============ -->
@@ -128,7 +140,7 @@
       <div class="topbar">
         <div>
           <div class="crumb">Công cụ SEO</div>
-          <h2 id="sectionTitle">Tối ưu Internal link</h2>
+          <h2 id="sectionTitle">Bảng điều khiển</h2>
         </div>
         <div class="right">
           <span class="engine-pill"><span class="dot" id="enginePillDot"></span><span id="enginePillText">Local</span></span>
@@ -144,14 +156,14 @@
       <div class="page" style="padding-top:18px;padding-bottom:0">
         <section class="card" id="engineCard" style="margin-bottom:0">
           <details id="engineBox">
-            <summary style="cursor:pointer;font-weight:700;font-size:14px;color:var(--brand-dark)">⚙️ Engine xử lý (kết nối 1 lần — dùng cho TẤT CẢ tính năng)</summary>
+            <summary style="cursor:pointer;font-weight:700;font-size:14px">Engine xử lý (kết nối 1 lần — dùng cho TẤT CẢ tính năng)</summary>
             <div class="grid cols-2" style="margin-top:12px">
               <div>
                 <label>Engine</label>
                 <select id="engine">
-                  <option value="local">🟢 Local — Miễn phí, offline, không cần key</option>
-                  <option value="gemini">✨ Gemini — Free key (Google AI Studio)</option>
-                  <option value="claude">🤖 Claude — Cần key trả phí (Anthropic)</option>
+                  <option value="local">Local — Miễn phí, offline, không cần key</option>
+                  <option value="gemini">Gemini — Free key (Google AI Studio)</option>
+                  <option value="claude">Claude — Cần key trả phí (Anthropic)</option>
                 </select>
                 <p class="muted" id="engineHint"></p>
               </div>
@@ -166,20 +178,62 @@
               <p class="muted" id="keyHelp"></p>
             </div>
             <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-              <button class="ghost small" id="engineCheckBtn" type="button">🔌 Kiểm tra kết nối</button>
+              <button class="ghost small" id="engineCheckBtn" type="button">Kiểm tra kết nối</button>
               <span id="engineStatus" style="font-size:13px;font-weight:600"></span>
             </div>
           </details>
         </section>
       </div>
 
+      <!-- ===== SECTION: DASHBOARD ===== -->
+      <div class="section active page" data-section="dashboard">
+        <div class="hero">
+          <h1>Chào mừng trở lại, SeoShark</h1>
+          <p>Bộ công cụ SEO all-in-one cho nhakhoashark.vn. Tối ưu internal link, onpage, nghiên cứu từ khóa, lên outline chuẩn Google và nhiều hơn nữa.</p>
+          <div class="quota">
+            <div style="display:flex;justify-content:space-between"><span class="mono" style="font-size:10px">Hạn mức Gemini hôm nay</span><span id="dashQuotaTxt">Sẵn sàng</span></div>
+            <div class="quota-bar"><i style="width:38%"></i></div>
+          </div>
+        </div>
+
+        <div class="stat-grid">
+          <div class="stat-card" style="--ac:var(--c-blue)"><div class="k">Bài đã tối ưu</div><div class="v">128</div><div class="d">+12 tuần này</div></div>
+          <div class="stat-card" style="--ac:var(--c-mint)"><div class="k">Tỷ lệ index</div><div class="v">94%</div><div class="d">Trên tổng URL đã kiểm tra</div></div>
+          <div class="stat-card" style="--ac:var(--c-violet)"><div class="k">Từ khóa theo dõi</div><div class="v">356</div><div class="d">Đang giám sát thứ hạng</div></div>
+          <div class="stat-card" style="--ac:var(--c-peach)"><div class="k">Link đã chèn</div><div class="v">1.2K</div><div class="d">Internal + incoming</div></div>
+        </div>
+
+        <section class="card">
+          <div class="flexbar" style="margin-bottom:14px"><h2 style="margin:0">Công cụ nhanh</h2><span class="mono" style="font-size:10px;color:var(--muted)">8 công cụ</span></div>
+          <div class="tool-grid" id="quickTools">
+            <div class="tool-card" data-goto="internal-link"><span class="tIco"><svg class="ic" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1.5-1.5"/></svg></span><div><b>Tối ưu Internal link</b><span>Chèn link nội bộ thông minh</span></div></div>
+            <div class="tool-card" data-goto="onpage"><span class="tIco"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 1 18 0"/><path d="M12 12l4-2.5"/></svg></span><div><b>Tối ưu Onpage</b><span>Audit &amp; so sánh đối thủ</span></div></div>
+            <div class="tool-card" data-goto="serp"><span class="tIco"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span><div><b>Check Index &amp; Thứ hạng</b><span>Kiểm tra index &amp; rank</span></div></div>
+            <div class="tool-card" data-goto="share"><span class="tIco"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.5l6.8-4M8.6 13.5l6.8 4"/></svg></span><div><b>Tự động Share Link</b><span>Chia sẻ đa nền tảng</span></div></div>
+            <div class="tool-card" data-goto="blog2"><span class="tIco"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span><div><b>Tự động đăng Blog 2.0</b><span>Đăng bài tự động</span></div></div>
+            <div class="tool-card" data-goto="keywords"><span class="tIco"><svg class="ic" viewBox="0 0 24 24"><circle cx="8" cy="14" r="4"/><path d="M11 11l7-7 3 3M17 9l2 2"/></svg></span><div><b>Nghiên cứu từ khóa</b><span>Gợi ý &amp; volume tìm kiếm</span></div></div>
+            <div class="tool-card" data-goto="outline"><span class="tIco"><svg class="ic" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg></span><div><b>Lên outline chuẩn SEO</b><span>Outline từ TOP đối thủ</span></div></div>
+            <div class="tool-card" data-goto="internal-link"><span class="tIco"><svg class="ic" viewBox="0 0 24 24"><path d="M4 4h16v6H4zM4 14h10v6H4z"/></svg></span><div><b>Xem tất cả</b><span>Mở toàn bộ công cụ</span></div></div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="flexbar" style="margin-bottom:6px"><h2 style="margin:0">Hoạt động gần đây</h2></div>
+          <ul class="activity">
+            <li><span class="aIco"><svg class="ic" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7"/></svg></span> Chèn 6 internal link vào bài "Niềng răng Invisalign" <time>2 giờ trước</time></li>
+            <li><span class="aIco"><svg class="ic" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/></svg></span> Tạo outline cho từ khóa "răng sứ Cercon" <time>Hôm qua</time></li>
+            <li><span class="aIco"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span> Kiểm tra index 24 URL, 22 đã index <time>2 ngày trước</time></li>
+          </ul>
+        </section>
+      </div>
+
       <!-- ===== SECTION: TỐI ƯU INTERNAL LINK ===== -->
-      <div class="section active page" data-section="internal-link">
+      <div class="section page" data-section="internal-link">
 
         <!-- SUB-TABS: Internal / Incoming -->
         <div class="tabs subtabs" id="featureTabs">
-          <div class="tab active" data-feat="internal">🔗 Internal Link (trong bài)</div>
-          <div class="tab" data-feat="incoming">🔁 Incoming Link (bài khác trỏ về)</div>
+          <div class="tab active" data-feat="internal">Internal Link (trong bài)</div>
+          <div class="tab" data-feat="incoming">Incoming Link (bài khác trỏ về)</div>
         </div>
 
         <!-- ---- INTERNAL ---- -->
@@ -197,13 +251,13 @@
                 <input id="sitemapUrl" type="text" placeholder="https://nhakhoashark.vn/sitemap.xml" />
               </div>
             </div>
-            <div style="margin-top:16px"><button id="btnAnalyze">🔍 Phân tích bài viết</button></div>
+            <div style="margin-top:16px"><button id="btnAnalyze">Phân tích bài viết</button></div>
             <div id="analyzeMsg"></div>
           </section>
 
           <section class="card hidden" id="articleCard">
             <div class="flexbar">
-              <h2 style="margin:0">📄 <span id="aTitle"></span></h2>
+              <h2 style="margin:0"><span id="aTitle"></span></h2>
               <span class="badge ok" id="aTargetBadge"></span>
             </div>
             <div class="stats" id="aStats"></div>
@@ -218,7 +272,7 @@
             <p class="hint">Sapo (mở bài) và đoạn kết luôn được bỏ qua. Link được chèn đúng ngữ cảnh, dễ đọc.</p>
             <div class="options">
               <div class="opt">
-                <h3>⚡ Phương án 1 — Tự động</h3>
+                <h3>Phương án 1 — Tự động</h3>
                 <p class="d">Công cụ tự chọn vị trí phù hợp nhất và chèn theo số lượng bạn muốn (lấy URL từ sitemap).</p>
                 <label>Số lượng internal link muốn chèn</label>
                 <input id="autoCount" type="number" min="1" max="20" value="3" />
@@ -226,7 +280,7 @@
                 <div style="margin-top:14px"><button id="btnAuto">Tối ưu tự động</button></div>
               </div>
               <div class="opt">
-                <h3>🎯 Phương án 2 — Theo từ khóa</h3>
+                <h3>Phương án 2 — Theo từ khóa</h3>
                 <p class="d">Bạn cung cấp từ khóa (và URL đích nếu muốn). Công cụ tìm vị trí phù hợp; chưa có chỗ thì viết thêm ý hợp lý.</p>
                 <div id="kwRows"></div>
                 <button class="ghost small" id="btnAddKw" type="button">+ Thêm từ khóa</button>
@@ -244,10 +298,10 @@
             </div>
             <div id="resAlerts"></div>
             <div class="tabs subtabs" id="resTabs">
-              <div class="tab active" data-tab="table">📊 Bảng đối chiếu</div>
-              <div class="tab" data-tab="render">👁️ Trước / Sau</div>
-              <div class="tab" data-tab="html">🧩 Mã HTML</div>
-              <div class="tab" data-tab="md">📝 Markdown</div>
+              <div class="tab active" data-tab="table">Bảng đối chiếu</div>
+              <div class="tab" data-tab="render">Trước / Sau</div>
+              <div class="tab" data-tab="html">Mã HTML</div>
+              <div class="tab" data-tab="md">Markdown</div>
             </div>
             <div class="tabpane active" data-pane="table"><div id="tableWrap"></div></div>
             <div class="tabpane" data-pane="render">
@@ -287,13 +341,13 @@
                 <input id="incSitemapUrl" type="text" placeholder="https://nhakhoashark.vn/sitemap.xml" />
               </div>
             </div>
-            <div style="margin-top:16px"><button id="btnIncAnalyze">🔍 Phân tích bài viết</button></div>
+            <div style="margin-top:16px"><button id="btnIncAnalyze">Phân tích bài viết</button></div>
             <div id="incAnalyzeMsg"></div>
           </section>
 
           <section class="card hidden" id="incTargetCard">
             <div class="flexbar">
-              <h2 style="margin:0">🎯 <span id="incTargetTitle"></span></h2>
+              <h2 style="margin:0"><span id="incTargetTitle"></span></h2>
               <span class="badge ok" id="incSitemapBadge"></span>
             </div>
             <div class="stats" id="incStats"></div>
@@ -309,7 +363,7 @@
             </div>
             <div class="options">
               <div class="opt">
-                <h3>⚡ Phương án 1 — Tự động</h3>
+                <h3>Phương án 1 — Tự động</h3>
                 <p class="d">Công cụ tự chọn các bài cùng chủ đề (pillar) từ sitemap và chèn link trỏ về URL đích.</p>
                 <label>Số lượng bài nguồn (tối đa 10)</label>
                 <input id="incAutoCount" type="number" min="1" max="10" value="5" />
@@ -317,7 +371,7 @@
                 <div style="margin-top:14px"><button id="btnIncAuto">Chèn tự động</button></div>
               </div>
               <div class="opt">
-                <h3>🎯 Phương án 2 — Theo từ khóa</h3>
+                <h3>Phương án 2 — Theo từ khóa</h3>
                 <p class="d">Bạn cung cấp anchor + URL bài nguồn cụ thể (hoặc bấm gợi ý bên dưới để thêm nhanh).</p>
                 <div id="incKwRows"></div>
                 <button class="ghost small" id="incAddKw" type="button">+ Thêm bài nguồn</button>
@@ -376,7 +430,7 @@
               <button class="ghost small" id="opAddComp" type="button">+ Thêm URL đối thủ</button>
             </div>
           </div>
-          <div style="margin-top:16px"><button id="btnOpAudit">🔍 Phân tích On-page</button></div>
+          <div style="margin-top:16px"><button id="btnOpAudit">Phân tích On-page</button></div>
           <div id="opAuditMsg"></div>
         </section>
 
@@ -386,15 +440,15 @@
             <span class="muted" id="opResMeta"></span>
           </div>
           <div id="opSummary"></div>
-          <h3 style="margin:14px 0 4px">📊 Bảng so sánh &amp; tiêu chí cần cải thiện</h3>
+          <h3 style="margin:14px 0 4px">Bảng so sánh &amp; tiêu chí cần cải thiện</h3>
           <p class="muted" style="margin:0 0 10px">Tick tiêu chí muốn tối ưu (mục yếu đã tự tick). Bấm tên tiêu chí để <b>mở/đóng chi tiết</b> của bạn &amp; từng đối thủ.</p>
           <div id="opCompareTable" style="overflow:auto"></div>
 
           <details style="margin-top:16px" id="opExtraBox">
-            <summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--brand-dark)">➕ Thông tin / số liệu / yêu cầu bổ sung (tùy chọn — giúp AI viết đúng &amp; sâu hơn)</summary>
+            <summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--brand-dark)">Thông tin / số liệu / yêu cầu bổ sung (tùy chọn — giúp AI viết đúng &amp; sâu hơn)</summary>
             <textarea id="opExtra" rows="4" style="margin-top:8px" placeholder="VD: Phòng khám 10 năm kinh nghiệm; giá bọc răng sứ từ 2 triệu/răng; bảo hành 15 năm; cần thêm phần FAQ; nhấn mạnh bác sĩ chuyên môn cao..."></textarea>
             <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-              <button class="ghost small" id="opSaveSkill" type="button">💾 Lưu để dùng lần sau</button>
+              <button class="ghost small" id="opSaveSkill" type="button">Lưu để dùng lần sau</button>
               <button class="ghost small" id="opClearSkill" type="button">Xóa</button>
               <span class="muted" id="opSkillMsg"></span>
             </div>
@@ -410,7 +464,7 @@
           </div>
           <div class="flexbar" style="margin-top:14px">
             <label style="display:flex;gap:7px;align-items:center;font-weight:600"><input type="checkbox" id="opSelectAll" style="width:17px;height:17px;accent-color:var(--brand)"> Chọn tất cả tiêu chí</label>
-            <button id="btnOpOptimize">✍️ Tự động tối ưu</button>
+            <button id="btnOpOptimize">Tự động tối ưu</button>
           </div>
           <div id="opRecs" style="margin-top:12px"></div>
           <div id="opOptMsg" style="margin-top:12px"></div>
@@ -433,8 +487,8 @@
               <div class="ph">SAU (đã tối ưu)
                 <span style="display:flex;gap:6px;flex-wrap:wrap">
                   <button class="ghost small" id="opCopyMd">Copy MD</button>
-                  <button class="ghost small" id="opDownHtml">⬇ HTML</button>
-                  <button class="ghost small" id="opDownDoc">⬇ Word</button>
+                  <button class="ghost small" id="opDownHtml">HTML</button>
+                  <button class="ghost small" id="opDownDoc">Word</button>
                 </span>
               </div>
               <div class="render" id="opAfter"></div>
@@ -448,7 +502,7 @@
       <!-- ===== SECTION: CHECK INDEX & THU HANG ===== -->
       <div class="section page" data-section="serp">
         <section class="card">
-          <h2>⚙️ Kết nối Serper.dev</h2>
+          <h2>Kết nối Serper.dev</h2>
           <p class="hint">Công cụ lấy SERP Google thật qua <a href="https://serper.dev" target="_blank" rel="noopener">serper.dev</a> — đăng ký <b>FREE 2.500 lượt</b>, vào Dashboard → API Key → copy. Hết lượt free, công cụ sẽ <b>tự dừng</b> (không trừ tiền).</p>
           <label>Serper API Key</label>
           <input id="serperKey" type="password" placeholder="dán API key từ serper.dev" />
@@ -482,8 +536,8 @@
         </section>
 
         <div class="tabs subtabs" id="serpTabs">
-          <div class="tab active" data-serp="index">📑 Check Index</div>
-          <div class="tab" data-serp="rank">📈 Check Thứ hạng từ khóa</div>
+          <div class="tab active" data-serp="index">Check Index</div>
+          <div class="tab" data-serp="rank">Check Thứ hạng từ khóa</div>
         </div>
 
         <!-- ---- CHECK INDEX ---- -->
@@ -493,19 +547,19 @@
             <p class="hint">Mỗi URL một dòng (nhập 1 hoặc dán hàng loạt). Hoặc tải file Excel/CSV (URL ở cột đầu). Mỗi lần tối đa ~200 URL.</p>
             <textarea id="idxInput" rows="7" placeholder="https://nhakhoashark.vn/bai-viet-1&#10;https://nhakhoashark.vn/bai-viet-2"></textarea>
             <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-              <button class="ghost small" id="idxUploadBtn" type="button">📁 Tải Excel/CSV</button>
+              <button class="ghost small" id="idxUploadBtn" type="button">Tải Excel/CSV</button>
               <input id="idxFile" type="file" accept=".xlsx,.xls,.csv" class="hidden" />
               <button class="ghost small" id="idxClear" type="button">Xóa</button>
               <span class="muted" id="idxCount"></span>
             </div>
-            <div style="margin-top:14px"><button id="idxRun">🔍 Kiểm tra Index</button></div>
+            <div style="margin-top:14px"><button id="idxRun">Kiểm tra Index</button></div>
             <div id="idxProgress" style="margin-top:12px"></div>
             <div id="idxMsg"></div>
           </section>
           <section class="card hidden" id="idxResultCard">
             <div class="flexbar">
               <h2 style="margin:0">2. Kết quả Index</h2>
-              <button class="ghost small" id="idxExport">⬇ Xuất Excel</button>
+              <button class="ghost small" id="idxExport">Xuất Excel</button>
             </div>
             <div class="stats" id="idxStats"></div>
             <div id="idxTable" style="overflow:auto"></div>
@@ -522,7 +576,7 @@
             <label style="margin-top:12px">Danh sách từ khóa</label>
             <textarea id="rkInput" rows="7" placeholder="bọc răng sứ&#10;niềng răng thẩm mỹ&#10;trồng răng implant"></textarea>
             <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-              <button class="ghost small" id="rkUploadBtn" type="button">📁 Tải Excel/CSV</button>
+              <button class="ghost small" id="rkUploadBtn" type="button">Tải Excel/CSV</button>
               <input id="rkFile" type="file" accept=".xlsx,.xls,.csv" class="hidden" />
               <button class="ghost small" id="rkClear" type="button">Xóa</button>
               <span class="muted" id="rkCount"></span>
@@ -538,7 +592,7 @@
                   <option value="100">Top 100 (10 trang)</option>
                 </select>
               </div>
-              <button id="rkRun">📈 Kiểm tra Thứ hạng</button>
+              <button id="rkRun">Kiểm tra Thứ hạng</button>
             </div>
             <div id="rkProgress" style="margin-top:12px"></div>
             <div id="rkMsg"></div>
@@ -546,7 +600,7 @@
           <section class="card hidden" id="rkResultCard">
             <div class="flexbar">
               <h2 style="margin:0">2. Kết quả Thứ hạng</h2>
-              <button class="ghost small" id="rkExport">⬇ Xuất Excel</button>
+              <button class="ghost small" id="rkExport">Xuất Excel</button>
             </div>
             <div class="stats" id="rkStats"></div>
             <div id="rkTable" style="overflow:auto"></div>
@@ -574,15 +628,15 @@
 
           <label style="margin-top:14px">Chọn social / bookmark muốn đi link (A→Z, có lọc)</label>
           <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
-            <input id="shFilter" type="text" placeholder="🔍 Lọc theo tên (vd: pin, red, beh...)" style="max-width:300px" />
+            <input id="shFilter" type="text" placeholder="Lọc theo tên (vd: pin, red, beh...)" style="max-width:300px" />
             <button class="ghost small" id="shCuratedAll" type="button">Chọn/bỏ tất cả (đang hiện)</button>
-            <button class="ghost small" id="shSelSave" type="button">💾 Lưu lựa chọn</button>
+            <button class="ghost small" id="shSelSave" type="button">Lưu lựa chọn</button>
             <span class="muted" id="shSelCount"></span>
           </div>
           <div id="shCurated" style="display:grid;grid-template-rows:repeat(10,auto);grid-auto-flow:column;grid-auto-columns:max-content;gap:6px 18px;max-height:360px;overflow:auto;padding:12px;border:1px solid var(--glass-border);border-radius:12px;background:var(--glass-2)"></div>
 
           <details style="margin-top:12px">
-            <summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--accent)">➕ Thêm social / bookmark khác (tùy chỉnh)</summary>
+            <summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--accent)">Thêm social / bookmark khác (tùy chỉnh)</summary>
             <div class="grid cols-2" style="margin-top:10px">
               <div><label>Tên site</label><input id="shCustName" type="text" placeholder="vd: LinkHay" /></div>
               <div><label>URL trang đăng / submit</label><input id="shCustUrl" type="text" placeholder="https://linkhay.com/submit" /></div>
@@ -592,7 +646,7 @@
           </details>
 
           <details style="margin-top:12px">
-            <summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--orange-text)">🔌 Kết nối tài khoản TỰ ĐĂNG (Diigo / Instapaper / Telegram) — click để cấu hình</summary>
+            <summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--orange-text)">Kết nối tài khoản TỰ ĐĂNG (Diigo / Instapaper / Telegram) — click để cấu hình</summary>
             <p class="muted" style="margin:8px 0">Các nền này có API → khi đã kết nối, bấm nút trên thẻ là <b>TỰ đăng/lưu link trần + ra link (0 thao tác)</b>. Thông tin lưu trong trình duyệt của bạn (máy tin cậy).</p>
             <div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:8px">
               <b>Diigo</b> <span class="muted">(bookmark — API key xin tại diigo.com/api_keys)</span>
@@ -616,17 +670,17 @@
                 <div><label>Chat ID / @kênh</label><input id="connTgChat" type="text" /></div>
               </div>
             </div>
-            <div style="margin-top:8px"><button class="ghost small" id="connSave" type="button">💾 Lưu kết nối</button></div>
+            <div style="margin-top:8px"><button class="ghost small" id="connSave" type="button">Lưu kết nối</button></div>
           </details>
 
           <label style="margin-top:14px">Ảnh thumbnail (tùy chọn — dùng chung cho mọi nền)</label>
           <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-            <button class="ghost small" id="shImgUploadBtn" type="button">📁 Upload ảnh</button>
+            <button class="ghost small" id="shImgUploadBtn" type="button">Upload ảnh</button>
             <input id="shImgFile" type="file" accept="image/*" class="hidden" />
             <span class="muted" id="shImgStatus">Để trống = tự lấy ảnh OG của bài (nếu có).</span>
           </div>
 
-          <div style="margin-top:16px"><button id="shRun">✨ Tạo nội dung share</button></div>
+          <div style="margin-top:16px"><button id="shRun">Tạo nội dung share</button></div>
           <div id="shMsg" style="margin-top:10px"></div>
         </section>
 
@@ -643,15 +697,15 @@
             <div style="flex:1;min-width:200px">
               <p class="muted" id="shTitle" style="margin:0 0 8px"></p>
               <div style="border:1px solid var(--brand-bright);border-radius:12px;padding:12px;background:var(--brand-light)">
-                <b>⚡ Tự đăng Telegra.ph</b> <span class="muted">(0 thao tác, có backlink + trả link)</span>
+                <b>Tự đăng Telegra.ph</b> <span class="muted">(0 thao tác, có backlink + trả link)</span>
                 <textarea id="shAutoCaption" rows="2" style="margin-top:8px"></textarea>
-                <div style="margin-top:8px"><button class="small" id="shAutoTelegraph">📝 Đăng Telegra.ph</button></div>
+                <div style="margin-top:8px"><button class="small" id="shAutoTelegraph">Đăng Telegra.ph</button></div>
                 <div id="shAutoResult" style="margin-top:8px"></div>
               </div>
             </div>
           </div>
 
-          <p class="muted" style="margin:6px 0 12px">🔓 = điền sẵn, chỉ bấm Đăng. 📋 = tự copy (tiêu đề + nội dung + link) rồi mở trang để bạn dán. Mỗi nền 1 tiêu đề + nội dung riêng — sửa thoải mái trước khi đăng.</p>
+          <p class="muted" style="margin:6px 0 12px">= điền sẵn, chỉ bấm Đăng. = tự copy (tiêu đề + nội dung + link) rồi mở trang để bạn dán. Mỗi nền 1 tiêu đề + nội dung riêng — sửa thoải mái trước khi đăng.</p>
           <div id="shCards"></div>
         </section>
       </div>
@@ -663,12 +717,12 @@
           <p class="hint">Kết nối blog qua <b>API</b> (không lưu mật khẩu đăng nhập). Lưu lại để lần sau chỉ cần tick chọn. Tự đăng: <b>WordPress</b> (App Password), <b>Dev.to</b>, <b>Hashnode</b>. "Khác" = chỉ xuất bài để bạn dán tay.</p>
 
           <details style="margin:0 0 16px;border:1px solid var(--glass-border);border-radius:14px;padding:12px 16px;background:var(--card-soft)">
-            <summary style="cursor:pointer;font-weight:800;font-size:14px;color:var(--orange-text)">📖 Hướng dẫn lấy thông tin kết nối &amp; tự đăng (bấm để xem chi tiết)</summary>
+            <summary style="cursor:pointer;font-weight:800;font-size:14px;color:var(--orange-text)">Hướng dẫn lấy thông tin kết nối &amp; tự đăng (bấm để xem chi tiết)</summary>
             <div style="margin-top:10px;font-size:13.5px;line-height:1.75">
-              <p class="muted" style="margin:0 0 10px">Chỉ các nền dưới đây <b>tự đăng được</b> (bấm Đăng là lên bài + trả link). Các nền không có API (Wix, Weebly, Site123, WordPress.com, Blogger qua app, exblog, pixnet, forumvi…) hãy chọn loại <b>"Khác"</b> rồi dùng nút <b>📋 Copy (giữ định dạng)</b> để dán vào trình soạn blog.</p>
+              <p class="muted" style="margin:0 0 10px">Chỉ các nền dưới đây <b>tự đăng được</b> (bấm Đăng là lên bài + trả link). Các nền không có API (Wix, Weebly, Site123, WordPress.com, Blogger qua app, exblog, pixnet, forumvi…) hãy chọn loại <b>"Khác"</b> rồi dùng nút <b>Copy (giữ định dạng)</b> để dán vào trình soạn blog.</p>
 
               <details style="margin:8px 0;border:1px solid var(--line);border-radius:10px;padding:10px 12px">
-                <summary style="cursor:pointer;font-weight:700">🟢 Dev.to — dễ nhất (khuyên dùng để thử)</summary>
+                <summary style="cursor:pointer;font-weight:700">Dev.to — dễ nhất (khuyên dùng để thử)</summary>
                 <ol style="margin:8px 0 0;padding-left:20px">
                   <li>Đăng nhập <a href="https://dev.to" target="_blank" rel="noopener">dev.to</a>.</li>
                   <li>Mở <a href="https://dev.to/settings/extensions" target="_blank" rel="noopener">dev.to/settings/extensions</a>.</li>
@@ -679,7 +733,7 @@
               </details>
 
               <details style="margin:8px 0;border:1px solid var(--line);border-radius:10px;padding:10px 12px">
-                <summary style="cursor:pointer;font-weight:700">🔵 WordPress (TỰ HOST — có domain riêng)</summary>
+                <summary style="cursor:pointer;font-weight:700">WordPress (TỰ HOST — có domain riêng)</summary>
                 <ol style="margin:8px 0 0;padding-left:20px">
                   <li>Đăng nhập WordPress Admin: <code>https://tenmiencuaban.com/wp-admin</code>.</li>
                   <li>Vào <b>Users → Profile</b> (Thành viên → Hồ sơ của bạn).</li>
@@ -688,11 +742,11 @@
                   <li><b>Copy</b> chuỗi hiện ra (dạng <code>abcd efgh ijkl mnop</code> — GIỮ NGUYÊN cả dấu cách).</li>
                   <li>Tại đây: Loại = <b>WordPress</b> → URL site (<code>https://tenmiencuaban.com</code>) + <b>Username</b> (tên đăng nhập WP) + dán <b>App Password</b> → <b>+ Lưu blog</b>.</li>
                 </ol>
-                <p class="muted" style="margin:8px 0 0">⚠️ Cần WordPress 5.6+ và site chạy HTTPS. KHÔNG dùng được với <b>wordpress.com</b> (bản hosted) — chỉ dùng cho WP bạn tự cài trên hosting/domain riêng.</p>
+                <p class="muted" style="margin:8px 0 0">Cần WordPress 5.6+ và site chạy HTTPS. KHÔNG dùng được với <b>wordpress.com</b> (bản hosted) — chỉ dùng cho WP bạn tự cài trên hosting/domain riêng.</p>
               </details>
 
               <details style="margin:8px 0;border:1px solid var(--line);border-radius:10px;padding:10px 12px">
-                <summary style="cursor:pointer;font-weight:700">🟣 Hashnode</summary>
+                <summary style="cursor:pointer;font-weight:700">Hashnode</summary>
                 <ol style="margin:8px 0 0;padding-left:20px">
                   <li>Đăng nhập <a href="https://hashnode.com" target="_blank" rel="noopener">hashnode.com</a> (tạo sẵn 1 blog/publication).</li>
                   <li>Lấy token: mở <a href="https://hashnode.com/settings/developer" target="_blank" rel="noopener">hashnode.com/settings/developer</a> → <b>Generate New Token</b> (Personal Access Token) → Copy.</li>
@@ -702,11 +756,11 @@
               </details>
 
               <details style="margin:8px 0;border:1px solid var(--line);border-radius:10px;padding:10px 12px">
-                <summary style="cursor:pointer;font-weight:700">⚪ Telegra.ph (0 cấu hình — ở tab "Tự động Share Link")</summary>
-                <p style="margin:8px 0 0">Không cần kết nối gì. Vào tab <b>📣 Tự động Share Link</b> → tạo nội dung → bấm <b>📝 Đăng Telegra.ph</b> là tự tạo trang có nội dung + link (backlink) và trả về link ngay.</p>
+                <summary style="cursor:pointer;font-weight:700">Telegra.ph (0 cấu hình — ở tab "Tự động Share Link")</summary>
+                <p style="margin:8px 0 0">Không cần kết nối gì. Vào tab <b>Tự động Share Link</b> → tạo nội dung → bấm <b>Đăng Telegra.ph</b> là tự tạo trang có nội dung + link (backlink) và trả về link ngay.</p>
               </details>
 
-              <p class="muted" style="margin:10px 0 0">💡 <b>Mẹo dán giữ định dạng:</b> với nền loại "Khác", bấm <b>📋 Copy (giữ định dạng)</b> rồi vào trình soạn bài của blog → bấm vào ô nội dung → <b>Ctrl + V</b>: tiêu đề, link anchor và ảnh sẽ giữ nguyên. Nhớ đặt bài ở chế độ <b>Public</b> khi đăng.</p>
+              <p class="muted" style="margin:10px 0 0"><b>Mẹo dán giữ định dạng:</b> với nền loại "Khác", bấm <b>Copy (giữ định dạng)</b> rồi vào trình soạn bài của blog → bấm vào ô nội dung → <b>Ctrl + V</b>: tiêu đề, link anchor và ảnh sẽ giữ nguyên. Nhớ đặt bài ở chế độ <b>Public</b> khi đăng.</p>
             </div>
           </details>
           <div class="grid cols-2">
@@ -735,7 +789,7 @@
           <div class="grid cols-2" style="margin-top:14px">
             <div><label>Độ dài mỗi bài (từ)</label><input id="blogWords" type="number" min="400" max="2000" value="1000" /></div>
           </div>
-          <div style="margin-top:14px"><button id="blogGen">✍️ Tạo bài cho các blog đã tick</button></div>
+          <div style="margin-top:14px"><button id="blogGen">Tạo bài cho các blog đã tick</button></div>
           <div id="blogMsg" style="margin-top:10px"></div>
         </section>
 
@@ -753,8 +807,8 @@
           <p class="hint">Free: <b>Google Autocomplete</b> (gợi ý thật của Google) + phân tích <b>on-page domain</b> + <b>AI</b> phân loại ý định/nhóm/độ khó. <i>(Volume số chính xác cần Google Keyword Planner — sẽ bổ sung ở giai đoạn 2 khi bạn có Google Ads developer token.)</i></p>
 
           <div class="tabs subtabs" id="kwTabs">
-            <div class="tab active" data-kwmode="seed">🔤 Nhập từ khóa</div>
-            <div class="tab" data-kwmode="domain">🌐 Nhập domain</div>
+            <div class="tab active" data-kwmode="seed">Nhập từ khóa</div>
+            <div class="tab" data-kwmode="domain">Nhập domain</div>
           </div>
 
           <div class="featpane active" data-kwpane="seed">
@@ -776,35 +830,35 @@
               <select id="kwHl"><option value="vi">Tiếng Việt</option><option value="en">English</option><option value="th">ไทย</option><option value="ja">日本語</option><option value="ko">한국어</option></select>
             </div>
           </div>
-          <label style="margin-top:10px;display:flex;gap:6px;align-items:center;font-weight:400;cursor:pointer"><input type="checkbox" id="kwBoost" checked style="width:16px;height:16px;accent-color:var(--orange)"> 🚀 <b>Mở rộng sâu + phân tích AI</b> — đào sâu (A–Z) ra nhiều từ liên quan hơn <i>và</i> AI phân loại ý định · nhóm chủ đề · độ khó (chậm hơn chút)</label>
+          <label style="margin-top:10px;display:flex;gap:6px;align-items:center;font-weight:400;cursor:pointer"><input type="checkbox" id="kwBoost" checked style="width:16px;height:16px;accent-color:var(--orange)"> <b>Mở rộng sâu + phân tích AI</b> — đào sâu (A–Z) ra nhiều từ liên quan hơn <i>và</i> AI phân loại ý định · nhóm chủ đề · độ khó (chậm hơn chút)</label>
           <label style="margin-top:8px;display:flex;gap:6px;align-items:center;font-weight:400;cursor:pointer"><input type="checkbox" id="kwVolume" checked style="width:16px;height:16px;accent-color:var(--orange)"> Lấy <b>Volume tìm kiếm</b> — <b>Mức quan tâm</b> (Google Trends, miễn phí, top ~30 từ) + <b>Số lượt/tháng</b> thật nếu có Bing key</label>
           <div style="margin-top:8px">
-            <label class="muted" style="font-size:.85rem;display:block;margin-bottom:4px">🔑 Bing Webmaster API key (tùy chọn — để có số lượt/tháng thật)</label>
+            <label class="muted" style="font-size:.85rem;display:block;margin-bottom:4px">Bing Webmaster API key (tùy chọn — để có số lượt/tháng thật)</label>
             <input id="kwBingKey" type="text" placeholder="Dán Bing API key (bỏ trống nếu chỉ dùng Google Trends)" style="max-width:420px" />
             <details style="margin-top:8px;font-size:.85rem">
-              <summary style="cursor:pointer;color:var(--orange);font-weight:600">📖 Hướng dẫn lấy Bing API key MIỄN PHÍ (bấm để mở)</summary>
+              <summary style="cursor:pointer;color:var(--orange);font-weight:600">Hướng dẫn lấy Bing API key MIỄN PHÍ (bấm để mở)</summary>
               <ol style="margin:8px 0 0;padding-left:20px;line-height:1.7">
                 <li>Truy cập <a href="https://www.bing.com/webmasters/" target="_blank" rel="noopener">bing.com/webmasters</a> và đăng nhập bằng tài khoản Microsoft (tạo mới miễn phí nếu chưa có).</li>
                 <li>Bấm <b>Add a site</b> → nhập URL website của bạn (VD <code>https://nhakhoashark.vn</code>) và <b>xác minh sở hữu</b> (dán thẻ meta vào trang, hoặc upload file XML, hoặc qua DNS). Cần ít nhất 1 site đã xác minh mới dùng được API.</li>
-                <li>Vào <b>Settings</b> (biểu tượng ⚙️ góc trên phải) → chọn <b>API access</b> → <b>API Key</b>.</li>
+                <li>Vào <b>Settings</b> (biểu tượng góc trên phải) → chọn <b>API access</b> → <b>API Key</b>.</li>
                 <li>Bấm <b>Generate</b> để tạo khóa, rồi <b>Copy</b> chuỗi key.</li>
-                <li>Dán key vào ô 🔑 phía trên. Xong! Từ giờ kết quả sẽ có thêm cột <b>Số lượt/tháng</b> thật.</li>
+                <li>Dán key vào ô phía trên. Xong! Từ giờ kết quả sẽ có thêm cột <b>Số lượt/tháng</b> thật.</li>
               </ol>
               <p class="muted" style="margin:8px 0 0">Lưu ý: số liệu là của <b>Bing</b> (không phải Google) nhưng sát thực tế và hoàn toàn miễn phí. Nếu bỏ trống, công cụ vẫn cho <b>Mức quan tâm 0–100</b> qua Google Trends (không cần key).</p>
             </details>
           </div>
 
-          <div style="margin-top:14px"><button id="kwRun">🔍 Nghiên cứu từ khóa</button></div>
+          <div style="margin-top:14px"><button id="kwRun">Nghiên cứu từ khóa</button></div>
           <div id="kwMsg" style="margin-top:10px"></div>
         </section>
 
         <section class="card hidden" id="kwResultCard">
           <div class="flexbar">
             <h2 style="margin:0">2. Kết quả (<span id="kwCount">0</span> từ khóa)</h2>
-            <button class="ghost small" id="kwExport">⬇ Xuất Excel</button>
+            <button class="ghost small" id="kwExport">Xuất Excel</button>
           </div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:10px 0">
-            <input id="kwFilter" type="text" placeholder="🔍 Lọc theo từ..." style="max-width:240px" />
+            <input id="kwFilter" type="text" placeholder="Lọc theo từ..." style="max-width:240px" />
             <select id="kwFilterIntent" style="max-width:180px"><option value="">Mọi ý định</option><option>Thông tin</option><option>Thương mại</option><option>Giao dịch</option><option>Điều hướng</option></select>
             <select id="kwSort" style="max-width:220px"><option value="vol">Sắp xếp: Volume ↓</option><option value="trend">Quan tâm ↓</option><option value="az">A→Z</option><option value="za">Z→A</option><option value="len">Ngắn → dài</option><option value="lend">Dài → ngắn</option></select>
             <span class="muted" id="kwShown"></span>
@@ -817,7 +871,7 @@
       <div class="section page" data-section="outline">
         <section class="card">
           <h2>1. Thông tin từ khóa</h2>
-          <p class="hint">Lên <b>outline heading (H2/H3/H4)</b> bám sát TOP 6 đối thủ trên SERP, đi đúng hướng <b>non-commodity</b>. Cần bật engine <b>Gemini/Claude</b> ở ⚙️ để AI tổng hợp tốt nhất (Local chỉ gộp cơ học).</p>
+          <p class="hint">Lên <b>outline heading (H2/H3/H4)</b> bám sát TOP 6 đối thủ trên SERP, đi đúng hướng <b>non-commodity</b>. Cần bật engine <b>Gemini/Claude</b> ở để AI tổng hợp tốt nhất (Local chỉ gộp cơ học).</p>
 
           <label>Từ khóa chính <span style="color:var(--orange)">*</span></label>
           <input id="olMainKw" type="text" placeholder="niềng răng invisalign" />
@@ -848,8 +902,8 @@
               <label>Chọn tài liệu kiến thức đã lưu</label>
               <select id="olKnowSelect"><option value="">— Không dùng —</option></select>
             </div>
-            <button class="ghost small" id="olKnowNew" type="button">➕ Thêm/Sửa</button>
-            <button class="ghost small" id="olKnowDelete" type="button">🗑 Xóa</button>
+            <button class="ghost small" id="olKnowNew" type="button">Thêm/Sửa</button>
+            <button class="ghost small" id="olKnowDelete" type="button">Xóa</button>
           </div>
 
           <div id="olKnowEditor" class="hidden" style="margin-top:12px;padding:12px;border:1px dashed var(--line);border-radius:10px">
@@ -859,11 +913,11 @@
             <textarea id="olKnowContent" rows="6" placeholder="Điểm khác biệt, USP, bác sĩ, công nghệ, cam kết, dịch vụ nổi bật, giọng văn, đối tượng khách hàng..."></textarea>
             <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px">
               <label class="ghost small" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;margin:0">
-                📎 Nạp từ Word/Excel
+                Nạp từ Word/Excel
                 <input id="olKnowFile" type="file" accept=".docx,.xlsx,.xls" style="display:none" />
               </label>
               <span class="muted" id="olKnowFileMsg" style="font-size:.85rem"></span>
-              <button id="olKnowSave" type="button" style="margin-left:auto">💾 Lưu vào thư viện</button>
+              <button id="olKnowSave" type="button" style="margin-left:auto">Lưu vào thư viện</button>
             </div>
           </div>
           <div id="olKnowMsg" style="margin-top:8px"></div>
@@ -872,8 +926,8 @@
         <section class="card">
           <h2>3. Đối thủ TOP SERP</h2>
           <div class="tabs subtabs" id="olCompTabs">
-            <div class="tab active" data-olmode="auto">🤖 Tự động (nhờ SERP)</div>
-            <div class="tab" data-olmode="manual">✍️ Dán URL thủ công</div>
+            <div class="tab active" data-olmode="auto">Tự động (nhờ SERP)</div>
+            <div class="tab" data-olmode="manual">Dán URL thủ công</div>
           </div>
           <div class="featpane active" data-olpane="auto">
             <p class="muted" style="margin:6px 0">Dựa trên <b>từ khóa chính</b>, hệ thống lấy TOP 6 đối thủ (rank 1–6) rồi bóc tách outline của họ.</p>
@@ -884,7 +938,7 @@
             <label>Dán 1–10 URL đối thủ TOP đầu (mỗi URL 1 dòng)</label>
             <textarea id="olManualUrls" rows="4" placeholder="https://doithu-1.com/bai-viet&#10;https://doithu-2.com/bai-viet"></textarea>
           </div>
-          <div style="margin-top:12px"><button id="olAnalyze">🔎 Phân tích đối thủ</button></div>
+          <div style="margin-top:12px"><button id="olAnalyze">Phân tích đối thủ</button></div>
           <div id="olCompMsg" style="margin-top:10px"></div>
         </section>
 
@@ -893,7 +947,7 @@
             <h2 style="margin:0">4. Outline của <span id="olCompCount">0</span> đối thủ <span class="muted" style="font-weight:400;font-size:.85rem">(bấm để xem chi tiết)</span></h2>
           </div>
           <div id="olCompList" style="margin-top:10px"></div>
-          <div style="margin-top:14px"><button id="olGenerate">🧩 Tạo outline cuối cùng</button></div>
+          <div style="margin-top:14px"><button id="olGenerate">Tạo outline cuối cùng</button></div>
           <div id="olGenMsg" style="margin-top:10px"></div>
         </section>
 
@@ -901,19 +955,19 @@
           <div class="flexbar">
             <h2 style="margin:0">5. Outline đề xuất <span class="muted" id="olEngineUsed" style="font-weight:400;font-size:.85rem"></span></h2>
             <div style="display:flex;gap:8px">
-              <button class="ghost small" id="olCopyMd">📋 Copy Markdown</button>
-              <button class="ghost small" id="olExport">⬇ Xuất Excel</button>
+              <button class="ghost small" id="olCopyMd">Copy Markdown</button>
+              <button class="ghost small" id="olExport">Xuất Excel</button>
             </div>
           </div>
           <div id="olTitleMeta" style="margin:6px 0 16px"></div>
-          <p class="muted" style="margin:8px 0;font-size:.85rem">★ = chứa từ khóa chính · ● = chứa từ khóa phụ</p>
+          <p class="muted" style="margin:8px 0;font-size:.85rem"><span style="color:var(--green)">★</span> = chứa từ khóa chính · <span style="color:var(--orange)">●</span> = chứa từ khóa phụ</p>
           <div id="olTree" style="margin-top:6px"></div>
 
           <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
-            <label style="display:flex;gap:6px;align-items:center;font-weight:400;cursor:pointer"><input type="checkbox" id="olUniqueTick" style="width:16px;height:16px;accent-color:var(--orange)"> 💎 <b>Gợi ý nội dung unique</b> — chắt lọc từ tài liệu kiến thức để thêm yếu tố non-commodity vào heading phù hợp nhất</label>
+            <label style="display:flex;gap:6px;align-items:center;font-weight:400;cursor:pointer"><input type="checkbox" id="olUniqueTick" style="width:16px;height:16px;accent-color:var(--orange)"> <b>Gợi ý nội dung unique</b> — chắt lọc từ tài liệu kiến thức để thêm yếu tố non-commodity vào heading phù hợp nhất</label>
             <div id="olUniqueBox" class="hidden" style="margin-top:10px">
-              <p class="muted" style="font-size:.85rem;margin:0 0 8px">Cần <b>chọn tài liệu kiến thức</b> ở mục 2 và bật engine <b>Gemini/Claude</b> ở ⚙️.</p>
-              <button class="ghost small" id="olUniqueRun">💎 Tạo gợi ý unique</button>
+              <p class="muted" style="font-size:.85rem;margin:0 0 8px">Cần <b>chọn tài liệu kiến thức</b> ở mục 2 và bật engine <b>Gemini/Claude</b> ở .</p>
+              <button class="ghost small" id="olUniqueRun">Tạo gợi ý unique</button>
               <div id="olUniqueMsg" style="margin-top:10px"></div>
               <div id="olUniqueList" style="margin-top:8px"></div>
             </div>
@@ -924,9 +978,16 @@
       <!-- ===== SECTION: COMING SOON ===== -->
       <div class="section page" data-section="soon">
         <div class="coming">
-          <div class="big">🚧</div>
+          <div class="tile"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 7.7l5.4-.8Z"/></svg></div>
           <h2 id="soonName">Tính năng sắp ra mắt</h2>
           <p>Tính năng này đang được phát triển và sẽ sớm có mặt trong SeoShark.</p>
+          <div class="eta mono">Dự kiến · Quý tới</div>
+          <div><button class="btn-dark" id="soonNotify" type="button">Nhận thông báo khi ra mắt</button></div>
+          <ul class="feats">
+            <li><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg> Theo dõi biến động thứ hạng theo ngày</li>
+            <li><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg> Biểu đồ xu hướng &amp; cảnh báo tụt hạng</li>
+            <li><svg viewBox="0 0 24 24"><path d="M4 12l5 5L20 6"/></svg> So sánh trực tiếp với đối thủ trên SERP</li>
+          </ul>
         </div>
       </div>
 
