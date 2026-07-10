@@ -22,6 +22,7 @@ import { expandSeeds, domainSeeds } from "./src/keywords.js";
 import { googleTrends, bingVolume } from "./src/volume.js";
 import { fetchCompetitors, extractManyHeadings, mergeOutlinesLocal, markKeywords, normalizeOutline } from "./src/outline.js";
 import { buildOutlinePrompt, OUTLINE_SCHEMA, buildUniquePrompt, UNIQUE_SCHEMA } from "./src/outline-prompt.js";
+import { buildClassifyPrompt as buildPillarClassifyPrompt, buildSuggestPrompt as buildPillarSuggestPrompt } from "./src/pillar-prompt.js";
 import * as store from "./src/store.js";
 import {
   ONPAGE_SYSTEM, RECOMMEND_SCHEMA, OPTIMIZE_SCHEMA, SUGGEST_SCHEMA,
@@ -1010,6 +1011,120 @@ app.post("/api/keywords/research", requireAuth, async (req, res) => {
       });
     }
     res.json({ keywords: rows, count: rows.length, enriched, trendUsed, bingUsed });
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
+});
+
+// ===================== PILLAR TOPIC =====================
+const _norm = (s) => String(s || "").toLowerCase().normalize("NFC").replace(/\s+/g, " ").trim();
+// Goi AI JSON (Gemini co fallback model / Claude); nem loi that neu that bai
+async function aiJson(eng, { system, user, schema, maxTokens, model, apiKey }) {
+  if (eng === "gemini") {
+    const k = (apiKey || process.env.GEMINI_API_KEY || "").trim();
+    if (!k) throw new Error("Chưa có Gemini API key (nhập ở ⚙️ hoặc đặt GEMINI_API_KEY trên server).");
+    const r = await geminiWithFallback((m) => geminiJson({ apiKey: k, model: m, system, user, schema, maxTokens }), (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim());
+    return r.result;
+  }
+  const k = (apiKey || process.env.ANTHROPIC_API_KEY || "").trim();
+  if (!k) throw new Error("Chưa có Claude API key (nhập ở ⚙️ hoặc đặt ANTHROPIC_API_KEY trên server).");
+  return await claudeJson({ apiKey: k, model: (model || process.env.SEOSHARK_MODEL || "claude-sonnet-4-6").trim(), system, user, schema, maxTokens });
+}
+
+// Buoc 1: phan nhom tu khoa theo topic (dung topic san co, else AI phan loai)
+app.post("/api/keywords/pillar/classify", requireAuth, async (req, res) => {
+  try {
+    const { keywords, engine, model, apiKey } = req.body || {};
+    const raw = (Array.isArray(keywords) ? keywords : [])
+      .map((k) => (typeof k === "string" ? { keyword: k.trim(), topic: "" } : { keyword: String(k.keyword || "").trim(), topic: String(k.topic || "").trim() }))
+      .filter((k) => k.keyword);
+    const seen = new Map();
+    for (const k of raw) { const key = _norm(k.keyword); if (!seen.has(key)) seen.set(key, { ...k }); else if (!seen.get(key).topic && k.topic) seen.get(key).topic = k.topic; }
+    const uniq = Array.from(seen.values()).slice(0, 500);
+    if (!uniq.length) return res.status(400).json({ error: "Chưa có từ khóa nào." });
+
+    let rows, aiUsed = false;
+    if (uniq.every((k) => k.topic)) {
+      rows = uniq.map((k) => ({ keyword: k.keyword, topic: k.topic }));
+    } else {
+      const eng = (engine || "local").toLowerCase();
+      if (eng !== "gemini" && eng !== "claude") return res.status(400).json({ error: "Cần bật engine Gemini/Claude để AI phân nhóm topic (hoặc tự nhập cột topic cho mọi từ khóa)." });
+      const { system, user, schema } = buildPillarClassifyPrompt(uniq);
+      const d = await aiJson(eng, { system, user, schema, maxTokens: 8192, model, apiKey });
+      const map = {};
+      (d.items || []).forEach((it) => { if (it && it.keyword) map[_norm(it.keyword)] = String(it.topic || "").trim(); });
+      rows = uniq.map((k) => ({ keyword: k.keyword, topic: k.topic || map[_norm(k.keyword)] || "Khác" }));
+      aiUsed = true;
+    }
+    const tMap = {};
+    rows.forEach((r) => { tMap[r.topic] = (tMap[r.topic] || 0) + 1; });
+    const topics = Object.entries(tMap).map(([topic, count]) => ({ topic, count })).sort((a, b) => b.count - a.count);
+    res.json({ rows, topics, kwCount: rows.length, topicCount: topics.length, aiUsed });
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
+});
+
+// Buoc 3: goi y >=20 tu khoa MOI/topic (khong trung ngu nghia), co volume
+app.post("/api/keywords/pillar/suggest", requireAuth, async (req, res) => {
+  try {
+    const { rows, gl, hl, engine, model, apiKey, bingKey, minPerTopic } = req.body || {};
+    const region = { gl: gl || "vn", hl: hl || "vi" };
+    const eng = (engine || "local").toLowerCase();
+    if (eng !== "gemini" && eng !== "claude") return res.status(400).json({ error: "Cần bật engine Gemini/Claude để gợi ý từ khóa bổ sung." });
+    const list = (Array.isArray(rows) ? rows : []).map((r) => ({ keyword: String(r.keyword || "").trim(), topic: String(r.topic || "").trim() })).filter((r) => r.keyword && r.topic);
+    if (!list.length) return res.status(400).json({ error: "Chưa có bảng phân nhóm. Hãy phân tích trước." });
+
+    const byTopic = {};
+    list.forEach((r) => { (byTopic[r.topic] = byTopic[r.topic] || []).push(r.keyword); });
+    const topicNames = Object.keys(byTopic).slice(0, 12);
+    const min = Math.max(10, Math.min(40, Number(minPerTopic) || 20));
+
+    // Ung vien tu Google Autocomplete cho tung topic (loai trung voi tu da co)
+    const topicsInput = [];
+    for (const topic of topicNames) {
+      const have = byTopic[topic];
+      let candidates = [];
+      try { candidates = await expandSeeds([topic, ...have.slice(0, 3)], { ...region, deep: false }); } catch {}
+      const haveSet = new Set(have.map(_norm));
+      candidates = candidates.filter((c) => !haveSet.has(_norm(c))).slice(0, 60);
+      topicsInput.push({ topic, have, candidates });
+    }
+
+    // AI goi y (chat loc + chong trung ngu nghia)
+    const { system, user, schema } = buildPillarSuggestPrompt(topicsInput, { minPerTopic: min });
+    const d = await aiJson(eng, { system, user, schema, maxTokens: 8192, model, apiKey });
+
+    // Dung ket qua: loai trung (chuan hoa) voi tu da co + trong noi bo
+    const haveGlobal = new Set(list.map((r) => _norm(r.keyword)));
+    const usedSug = new Set();
+    const out = [];
+    (d.topics || []).forEach((t) => {
+      const topic = String(t.topic || "").trim();
+      if (!topic) return;
+      const kws = [];
+      (t.keywords || []).forEach((kw) => {
+        const clean = String(kw || "").trim();
+        const key = _norm(clean);
+        if (!clean || haveGlobal.has(key) || usedSug.has(key)) return;
+        usedSug.add(key);
+        kws.push(clean);
+      });
+      if (kws.length) out.push({ topic, keywords: kws });
+    });
+
+    // Volume cho toan bo tu goi y (Google Trends cap 40 + Bing neu co key)
+    const allKw = out.flatMap((t) => t.keywords);
+    const bKey = (bingKey || process.env.BING_API_KEY || "").trim();
+    const [trendMap, bingMap] = await Promise.all([
+      googleTrends(allKw, { ...region, cap: 40 }).catch(() => new Map()),
+      bKey ? bingVolume(allKw, { key: bKey, ...region, cap: 200 }).catch(() => new Map()) : Promise.resolve(new Map()),
+    ]);
+    const suggestions = out.map((t) => ({
+      topic: t.topic,
+      keywords: t.keywords.map((kw) => {
+        const lk = kw.toLowerCase();
+        const tr = trendMap.get(lk); const vo = bingMap.get(lk);
+        return { keyword: kw, trend: Number.isFinite(tr) ? tr : null, volume: Number.isFinite(vo) ? vo : null };
+      }),
+    }));
+    res.json({ topics: suggestions, count: allKw.length, trendUsed: trendMap.size > 0, bingUsed: bingMap.size > 0 });
   } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
 });
 

@@ -2285,3 +2285,187 @@ $("#opClearSkill").addEventListener("click", () => {
     finally { busy(btn, false); }
   });
 })();
+
+/* ===================== NGHIÊN CỨU PILLAR TOPIC ===================== */
+(function () {
+  const analyzeBtn = $("#plAnalyze");
+  if (!analyzeBtn) return;
+  let plMode = "manual";
+  let excelRows = null;   // [{keyword,topic}] từ Excel
+  let statsRows = [];     // [{keyword,topic}]
+  let suggestData = [];   // [{topic, keywords:[{keyword,trend,volume}]}]
+
+  const setMsg = (el, type, msg) => { $(el).innerHTML = msg ? alertHtml(type, msg) : ""; };
+  const fmtVol = (v) => (Number.isFinite(v) ? v.toLocaleString("vi-VN") : '<span class="muted">—</span>');
+  function trendBar(t) {
+    if (!Number.isFinite(t)) return '<span class="muted">—</span>';
+    const c = t >= 66 ? "var(--green)" : t >= 33 ? "var(--c-teal)" : "#9aa0a6";
+    return `<div style="display:flex;align-items:center;gap:6px"><div style="flex:1;min-width:48px;height:7px;background:#e6e6e6;border-radius:4px;overflow:hidden"><div style="width:${t}%;height:100%;background:${c}"></div></div><span style="font-size:.8rem;min-width:22px;text-align:right">${t}</span></div>`;
+  }
+  const num = (x) => (Number.isFinite(x) ? x : -1);
+
+  // Tab chính research / pillar
+  $$("#kwMainTabs .tab").forEach((t) => t.addEventListener("click", () => {
+    $$("#kwMainTabs .tab").forEach((x) => x.classList.toggle("active", x === t));
+    const m = t.dataset.kwmain;
+    $$("[data-kwmainpane]").forEach((p) => p.classList.toggle("active", p.dataset.kwmainpane === m));
+  }));
+  // Subtab nhập liệu manual / excel
+  $$("#plTabs .tab").forEach((t) => t.addEventListener("click", () => {
+    $$("#plTabs .tab").forEach((x) => x.classList.toggle("active", x === t));
+    plMode = t.dataset.plmode;
+    $$("[data-plpane]").forEach((p) => p.classList.toggle("active", p.dataset.plpane === plMode));
+  }));
+
+  // Đọc Excel/CSV
+  $("#plFile").addEventListener("change", async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    $("#plFileMsg").textContent = "Đang đọc...";
+    try {
+      const buf = await f.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      let rows = XLSX.utils.sheet_to_json(ws, { header: 1, blankrows: false })
+        .map((r) => ({ keyword: String(r[0] || "").trim(), topic: String(r[1] || "").trim() })).filter((r) => r.keyword);
+      if (rows.length && /^(từ khóa|tu khoa|keyword|kw)$/i.test(rows[0].keyword)) rows = rows.slice(1);
+      excelRows = rows;
+      $("#plFileMsg").textContent = `✓ Đã đọc ${rows.length} từ khóa${rows.some((r) => r.topic) ? " (có sẵn topic)" : ""} từ ${f.name}`;
+    } catch (err) { $("#plFileMsg").textContent = "Lỗi đọc file: " + (err.message || err); }
+    finally { e.target.value = ""; }
+  });
+
+  function parseManual(text) {
+    return String(text || "").split(/\n/).map((l) => l.trim()).filter(Boolean).map((l) => {
+      let kw = l, topic = "";
+      if (l.includes("|")) { const p = l.split("|"); kw = p[0].trim(); topic = p.slice(1).join("|").trim(); }
+      else if (l.includes("\t")) { const p = l.split("\t"); kw = p[0].trim(); topic = p.slice(1).join(" ").trim(); }
+      return { keyword: kw, topic };
+    }).filter((r) => r.keyword);
+  }
+  const collectInput = () => (plMode === "excel" ? (excelRows || []) : parseManual($("#plManualInput").value));
+  function populateTopicFilter(sel, topics) {
+    $(sel).innerHTML = `<option value="">Mọi topic</option>` + topics.map((t) => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
+  }
+
+  /* ---------- BƯỚC 1+2: phân tích & bảng thống kê ---------- */
+  analyzeBtn.addEventListener("click", async () => {
+    const kws = collectInput();
+    if (!kws.length) return setMsg("#plMsg", "err", "❌ Chưa có từ khóa. Dán danh sách hoặc tải Excel lên.");
+    const engine = $("#engine").value, model = $("#model").value, apiKey = $("#apiKey").value.trim();
+    busy(analyzeBtn, true, "Đang phân nhóm...");
+    setMsg("#plMsg", "info", '<span class="spinner" style="border-top-color:transparent"></span>AI đang phân nhóm từ khóa theo topic...');
+    $("#plStatsCard").classList.add("hidden"); $("#plSuggestCard").classList.add("hidden");
+    try {
+      const r = await _fetch("/api/keywords/pillar/classify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ keywords: kws, engine, model, apiKey }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Lỗi phân nhóm");
+      statsRows = d.rows || [];
+      const topicNames = (d.topics || []).map((t) => t.topic);
+      $("#plKwCount").textContent = d.kwCount; $("#plTopicCount").textContent = d.topicCount;
+      $("#plTopicChips").innerHTML = (d.topics || []).map((t) => `<span class="chip">${esc(t.topic)} <b style="color:var(--c-blue)">${t.count}</b></span>`).join("");
+      populateTopicFilter("#plStatsTopicFilter", topicNames);
+      renderStats();
+      $("#plStatsCard").classList.remove("hidden");
+      setMsg("#plMsg", "info", `✓ Đã phân ${d.kwCount} từ khóa thành ${d.topicCount} topic${d.aiUsed ? " (AI phân loại)" : " (dùng topic bạn cung cấp)"}.`);
+    } catch (err) { setMsg("#plMsg", "err", "❌ " + err.message); }
+    finally { busy(analyzeBtn, false); }
+  });
+
+  function statsFiltered() {
+    const q = ($("#plStatsFilter").value || "").trim().toLowerCase();
+    const tp = $("#plStatsTopicFilter").value;
+    let list = statsRows.filter((r) => (!q || r.keyword.toLowerCase().includes(q)) && (!tp || r.topic === tp));
+    const s = $("#plStatsSort").value;
+    if (s === "az") list = list.slice().sort((a, b) => a.keyword.localeCompare(b.keyword, "vi"));
+    else if (s === "za") list = list.slice().sort((a, b) => b.keyword.localeCompare(a.keyword, "vi"));
+    else list = list.slice().sort((a, b) => a.topic.localeCompare(b.topic, "vi") || a.keyword.localeCompare(b.keyword, "vi"));
+    return list;
+  }
+  function renderStats() {
+    const list = statsFiltered();
+    $("#plStatsShown").textContent = `Hiển thị: ${list.length}`;
+    $("#plStatsTable").innerHTML = `<table class="cmp"><thead><tr><th>#</th><th>Từ khóa</th><th>Topic</th></tr></thead><tbody>${
+      list.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.keyword)}</td><td><span class="chip" style="padding:2px 9px">${esc(r.topic)}</span></td></tr>`).join("")
+    }</tbody></table>`;
+  }
+  $("#plStatsFilter").addEventListener("input", renderStats);
+  $("#plStatsTopicFilter").addEventListener("change", renderStats);
+  $("#plStatsSort").addEventListener("change", renderStats);
+
+  $("#plStatsCopy").addEventListener("click", async () => {
+    if (!statsRows.length) return toast("Chưa có dữ liệu.");
+    const txt = "Từ khóa\tTopic\n" + statsFiltered().map((r) => `${r.keyword}\t${r.topic}`).join("\n");
+    try { await navigator.clipboard.writeText(txt); toast("Đã copy!"); } catch { toast("Không copy được."); }
+  });
+  $("#plStatsExport").addEventListener("click", () => {
+    if (!statsRows.length) return toast("Chưa có dữ liệu.");
+    if (typeof XLSX === "undefined") return toast("Thư viện Excel chưa tải xong.");
+    const aoa = [["Từ khóa", "Topic"]].concat(statsFiltered().map((r) => [r.keyword, r.topic]));
+    const ws = XLSX.utils.aoa_to_sheet(aoa); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "PillarTopic"); XLSX.writeFile(wb, "seoshark-pillar-topic.xlsx");
+  });
+
+  /* ---------- BƯỚC 3: gợi ý từ khóa bổ sung ---------- */
+  $("#plSuggest").addEventListener("click", async () => {
+    if (!statsRows.length) return setMsg("#plSuggestMsg", "err", "❌ Chưa có bảng phân nhóm.");
+    const engine = $("#engine").value, model = $("#model").value, apiKey = $("#apiKey").value.trim();
+    if (engine !== "gemini" && engine !== "claude") return setMsg("#plSuggestMsg", "err", "❌ Cần bật engine Gemini/Claude ở ⚙️ để gợi ý.");
+    const gl = $("#plGl").value, hl = $("#plHl").value, bingKey = $("#plBingKey").value.trim();
+    const btn = $("#plSuggest"); busy(btn, true, "Đang gợi ý...");
+    setMsg("#plSuggestMsg", "info", '<span class="spinner" style="border-top-color:transparent"></span>AI đang gợi ý & lấy volume (~20-40s tùy số topic)...');
+    $("#plSuggestCard").classList.add("hidden");
+    try {
+      const r = await _fetch("/api/keywords/pillar/suggest", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows: statsRows, gl, hl, engine, model, apiKey, bingKey, minPerTopic: 20 }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Lỗi gợi ý");
+      suggestData = d.topics || [];
+      const total = suggestData.reduce((s, t) => s + t.keywords.length, 0);
+      $("#plSugCount").textContent = total;
+      populateTopicFilter("#plSugTopicFilter", suggestData.map((t) => t.topic));
+      renderSuggest();
+      $("#plSuggestCard").classList.remove("hidden");
+      const notes = [];
+      if (d.bingUsed) notes.push("có số lượt/tháng (Bing)");
+      if (d.trendUsed) notes.push("có mức quan tâm (Trends)");
+      setMsg("#plSuggestMsg", "info", `✓ Gợi ý ${total} từ khóa mới cho ${suggestData.length} topic${notes.length ? " — " + notes.join("; ") : ""}.`);
+      $("#plSuggestCard").scrollIntoView({ block: "start", behavior: "smooth" });
+    } catch (err) { setMsg("#plSuggestMsg", "err", "❌ " + err.message); }
+    finally { busy(btn, false); }
+  });
+
+  function suggestFlat() { return suggestData.flatMap((t) => t.keywords.map((k) => ({ ...k, topic: t.topic }))); }
+  function suggestFiltered() {
+    const q = ($("#plSugFilter").value || "").trim().toLowerCase();
+    const tp = $("#plSugTopicFilter").value;
+    let list = suggestFlat().filter((r) => (!q || r.keyword.toLowerCase().includes(q)) && (!tp || r.topic === tp));
+    const s = $("#plSugSort").value;
+    if (s === "vol") list.sort((a, b) => num(b.volume) - num(a.volume) || num(b.trend) - num(a.trend));
+    else if (s === "trend") list.sort((a, b) => num(b.trend) - num(a.trend) || num(b.volume) - num(a.volume));
+    else if (s === "az") list.sort((a, b) => a.keyword.localeCompare(b.keyword, "vi"));
+    else list.sort((a, b) => a.topic.localeCompare(b.topic, "vi") || num(b.volume) - num(a.volume));
+    return list;
+  }
+  function renderSuggest() {
+    const list = suggestFiltered();
+    const hasVol = list.some((r) => Number.isFinite(r.volume));
+    $("#plSugShown").textContent = `Hiển thị: ${list.length}`;
+    $("#plSuggestList").innerHTML = `<div style="overflow:auto"><table class="cmp"><thead><tr><th>#</th><th>Topic</th><th>Từ khóa gợi ý</th>${hasVol ? "<th>Volume/tháng<br><small class='muted'>Bing</small></th>" : ""}<th style="min-width:104px">Mức quan tâm<br><small class='muted'>Trends</small></th></tr></thead><tbody>${
+      list.map((r, i) => `<tr><td>${i + 1}</td><td><span class="chip" style="padding:2px 9px">${esc(r.topic)}</span></td><td>${esc(r.keyword)}</td>${hasVol ? `<td style="text-align:right">${fmtVol(r.volume)}</td>` : ""}<td>${trendBar(r.trend)}</td></tr>`).join("")
+    }</tbody></table></div>`;
+  }
+  $("#plSugFilter").addEventListener("input", renderSuggest);
+  $("#plSugTopicFilter").addEventListener("change", renderSuggest);
+  $("#plSugSort").addEventListener("change", renderSuggest);
+
+  $("#plSuggestCopy").addEventListener("click", async () => {
+    if (!suggestData.length) return toast("Chưa có dữ liệu.");
+    const txt = "Topic\tTừ khóa\tVolume/tháng\tQuan tâm\n" + suggestFiltered().map((r) => `${r.topic}\t${r.keyword}\t${Number.isFinite(r.volume) ? r.volume : ""}\t${Number.isFinite(r.trend) ? r.trend : ""}`).join("\n");
+    try { await navigator.clipboard.writeText(txt); toast("Đã copy!"); } catch { toast("Không copy được."); }
+  });
+  $("#plSuggestExport").addEventListener("click", () => {
+    if (!suggestData.length) return toast("Chưa có dữ liệu.");
+    if (typeof XLSX === "undefined") return toast("Thư viện Excel chưa tải xong.");
+    const aoa = [["Topic", "Từ khóa gợi ý", "Volume/tháng (Bing)", "Mức quan tâm (Trends)"]].concat(
+      suggestFiltered().map((r) => [r.topic, r.keyword, Number.isFinite(r.volume) ? r.volume : "", Number.isFinite(r.trend) ? r.trend : ""]));
+    const ws = XLSX.utils.aoa_to_sheet(aoa); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "GoiYBoSung"); XLSX.writeFile(wb, "seoshark-pillar-goi-y.xlsx");
+  });
+})();
