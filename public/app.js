@@ -2292,17 +2292,19 @@ $("#opClearSkill").addEventListener("click", () => {
   if (!analyzeBtn) return;
   let plMode = "manual";
   let excelRows = null;   // [{keyword,topic}] từ Excel
-  let statsRows = [];     // [{keyword,topic}]
-  let suggestData = [];   // [{topic, keywords:[{keyword,trend,volume}]}]
+  let statsRows = [];     // [{keyword, topic, vi}]
+  let suggestData = [];   // [{topic, keywords:[{keyword, vi, trend, volume}]}]
+  let isEnglish = false;
 
   const setMsg = (el, type, msg) => { $(el).innerHTML = msg ? alertHtml(type, msg) : ""; };
   const fmtVol = (v) => (Number.isFinite(v) ? v.toLocaleString("vi-VN") : '<span class="muted">—</span>');
   function trendBar(t) {
     if (!Number.isFinite(t)) return '<span class="muted">—</span>';
     const c = t >= 66 ? "var(--green)" : t >= 33 ? "var(--c-teal)" : "#9aa0a6";
-    return `<div style="display:flex;align-items:center;gap:6px"><div style="flex:1;min-width:48px;height:7px;background:#e6e6e6;border-radius:4px;overflow:hidden"><div style="width:${t}%;height:100%;background:${c}"></div></div><span style="font-size:.8rem;min-width:22px;text-align:right">${t}</span></div>`;
+    return `<div style="display:flex;align-items:center;gap:6px"><div style="flex:1;min-width:44px;height:7px;background:#e6e6e6;border-radius:4px;overflow:hidden"><div style="width:${t}%;height:100%;background:${c}"></div></div><span style="font-size:.8rem;min-width:22px;text-align:right">${t}</span></div>`;
   }
   const num = (x) => (Number.isFinite(x) ? x : -1);
+  const chunk = (a, n) => { const o = []; for (let i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; };
 
   // Tab chính research / pillar
   $$("#kwMainTabs .tab").forEach((t) => t.addEventListener("click", () => {
@@ -2310,7 +2312,6 @@ $("#opClearSkill").addEventListener("click", () => {
     const m = t.dataset.kwmain;
     $$("[data-kwmainpane]").forEach((p) => p.classList.toggle("active", p.dataset.kwmainpane === m));
   }));
-  // Subtab nhập liệu manual / excel
   $$("#plTabs .tab").forEach((t) => t.addEventListener("click", () => {
     $$("#plTabs .tab").forEach((x) => x.classList.toggle("active", x === t));
     plMode = t.dataset.plmode;
@@ -2346,27 +2347,50 @@ $("#opClearSkill").addEventListener("click", () => {
   function populateTopicFilter(sel, topics) {
     $(sel).innerHTML = `<option value="">Mọi topic</option>` + topics.map((t) => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
   }
+  const normKw = (s) => String(s || "").toLowerCase().normalize("NFC").replace(/\s+/g, " ").trim();
+  function dedupInput(list) {
+    const seen = new Map(); let dups = 0; const samples = [];
+    for (const k of list) {
+      const kw = String(k.keyword || "").trim(); if (!kw) continue;
+      const key = normKw(kw);
+      if (!seen.has(key)) seen.set(key, { keyword: kw, topic: String(k.topic || "").trim() });
+      else { dups++; if (samples.length < 6) samples.push(kw); const e = seen.get(key); if (!e.topic && k.topic) e.topic = String(k.topic).trim(); }
+    }
+    return { uniq: Array.from(seen.values()), dups, samples };
+  }
 
-  /* ---------- BƯỚC 1+2: phân tích & bảng thống kê ---------- */
+  /* ---------- BƯỚC 1+2: phân tích theo LÔ ---------- */
   analyzeBtn.addEventListener("click", async () => {
-    const kws = collectInput();
-    if (!kws.length) return setMsg("#plMsg", "err", "❌ Chưa có từ khóa. Dán danh sách hoặc tải Excel lên.");
+    const raw = collectInput();
+    if (!raw.length) return setMsg("#plMsg", "err", "❌ Chưa có từ khóa. Dán danh sách hoặc tải Excel lên.");
+    const { uniq, dups, samples } = dedupInput(raw);
+    isEnglish = ($("#plHl").value === "en");
     const engine = $("#engine").value, model = $("#model").value, apiKey = $("#apiKey").value.trim();
+    const needAI = uniq.some((k) => !k.topic) || isEnglish;
+    if (needAI && engine !== "gemini" && engine !== "claude")
+      return setMsg("#plMsg", "err", "❌ Cần bật engine Gemini/Claude ở ⚙️ để AI phân nhóm/dịch (hoặc tự nhập cột topic & chọn tiếng Việt).");
+    const dupNote = dups > 0 ? ` (đã loại ${dups} từ trùng: ${samples.map(esc).join(", ")}${dups > samples.length ? "..." : ""})` : "";
+
     busy(analyzeBtn, true, "Đang phân nhóm...");
-    setMsg("#plMsg", "info", '<span class="spinner" style="border-top-color:transparent"></span>AI đang phân nhóm từ khóa theo topic...');
     $("#plStatsCard").classList.add("hidden"); $("#plSuggestCard").classList.add("hidden");
+    const batches = chunk(uniq, 120);
+    statsRows = []; const knownTopics = new Set();
     try {
-      const r = await _fetch("/api/keywords/pillar/classify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ keywords: kws, engine, model, apiKey }) });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Lỗi phân nhóm");
-      statsRows = d.rows || [];
-      const topicNames = (d.topics || []).map((t) => t.topic);
-      $("#plKwCount").textContent = d.kwCount; $("#plTopicCount").textContent = d.topicCount;
-      $("#plTopicChips").innerHTML = (d.topics || []).map((t) => `<span class="chip">${esc(t.topic)} <b style="color:var(--c-blue)">${t.count}</b></span>`).join("");
-      populateTopicFilter("#plStatsTopicFilter", topicNames);
+      for (let i = 0; i < batches.length; i++) {
+        setMsg("#plMsg", "info", `<span class="spinner" style="border-top-color:transparent"></span>Đang phân nhóm ${batches.length > 1 ? `lô ${i + 1}/${batches.length}` : ""} (${uniq.length} từ khóa)${dupNote}...`);
+        const r = await _fetch("/api/keywords/pillar/classify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ keywords: batches[i], knownTopics: [...knownTopics], needTranslate: isEnglish, engine, model, apiKey }) });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || "Lỗi phân nhóm");
+        (d.items || []).forEach((it) => { const topic = it.topic || "Khác"; statsRows.push({ keyword: it.keyword, topic, vi: it.vi || "" }); knownTopics.add(topic); });
+      }
+      const tMap = {}; statsRows.forEach((r) => { tMap[r.topic] = (tMap[r.topic] || 0) + 1; });
+      const topics = Object.entries(tMap).map(([topic, count]) => ({ topic, count })).sort((a, b) => b.count - a.count);
+      $("#plKwCount").textContent = statsRows.length; $("#plTopicCount").textContent = topics.length;
+      $("#plTopicChips").innerHTML = topics.map((t) => `<span class="chip">${esc(t.topic)} <b style="color:var(--c-blue)">${t.count}</b></span>`).join("");
+      populateTopicFilter("#plStatsTopicFilter", topics.map((t) => t.topic));
       renderStats();
       $("#plStatsCard").classList.remove("hidden");
-      setMsg("#plMsg", "info", `✓ Đã phân ${d.kwCount} từ khóa thành ${d.topicCount} topic${d.aiUsed ? " (AI phân loại)" : " (dùng topic bạn cung cấp)"}.`);
+      setMsg("#plMsg", "info", `✓ Đã phân ${statsRows.length} từ khóa thành ${topics.length} topic${isEnglish ? " (kèm bản dịch VI)" : ""}${dupNote}.`);
     } catch (err) { setMsg("#plMsg", "err", "❌ " + err.message); }
     finally { busy(analyzeBtn, false); }
   });
@@ -2374,7 +2398,7 @@ $("#opClearSkill").addEventListener("click", () => {
   function statsFiltered() {
     const q = ($("#plStatsFilter").value || "").trim().toLowerCase();
     const tp = $("#plStatsTopicFilter").value;
-    let list = statsRows.filter((r) => (!q || r.keyword.toLowerCase().includes(q)) && (!tp || r.topic === tp));
+    let list = statsRows.filter((r) => (!q || r.keyword.toLowerCase().includes(q) || (r.vi || "").toLowerCase().includes(q)) && (!tp || r.topic === tp));
     const s = $("#plStatsSort").value;
     if (s === "az") list = list.slice().sort((a, b) => a.keyword.localeCompare(b.keyword, "vi"));
     else if (s === "za") list = list.slice().sort((a, b) => b.keyword.localeCompare(a.keyword, "vi"));
@@ -2384,9 +2408,11 @@ $("#opClearSkill").addEventListener("click", () => {
   function renderStats() {
     const list = statsFiltered();
     $("#plStatsShown").textContent = `Hiển thị: ${list.length}`;
-    $("#plStatsTable").innerHTML = `<table class="cmp"><thead><tr><th>#</th><th>Từ khóa</th><th>Topic</th></tr></thead><tbody>${
-      list.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.keyword)}</td><td><span class="chip" style="padding:2px 9px">${esc(r.topic)}</span></td></tr>`).join("")
-    }</tbody></table>`;
+    const viCol = isEnglish;
+    const head = `<tr><th>#</th><th>Từ khóa</th>${viCol ? "<th>Bản dịch (VI)</th>" : ""}<th>Topic</th></tr>`;
+    const body = list.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.keyword)}</td>${viCol ? `<td>${esc(r.vi || "")}</td>` : ""}<td><span class="chip" style="padding:2px 9px">${esc(r.topic)}</span></td></tr>`).join("");
+    const scroll = list.length > 20 ? ' style="max-height:560px;overflow:auto"' : ' style="overflow:auto"';
+    $("#plStatsTable").innerHTML = `<div${scroll}><table class="cmp"><thead>${head}</thead><tbody>${body}</tbody></table></div>` + (list.length > 20 ? `<p class="muted" style="font-size:.8rem;margin:6px 0 0">Hiển thị 20 dòng đầu, cuộn trong bảng để xem tất cả ${list.length} dòng.</p>` : "");
   }
   $("#plStatsFilter").addEventListener("input", renderStats);
   $("#plStatsTopicFilter").addEventListener("change", renderStats);
@@ -2394,49 +2420,63 @@ $("#opClearSkill").addEventListener("click", () => {
 
   $("#plStatsCopy").addEventListener("click", async () => {
     if (!statsRows.length) return toast("Chưa có dữ liệu.");
-    const txt = "Từ khóa\tTopic\n" + statsFiltered().map((r) => `${r.keyword}\t${r.topic}`).join("\n");
+    const h = isEnglish ? "Từ khóa\tBản dịch (VI)\tTopic" : "Từ khóa\tTopic";
+    const txt = h + "\n" + statsFiltered().map((r) => isEnglish ? `${r.keyword}\t${r.vi || ""}\t${r.topic}` : `${r.keyword}\t${r.topic}`).join("\n");
     try { await navigator.clipboard.writeText(txt); toast("Đã copy!"); } catch { toast("Không copy được."); }
   });
   $("#plStatsExport").addEventListener("click", () => {
     if (!statsRows.length) return toast("Chưa có dữ liệu.");
     if (typeof XLSX === "undefined") return toast("Thư viện Excel chưa tải xong.");
-    const aoa = [["Từ khóa", "Topic"]].concat(statsFiltered().map((r) => [r.keyword, r.topic]));
+    const head = isEnglish ? ["Từ khóa", "Bản dịch (VI)", "Topic"] : ["Từ khóa", "Topic"];
+    const aoa = [head].concat(statsFiltered().map((r) => isEnglish ? [r.keyword, r.vi || "", r.topic] : [r.keyword, r.topic]));
     const ws = XLSX.utils.aoa_to_sheet(aoa); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "PillarTopic"); XLSX.writeFile(wb, "seoshark-pillar-topic.xlsx");
   });
 
-  /* ---------- BƯỚC 3: gợi ý từ khóa bổ sung ---------- */
+  /* ---------- BƯỚC 3: gợi ý từ khóa bổ sung (theo LÔ topic) ---------- */
   $("#plSuggest").addEventListener("click", async () => {
     if (!statsRows.length) return setMsg("#plSuggestMsg", "err", "❌ Chưa có bảng phân nhóm.");
     const engine = $("#engine").value, model = $("#model").value, apiKey = $("#apiKey").value.trim();
     if (engine !== "gemini" && engine !== "claude") return setMsg("#plSuggestMsg", "err", "❌ Cần bật engine Gemini/Claude ở ⚙️ để gợi ý.");
     const gl = $("#plGl").value, hl = $("#plHl").value, bingKey = $("#plBingKey").value.trim();
+    const allHave = statsRows.map((r) => r.keyword);
+    const byTopic = {}; statsRows.forEach((r) => { (byTopic[r.topic] = byTopic[r.topic] || []).push(r.keyword); });
+    const topicList = Object.entries(byTopic).map(([topic, have]) => ({ topic, have }));
+    const batches = chunk(topicList, 4);
+
     const btn = $("#plSuggest"); busy(btn, true, "Đang gợi ý...");
-    setMsg("#plSuggestMsg", "info", '<span class="spinner" style="border-top-color:transparent"></span>AI đang gợi ý & lấy volume (~20-40s tùy số topic)...');
-    $("#plSuggestCard").classList.add("hidden");
+    $("#plSuggestCard").classList.add("hidden"); $("#plOutlinePanel").classList.add("hidden");
+    suggestData = []; const usedGlobal = new Set(); let anyTrend = false, anyBing = false;
     try {
-      const r = await _fetch("/api/keywords/pillar/suggest", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows: statsRows, gl, hl, engine, model, apiKey, bingKey, minPerTopic: 20 }) });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Lỗi gợi ý");
-      suggestData = d.topics || [];
+      for (let i = 0; i < batches.length; i++) {
+        setMsg("#plSuggestMsg", "info", `<span class="spinner" style="border-top-color:transparent"></span>AI đang gợi ý & lấy volume ${batches.length > 1 ? `(lô ${i + 1}/${batches.length})` : ""}...`);
+        const r = await _fetch("/api/keywords/pillar/suggest", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topics: batches[i], allHave, gl, hl, engine, model, apiKey, bingKey, minPerTopic: 20, needTranslate: isEnglish }) });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || "Lỗi gợi ý");
+        anyTrend = anyTrend || d.trendUsed; anyBing = anyBing || d.bingUsed;
+        (d.topics || []).forEach((t) => {
+          const kws = (t.keywords || []).filter((k) => { const key = normKw(k.keyword); if (usedGlobal.has(key)) return false; usedGlobal.add(key); return true; });
+          if (kws.length) suggestData.push({ topic: t.topic, keywords: kws });
+        });
+      }
       const total = suggestData.reduce((s, t) => s + t.keywords.length, 0);
       $("#plSugCount").textContent = total;
       populateTopicFilter("#plSugTopicFilter", suggestData.map((t) => t.topic));
       renderSuggest();
       $("#plSuggestCard").classList.remove("hidden");
       const notes = [];
-      if (d.bingUsed) notes.push("có số lượt/tháng (Bing)");
-      if (d.trendUsed) notes.push("có mức quan tâm (Trends)");
+      if (anyBing) notes.push("có số lượt/tháng (Bing)");
+      if (anyTrend) notes.push("có mức quan tâm (Trends)");
       setMsg("#plSuggestMsg", "info", `✓ Gợi ý ${total} từ khóa mới cho ${suggestData.length} topic${notes.length ? " — " + notes.join("; ") : ""}.`);
       $("#plSuggestCard").scrollIntoView({ block: "start", behavior: "smooth" });
     } catch (err) { setMsg("#plSuggestMsg", "err", "❌ " + err.message); }
     finally { busy(btn, false); }
   });
 
-  function suggestFlat() { return suggestData.flatMap((t) => t.keywords.map((k) => ({ ...k, topic: t.topic }))); }
+  const suggestFlat = () => suggestData.flatMap((t) => t.keywords.map((k) => ({ ...k, topic: t.topic })));
   function suggestFiltered() {
     const q = ($("#plSugFilter").value || "").trim().toLowerCase();
     const tp = $("#plSugTopicFilter").value;
-    let list = suggestFlat().filter((r) => (!q || r.keyword.toLowerCase().includes(q)) && (!tp || r.topic === tp));
+    let list = suggestFlat().filter((r) => (!q || r.keyword.toLowerCase().includes(q) || (r.vi || "").toLowerCase().includes(q)) && (!tp || r.topic === tp));
     const s = $("#plSugSort").value;
     if (s === "vol") list.sort((a, b) => num(b.volume) - num(a.volume) || num(b.trend) - num(a.trend));
     else if (s === "trend") list.sort((a, b) => num(b.trend) - num(a.trend) || num(b.volume) - num(a.volume));
@@ -2447,10 +2487,13 @@ $("#opClearSkill").addEventListener("click", () => {
   function renderSuggest() {
     const list = suggestFiltered();
     const hasVol = list.some((r) => Number.isFinite(r.volume));
+    const viCol = isEnglish;
     $("#plSugShown").textContent = `Hiển thị: ${list.length}`;
-    $("#plSuggestList").innerHTML = `<div style="overflow:auto"><table class="cmp"><thead><tr><th>#</th><th>Topic</th><th>Từ khóa gợi ý</th>${hasVol ? "<th>Volume/tháng<br><small class='muted'>Bing</small></th>" : ""}<th style="min-width:104px">Mức quan tâm<br><small class='muted'>Trends</small></th></tr></thead><tbody>${
-      list.map((r, i) => `<tr><td>${i + 1}</td><td><span class="chip" style="padding:2px 9px">${esc(r.topic)}</span></td><td>${esc(r.keyword)}</td>${hasVol ? `<td style="text-align:right">${fmtVol(r.volume)}</td>` : ""}<td>${trendBar(r.trend)}</td></tr>`).join("")
-    }</tbody></table></div>`;
+    const head = `<tr><th>#</th><th>Topic</th><th>Từ khóa gợi ý</th>${viCol ? "<th>Bản dịch (VI)</th>" : ""}${hasVol ? "<th>Volume/tháng<br><small class='muted'>Bing</small></th>" : ""}<th style="min-width:100px">Quan tâm<br><small class='muted'>Trends</small></th><th>Outline</th></tr>`;
+    const body = list.map((r, i) => `<tr><td>${i + 1}</td><td><span class="chip" style="padding:2px 9px">${esc(r.topic)}</span></td><td>${esc(r.keyword)}</td>${viCol ? `<td>${esc(r.vi || "")}</td>` : ""}${hasVol ? `<td style="text-align:right">${fmtVol(r.volume)}</td>` : ""}<td>${trendBar(r.trend)}</td><td><button class="ghost small pl-ol-btn" data-kw="${esc(r.keyword)}">Lên outline</button></td></tr>`).join("");
+    const scroll = list.length > 20 ? ' style="max-height:640px;overflow:auto"' : ' style="overflow:auto"';
+    $("#plSuggestList").innerHTML = `<div${scroll}><table class="cmp"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+    $$("#plSuggestList .pl-ol-btn").forEach((b) => b.addEventListener("click", () => openOutline(b.dataset.kw)));
   }
   $("#plSugFilter").addEventListener("input", renderSuggest);
   $("#plSugTopicFilter").addEventListener("change", renderSuggest);
@@ -2458,14 +2501,64 @@ $("#opClearSkill").addEventListener("click", () => {
 
   $("#plSuggestCopy").addEventListener("click", async () => {
     if (!suggestData.length) return toast("Chưa có dữ liệu.");
-    const txt = "Topic\tTừ khóa\tVolume/tháng\tQuan tâm\n" + suggestFiltered().map((r) => `${r.topic}\t${r.keyword}\t${Number.isFinite(r.volume) ? r.volume : ""}\t${Number.isFinite(r.trend) ? r.trend : ""}`).join("\n");
+    const h = isEnglish ? "Topic\tTừ khóa\tBản dịch (VI)\tVolume/tháng\tQuan tâm" : "Topic\tTừ khóa\tVolume/tháng\tQuan tâm";
+    const txt = h + "\n" + suggestFiltered().map((r) => (isEnglish ? `${r.topic}\t${r.keyword}\t${r.vi || ""}` : `${r.topic}\t${r.keyword}`) + `\t${Number.isFinite(r.volume) ? r.volume : ""}\t${Number.isFinite(r.trend) ? r.trend : ""}`).join("\n");
     try { await navigator.clipboard.writeText(txt); toast("Đã copy!"); } catch { toast("Không copy được."); }
   });
   $("#plSuggestExport").addEventListener("click", () => {
     if (!suggestData.length) return toast("Chưa có dữ liệu.");
     if (typeof XLSX === "undefined") return toast("Thư viện Excel chưa tải xong.");
-    const aoa = [["Topic", "Từ khóa gợi ý", "Volume/tháng (Bing)", "Mức quan tâm (Trends)"]].concat(
-      suggestFiltered().map((r) => [r.topic, r.keyword, Number.isFinite(r.volume) ? r.volume : "", Number.isFinite(r.trend) ? r.trend : ""]));
+    const head = isEnglish ? ["Topic", "Từ khóa gợi ý", "Bản dịch (VI)", "Volume/tháng (Bing)", "Mức quan tâm (Trends)"] : ["Topic", "Từ khóa gợi ý", "Volume/tháng (Bing)", "Mức quan tâm (Trends)"];
+    const aoa = [head].concat(suggestFiltered().map((r) => (isEnglish ? [r.topic, r.keyword, r.vi || ""] : [r.topic, r.keyword]).concat([Number.isFinite(r.volume) ? r.volume : "", Number.isFinite(r.trend) ? r.trend : ""])));
     const ws = XLSX.utils.aoa_to_sheet(aoa); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "GoiYBoSung"); XLSX.writeFile(wb, "seoshark-pillar-goi-y.xlsx");
+  });
+
+  /* ---------- Outline nội tuyến cho 1 từ khóa gợi ý ---------- */
+  let olKw = "", olOutline = [];
+  function openOutline(kw) {
+    olKw = kw; olOutline = [];
+    $("#plOlKw").textContent = kw;
+    $("#plOlResult").classList.add("hidden"); $("#plOlMsg").innerHTML = ""; $("#plOlTree").innerHTML = "";
+    $("#plOutlinePanel").classList.remove("hidden");
+    $("#plOutlinePanel").scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+  $("#plOlClose").addEventListener("click", () => $("#plOutlinePanel").classList.add("hidden"));
+
+  $("#plOlRun").addEventListener("click", async () => {
+    const kw = ($("#plOlKw").textContent || olKw || "").trim();
+    if (!kw) return setMsg("#plOlMsg", "err", "❌ Thiếu từ khóa.");
+    const urls = String($("#plOlUrls").value || "").split(/\n/).map((s) => s.trim()).filter(Boolean).slice(0, 10);
+    if (!urls.length) return setMsg("#plOlMsg", "err", "❌ Dán ít nhất 1 URL đối thủ.");
+    const engine = $("#engine").value, model = $("#model").value, apiKey = $("#apiKey").value.trim();
+    const gl = $("#plGl").value, hl = $("#plHl").value;
+    const btn = $("#plOlRun"); busy(btn, true, "Đang xử lý...");
+    $("#plOlResult").classList.add("hidden");
+    setMsg("#plOlMsg", "info", '<span class="spinner" style="border-top-color:transparent"></span>Đang bóc tách đối thủ & tạo outline...');
+    try {
+      const rc = await _fetch("/api/outline/competitors", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ urls, gl, hl }) });
+      const dc = await rc.json();
+      if (!rc.ok) throw new Error(dc.error || "Lỗi phân tích đối thủ");
+      const comps = (dc.competitors || []).filter((c) => (c.headings || []).length);
+      if (!comps.length) throw new Error("Không bóc tách được heading từ URL đã dán (có thể trang dựng JS). Thử URL bài viết khác.");
+      const rg = await _fetch("/api/outline/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mainKw: kw, subKws: [], competitors: comps, engine, model, apiKey }) });
+      const dg = await rg.json();
+      if (!rg.ok) throw new Error(dg.error || "Lỗi tạo outline");
+      olOutline = dg.outline || [];
+      $("#plOlEngine").textContent = "— " + (dg.engineUsed || "");
+      $("#plOlTree").innerHTML = olOutline.map((it) => {
+        const pad = (it.level - 2) * 22;
+        const tag = `<span class="muted" style="font-size:.72rem;border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-right:6px">H${it.level}</span>`;
+        const star = it.hasMain ? ` <span style="color:var(--green)">★</span>` : "";
+        return `<div style="padding:4px 0;padding-left:${pad}px;font-weight:${it.level === 2 ? 600 : 400}">${tag}${esc(it.text)}${star}</div>`;
+      }).join("");
+      $("#plOlResult").classList.remove("hidden");
+      setMsg("#plOlMsg", dg.aiError ? "warn" : "info", dg.aiError ? `⚠️ AI lỗi (${esc(dg.aiError)}) → dùng Local.` : `✓ Đã tạo outline ${olOutline.length} heading.`);
+    } catch (err) { setMsg("#plOlMsg", "err", "❌ " + err.message); }
+    finally { busy(btn, false); }
+  });
+  $("#plOlCopy").addEventListener("click", async () => {
+    if (!olOutline.length) return toast("Chưa có outline.");
+    const md = olOutline.map((it) => `${"#".repeat(it.level)} ${it.text}`).join("\n");
+    try { await navigator.clipboard.writeText(md); toast("Đã copy Markdown!"); } catch { toast("Không copy được."); }
   });
 })();

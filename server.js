@@ -1029,70 +1029,66 @@ async function aiJson(eng, { system, user, schema, maxTokens, model, apiKey }) {
   return await claudeJson({ apiKey: k, model: (model || process.env.SEOSHARK_MODEL || "claude-sonnet-4-6").trim(), system, user, schema, maxTokens });
 }
 
-// Buoc 1: phan nhom tu khoa theo topic (dung topic san co, else AI phan loai)
+// Buoc 1: phan nhom 1 LO tu khoa theo topic (client chia lo, truyen knownTopics de nhat quan; dich VI neu can)
 app.post("/api/keywords/pillar/classify", requireAuth, async (req, res) => {
   try {
-    const { keywords, engine, model, apiKey } = req.body || {};
+    const { keywords, knownTopics, needTranslate, engine, model, apiKey } = req.body || {};
     const raw = (Array.isArray(keywords) ? keywords : [])
       .map((k) => (typeof k === "string" ? { keyword: k.trim(), topic: "" } : { keyword: String(k.keyword || "").trim(), topic: String(k.topic || "").trim() }))
-      .filter((k) => k.keyword);
-    const seen = new Map();
-    for (const k of raw) { const key = _norm(k.keyword); if (!seen.has(key)) seen.set(key, { ...k }); else if (!seen.get(key).topic && k.topic) seen.get(key).topic = k.topic; }
-    const uniq = Array.from(seen.values()).slice(0, 500);
-    if (!uniq.length) return res.status(400).json({ error: "Chưa có từ khóa nào." });
+      .filter((k) => k.keyword)
+      .slice(0, 300); // an toan moi lo (client gui ~120)
+    if (!raw.length) return res.status(400).json({ error: "Chưa có từ khóa nào." });
+    const known = (Array.isArray(knownTopics) ? knownTopics : []).map((t) => String(t || "").trim()).filter(Boolean).slice(0, 200);
+    const tr = !!needTranslate;
 
-    let rows, aiUsed = false;
-    if (uniq.every((k) => k.topic)) {
-      rows = uniq.map((k) => ({ keyword: k.keyword, topic: k.topic }));
-    } else {
-      const eng = (engine || "local").toLowerCase();
-      if (eng !== "gemini" && eng !== "claude") return res.status(400).json({ error: "Cần bật engine Gemini/Claude để AI phân nhóm topic (hoặc tự nhập cột topic cho mọi từ khóa)." });
-      const { system, user, schema } = buildPillarClassifyPrompt(uniq);
-      const d = await aiJson(eng, { system, user, schema, maxTokens: 8192, model, apiKey });
-      const map = {};
-      (d.items || []).forEach((it) => { if (it && it.keyword) map[_norm(it.keyword)] = String(it.topic || "").trim(); });
-      rows = uniq.map((k) => ({ keyword: k.keyword, topic: k.topic || map[_norm(k.keyword)] || "Khác" }));
-      aiUsed = true;
+    // Khong can AI: da co topic het VA khong can dich
+    if (raw.every((k) => k.topic) && !tr) {
+      return res.json({ items: raw.map((k) => ({ keyword: k.keyword, topic: k.topic, vi: "" })), aiUsed: false });
     }
-    const tMap = {};
-    rows.forEach((r) => { tMap[r.topic] = (tMap[r.topic] || 0) + 1; });
-    const topics = Object.entries(tMap).map(([topic, count]) => ({ topic, count })).sort((a, b) => b.count - a.count);
-    res.json({ rows, topics, kwCount: rows.length, topicCount: topics.length, aiUsed });
+    const eng = (engine || "local").toLowerCase();
+    if (eng !== "gemini" && eng !== "claude") return res.status(400).json({ error: "Cần bật engine Gemini/Claude để AI phân nhóm topic (hoặc tự nhập cột topic cho mọi từ khóa)." });
+    const { system, user, schema } = buildPillarClassifyPrompt(raw, { knownTopics: known, needTranslate: tr });
+    const d = await aiJson(eng, { system, user, schema, maxTokens: 8192, model, apiKey });
+    const map = {};
+    (d.items || []).forEach((it) => { if (it && it.keyword) map[_norm(it.keyword)] = { topic: String(it.topic || "").trim(), vi: String(it.vi || "").trim() }; });
+    const items = raw.map((k) => {
+      const m = map[_norm(k.keyword)] || {};
+      return { keyword: k.keyword, topic: k.topic || m.topic || "Khác", vi: tr ? (m.vi || "") : "" };
+    });
+    res.json({ items, aiUsed: true });
   } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
 });
 
-// Buoc 3: goi y >=20 tu khoa MOI/topic (khong trung ngu nghia), co volume
+// Buoc 3: goi y >=20 tu khoa MOI cho 1 LO topic (client chia lo topic), khong trung ngu nghia, co volume + dich VI
 app.post("/api/keywords/pillar/suggest", requireAuth, async (req, res) => {
   try {
-    const { rows, gl, hl, engine, model, apiKey, bingKey, minPerTopic } = req.body || {};
+    const { topics, allHave, gl, hl, engine, model, apiKey, bingKey, minPerTopic, needTranslate } = req.body || {};
     const region = { gl: gl || "vn", hl: hl || "vi" };
     const eng = (engine || "local").toLowerCase();
     if (eng !== "gemini" && eng !== "claude") return res.status(400).json({ error: "Cần bật engine Gemini/Claude để gợi ý từ khóa bổ sung." });
-    const list = (Array.isArray(rows) ? rows : []).map((r) => ({ keyword: String(r.keyword || "").trim(), topic: String(r.topic || "").trim() })).filter((r) => r.keyword && r.topic);
-    if (!list.length) return res.status(400).json({ error: "Chưa có bảng phân nhóm. Hãy phân tích trước." });
-
-    const byTopic = {};
-    list.forEach((r) => { (byTopic[r.topic] = byTopic[r.topic] || []).push(r.keyword); });
-    const topicNames = Object.keys(byTopic).slice(0, 12);
+    const inTopics = (Array.isArray(topics) ? topics : [])
+      .map((t) => ({ topic: String(t.topic || "").trim(), have: (Array.isArray(t.have) ? t.have : []).map((k) => String(k || "").trim()).filter(Boolean) }))
+      .filter((t) => t.topic).slice(0, 6); // toi da 6 topic/lo
+    if (!inTopics.length) return res.status(400).json({ error: "Chưa có topic để gợi ý." });
     const min = Math.max(10, Math.min(40, Number(minPerTopic) || 20));
+    const tr = !!needTranslate;
 
     // Ung vien tu Google Autocomplete cho tung topic (loai trung voi tu da co)
     const topicsInput = [];
-    for (const topic of topicNames) {
-      const have = byTopic[topic];
+    for (const t of inTopics) {
       let candidates = [];
-      try { candidates = await expandSeeds([topic, ...have.slice(0, 3)], { ...region, deep: false }); } catch {}
-      const haveSet = new Set(have.map(_norm));
+      try { candidates = await expandSeeds([t.topic, ...t.have.slice(0, 3)], { ...region, deep: false }); } catch {}
+      const haveSet = new Set(t.have.map(_norm));
       candidates = candidates.filter((c) => !haveSet.has(_norm(c))).slice(0, 60);
-      topicsInput.push({ topic, have, candidates });
+      topicsInput.push({ topic: t.topic, have: t.have, candidates });
     }
 
-    // AI goi y (chat loc + chong trung ngu nghia)
-    const { system, user, schema } = buildPillarSuggestPrompt(topicsInput, { minPerTopic: min });
+    const { system, user, schema } = buildPillarSuggestPrompt(topicsInput, { minPerTopic: min, needTranslate: tr });
     const d = await aiJson(eng, { system, user, schema, maxTokens: 8192, model, apiKey });
 
-    // Dung ket qua: loai trung (chuan hoa) voi tu da co + trong noi bo
-    const haveGlobal = new Set(list.map((r) => _norm(r.keyword)));
+    // Loai trung voi TOAN BO tu khoa nguoi dung (allHave) + trong noi bo
+    const haveGlobal = new Set((Array.isArray(allHave) ? allHave : []).map(_norm));
+    inTopics.forEach((t) => t.have.forEach((k) => haveGlobal.add(_norm(k))));
     const usedSug = new Set();
     const out = [];
     (d.topics || []).forEach((t) => {
@@ -1100,17 +1096,17 @@ app.post("/api/keywords/pillar/suggest", requireAuth, async (req, res) => {
       if (!topic) return;
       const kws = [];
       (t.keywords || []).forEach((kw) => {
-        const clean = String(kw || "").trim();
+        const clean = String(kw && kw.keyword != null ? kw.keyword : kw).trim();
+        const vi = String((kw && kw.vi) || "").trim();
         const key = _norm(clean);
         if (!clean || haveGlobal.has(key) || usedSug.has(key)) return;
         usedSug.add(key);
-        kws.push(clean);
+        kws.push({ keyword: clean, vi });
       });
       if (kws.length) out.push({ topic, keywords: kws });
     });
 
-    // Volume cho toan bo tu goi y (Google Trends cap 40 + Bing neu co key)
-    const allKw = out.flatMap((t) => t.keywords);
+    const allKw = out.flatMap((t) => t.keywords.map((k) => k.keyword));
     const bKey = (bingKey || process.env.BING_API_KEY || "").trim();
     const [trendMap, bingMap] = await Promise.all([
       googleTrends(allKw, { ...region, cap: 40 }).catch(() => new Map()),
@@ -1118,10 +1114,10 @@ app.post("/api/keywords/pillar/suggest", requireAuth, async (req, res) => {
     ]);
     const suggestions = out.map((t) => ({
       topic: t.topic,
-      keywords: t.keywords.map((kw) => {
-        const lk = kw.toLowerCase();
-        const tr = trendMap.get(lk); const vo = bingMap.get(lk);
-        return { keyword: kw, trend: Number.isFinite(tr) ? tr : null, volume: Number.isFinite(vo) ? vo : null };
+      keywords: t.keywords.map((k) => {
+        const lk = k.keyword.toLowerCase();
+        const trd = trendMap.get(lk); const vo = bingMap.get(lk);
+        return { keyword: k.keyword, vi: k.vi, trend: Number.isFinite(trd) ? trd : null, volume: Number.isFinite(vo) ? vo : null };
       }),
     }));
     res.json({ topics: suggestions, count: allKw.length, trendUsed: trendMap.size > 0, bingUsed: bingMap.size > 0 });

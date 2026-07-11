@@ -911,6 +911,17 @@
             <div style="margin-top:8px">
               <label class="muted" style="font-size:.85rem;display:block;margin-bottom:4px">Bing Webmaster API key (tùy chọn — để từ khóa gợi ý có số lượt/tháng thật)</label>
               <input id="plBingKey" type="text" placeholder="Dán Bing API key (bỏ trống sẽ dùng Google Trends)" style="max-width:420px" />
+              <details style="margin-top:8px;font-size:.85rem">
+                <summary style="cursor:pointer;color:var(--c-blue);font-weight:600">Hướng dẫn lấy Bing API key MIỄN PHÍ (bấm để mở)</summary>
+                <ol style="margin:8px 0 0;padding-left:20px;line-height:1.7">
+                  <li>Truy cập <a href="https://www.bing.com/webmasters/" target="_blank" rel="noopener">bing.com/webmasters</a> và đăng nhập bằng tài khoản Microsoft (tạo mới miễn phí nếu chưa có).</li>
+                  <li>Bấm <b>Add a site</b> → nhập URL website của bạn (VD <code>https://nhakhoashark.vn</code>) và <b>xác minh sở hữu</b> (dán thẻ meta vào trang, hoặc upload file XML, hoặc qua DNS). Cần ít nhất 1 site đã xác minh mới dùng được API.</li>
+                  <li>Vào <b>Settings</b> (biểu tượng góc trên phải) → chọn <b>API access</b> → <b>API Key</b>.</li>
+                  <li>Bấm <b>Generate</b> để tạo khóa, rồi <b>Copy</b> chuỗi key.</li>
+                  <li>Dán key vào ô phía trên. Xong! Từ khóa gợi ý sẽ có thêm cột <b>Số lượt/tháng</b> thật.</li>
+                </ol>
+                <p class="muted" style="margin:8px 0 0">Lưu ý: số liệu là của <b>Bing</b> (không phải Google) nhưng sát thực tế và hoàn toàn miễn phí. Bỏ trống thì vẫn có <b>Mức quan tâm 0–100</b> qua Google Trends (không cần key).</p>
+              </details>
             </div>
             <div style="margin-top:14px"><button id="plAnalyze">Phân tích &amp; phân nhóm topic</button></div>
             <div id="plMsg" style="margin-top:10px"></div>
@@ -958,6 +969,22 @@
               <span class="muted" id="plSugShown"></span>
             </div>
             <div id="plSuggestList"></div>
+
+            <!-- Panel outline nội tuyến -->
+            <div id="plOutlinePanel" class="hidden" style="margin-top:16px;padding:16px;border:1px solid var(--c-blue);border-radius:14px;background:#f7f9ff">
+              <div class="flexbar" style="margin-bottom:8px">
+                <b style="font-size:15px">Lên outline cho: <span id="plOlKw" style="color:var(--c-blue)"></span></b>
+                <a id="plOlClose" class="muted" style="cursor:pointer">Đóng ✕</a>
+              </div>
+              <label>Dán 1–10 URL đối thủ TOP đầu (mỗi URL 1 dòng)</label>
+              <textarea id="plOlUrls" rows="4" placeholder="https://doithu-1.com/bai-viet&#10;https://doithu-2.com/bai-viet"></textarea>
+              <div style="margin-top:10px"><button id="plOlRun">Phân tích &amp; tạo outline</button></div>
+              <div id="plOlMsg" style="margin-top:10px"></div>
+              <div id="plOlResult" class="hidden" style="margin-top:12px">
+                <div class="flexbar"><b id="plOlEngine" class="muted" style="font-size:.85rem"></b><button class="ghost small" id="plOlCopy">Copy Markdown</button></div>
+                <div id="plOlTree" style="margin-top:6px"></div>
+              </div>
+            </div>
           </section>
         </div>
       </div>
