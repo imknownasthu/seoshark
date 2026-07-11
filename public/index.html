@@ -107,14 +107,6 @@
           <svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/><path d="M8 11l2 2 3.5-4"/></svg>
           Check Index &amp; Thứ hạng
         </div>
-        <div class="menu-item disabled" data-section="soon" data-name="Tự động Share Link">
-          <svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.5l6.8-4M8.6 13.5l6.8 4"/></svg>
-          Tự động Share Link <span class="soon">Đang phát triển</span>
-        </div>
-        <div class="menu-item disabled" data-section="soon" data-name="Tự động đăng Blog 2.0">
-          <svg class="ic" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-          Tự động đăng Blog 2.0 <span class="soon">Đang phát triển</span>
-        </div>
         <div class="menu-item" data-section="keywords">
           <svg class="ic" viewBox="0 0 24 24"><circle cx="8" cy="14" r="4"/><path d="M11 11l7-7 3 3M17 9l2 2"/></svg>
           Nghiên cứu từ khóa
@@ -122,6 +114,16 @@
         <div class="menu-item" data-section="outline">
           <svg class="ic" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>
           Lên outline chuẩn SEO
+        </div>
+
+        <div class="menu-label">Sắp ra mắt</div>
+        <div class="menu-item disabled" data-section="soon" data-name="Tự động Share Link">
+          <svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 10.5l6.8-4M8.6 13.5l6.8 4"/></svg>
+          Tự động Share Link <span class="soon">Đang phát triển</span>
+        </div>
+        <div class="menu-item disabled" data-section="soon" data-name="Tự động đăng Blog 2.0">
+          <svg class="ic" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          Tự động đăng Blog 2.0 <span class="soon">Đang phát triển</span>
         </div>
         <div class="menu-item disabled" data-section="soon" data-name="Theo dõi thứ hạng">
           <svg class="ic" viewBox="0 0 24 24"><path d="M4 18l5-5 3 3 8-8"/><path d="M20 8v4h-4"/></svg>
@@ -234,6 +236,7 @@
         <div class="tabs subtabs" id="featureTabs">
           <div class="tab active" data-feat="internal">Internal Link (trong bài)</div>
           <div class="tab" data-feat="incoming">Incoming Link (bài khác trỏ về)</div>
+          <div class="tab" data-feat="pillar">Xây dựng Pillar Content</div>
         </div>
 
         <!-- ---- INTERNAL ---- -->
@@ -392,6 +395,85 @@
               <span class="muted" id="incResMeta"></span>
             </div>
             <div id="incResults"></div>
+          </section>
+        </div>
+
+        <!-- ---- PILLAR CONTENT ---- -->
+        <div class="featpane" data-featpane="pillar">
+          <section class="card">
+            <div class="step">BƯỚC 1</div>
+            <h2>Nhập từ khóa + URL + chuyên mục</h2>
+            <p class="hint">Phân loại <b>Chuyển đổi / Tin tức</b>, gom <b>Topic Content</b>, rồi <b>phân bậc 1–5 + dựng cây cha–con</b> để đi internal link (theo phương pháp keyword-topic-classifier). Cần bật engine <b>Gemini/Claude</b> ở ⚙️.</p>
+
+            <div class="tabs subtabs" id="pcTabs">
+              <div class="tab active" data-pcmode="manual">Dán thủ công</div>
+              <div class="tab" data-pcmode="excel">Tải Excel</div>
+            </div>
+            <div class="featpane active" data-pcpane="manual">
+              <label>Mỗi dòng: <code>từ khóa | URL | chuyên mục</code> (URL và chuyên mục tùy chọn, phân tách bằng dấu <code>|</code>)</label>
+              <textarea id="pcManualInput" rows="7" placeholder="giá niềng răng | https://site.com/gia-nieng-rang | Chỉnh nha&#10;niềng răng invisalign là gì | https://site.com/invisalign-la-gi | Chỉnh nha&#10;20 tuổi niềng răng bao nhiêu tiền&#10;trồng răng implant giá bao nhiêu | | Implant"></textarea>
+            </div>
+            <div class="featpane" data-pcpane="excel">
+              <label class="ghost small" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;margin:0">
+                Chọn file Excel/CSV
+                <input id="pcFile" type="file" accept=".xlsx,.xls,.csv" style="display:none" />
+              </label>
+              <span class="muted" id="pcFileMsg" style="font-size:.85rem;margin-left:8px"></span>
+              <p class="muted" style="margin-top:8px;font-size:.85rem">Cột A = <b>từ khóa</b>, B = <b>URL</b>, C = <b>chuyên mục</b> (B, C tùy chọn). Có/không dòng tiêu đề đều được.</p>
+            </div>
+
+            <label style="margin-top:12px">Danh sách URL/từ khóa <b>Chuyển đổi</b> (tùy chọn — dán để đánh dấu chính xác, mỗi dòng 1 URL hoặc từ khóa)</label>
+            <textarea id="pcConvInput" rows="3" placeholder="https://site.com/gia-nieng-rang&#10;https://site.com/bang-gia-implant"></textarea>
+
+            <div class="grid cols-2" style="margin-top:12px">
+              <div><label>Ngôn ngữ từ khóa</label>
+                <select id="pcHl"><option value="vi">Tiếng Việt</option><option value="en">English (kèm cột dịch VI)</option></select>
+              </div>
+            </div>
+            <div style="margin-top:14px"><button id="pcAnalyze">Phân tích (Chuyển đổi/Tin tức + Topic)</button></div>
+            <div id="pcMsg" style="margin-top:10px"></div>
+          </section>
+
+          <!-- BƯỚC 2: xem trước phân loại + tick chuyển đổi -->
+          <section class="card hidden" id="pcClassifyCard">
+            <div class="step">BƯỚC 2</div>
+            <div class="flexbar">
+              <h2 style="margin:0">Xem trước phân loại (<span id="pcKwCount">0</span> từ khóa)</h2>
+              <span class="muted" style="font-size:.85rem">Tick cột <b>CĐ</b> để đánh dấu từ khóa Chuyển đổi (quan trọng) trước khi phân bậc</span>
+            </div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:10px 0">
+              <input id="pcFilter" type="text" placeholder="Lọc theo từ..." style="max-width:200px" />
+              <select id="pcCatFilter" style="max-width:180px"><option value="">Mọi chuyên mục</option></select>
+              <select id="pcClassFilter" style="max-width:160px"><option value="">Mọi phân loại</option><option>Chuyển đổi</option><option>Tin tức</option></select>
+              <span class="muted" id="pcShown"></span>
+            </div>
+            <div id="pcClassifyTable" style="overflow:auto"></div>
+            <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
+              <p class="hint" style="margin:0 0 10px">Sau khi tick đúng các từ khóa Chuyển đổi, phân bậc 1–5 và dựng cây cha–con theo từng chuyên mục.</p>
+              <button id="pcTier">Phân bậc &amp; dựng cây cha–con</button>
+              <div id="pcTierMsg" style="margin-top:10px"></div>
+            </div>
+          </section>
+
+          <!-- BƯỚC 3: kết quả phân bậc + xuất Excel -->
+          <section class="card hidden" id="pcResultCard">
+            <div class="step">BƯỚC 3</div>
+            <div class="flexbar">
+              <h2 style="margin:0">Kết quả pillar (<span id="pcResCount">0</span> từ khóa)</h2>
+              <div style="display:flex;gap:8px">
+                <button class="ghost small" id="pcCopy">Copy</button>
+                <button class="ghost small" id="pcExport">Xuất Excel (3 sheet)</button>
+              </div>
+            </div>
+            <div id="pcTierChips" class="chips" style="margin:10px 0"></div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:6px 0 10px">
+              <input id="pcResFilter" type="text" placeholder="Lọc theo từ..." style="max-width:200px" />
+              <select id="pcResCatFilter" style="max-width:180px"><option value="">Mọi chuyên mục</option></select>
+              <select id="pcResTierFilter" style="max-width:150px"><option value="">Mọi bậc</option><option value="1">Bậc 1</option><option value="2">Bậc 2</option><option value="3">Bậc 3</option><option value="4">Bậc 4</option><option value="5">Bậc 5</option></select>
+              <select id="pcResSort" style="max-width:180px"><option value="tier">Theo bậc</option><option value="cat">Theo chuyên mục</option><option value="topic">Theo topic</option><option value="az">A→Z</option></select>
+              <span class="muted" id="pcResShown"></span>
+            </div>
+            <div id="pcResultTable" style="overflow:auto"></div>
           </section>
         </div>
 

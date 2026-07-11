@@ -373,7 +373,7 @@ function formatHtml(html) {
 $$("#featureTabs .tab").forEach((tab) => {
   tab.addEventListener("click", () => {
     $$("#featureTabs .tab").forEach((t) => t.classList.remove("active"));
-    $$(".featpane").forEach((p) => p.classList.remove("active"));
+    $$("[data-featpane]").forEach((p) => p.classList.remove("active"));
     tab.classList.add("active");
     $(`.featpane[data-featpane="${tab.dataset.feat}"]`).classList.add("active");
   });
@@ -2560,5 +2560,217 @@ $("#opClearSkill").addEventListener("click", () => {
     if (!olOutline.length) return toast("Chưa có outline.");
     const md = olOutline.map((it) => `${"#".repeat(it.level)} ${it.text}`).join("\n");
     try { await navigator.clipboard.writeText(md); toast("Đã copy Markdown!"); } catch { toast("Không copy được."); }
+  });
+})();
+
+/* ===================== XÂY DỰNG PILLAR CONTENT (Internal Link) ===================== */
+(function () {
+  const analyzeBtn = $("#pcAnalyze");
+  if (!analyzeBtn) return;
+  let pcMode = "manual";
+  let excelRows = null;      // [{keyword,url,category}]
+  let classifyRows = [];     // [{keyword,url,category,conv,phanLoai,topic,ghiChu,vi}]
+  let resultRows = [];       // classify + {tier,vaiTro,nhomThuocTinh,tuKhoaCha}
+  let isEng = false;
+
+  const setMsg = (el, type, msg) => { $(el).innerHTML = msg ? alertHtml(type, msg) : ""; };
+  const chunk = (a, n) => { const o = []; for (let i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; };
+  const normKw = (s) => String(s || "").toLowerCase().normalize("NFC").replace(/\s+/g, " ").trim();
+  const normUrl = (u) => String(u || "").toLowerCase().trim().replace(/^https?:\/\//, "").replace(/^www\./, "").split(/[?#]/)[0].replace(/\/+$/, "");
+  const TIER_COLOR = { 1: "#6C8CFF", 2: "#57D9A3", 3: "#3FC8D6", 4: "#FFC46B", 5: "#FFAD8A" };
+
+  // subtabs
+  $$("#pcTabs .tab").forEach((t) => t.addEventListener("click", () => {
+    $$("#pcTabs .tab").forEach((x) => x.classList.toggle("active", x === t));
+    pcMode = t.dataset.pcmode;
+    $$("[data-pcpane]").forEach((p) => p.classList.toggle("active", p.dataset.pcpane === pcMode));
+  }));
+
+  $("#pcFile").addEventListener("change", async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    $("#pcFileMsg").textContent = "Đang đọc...";
+    try {
+      const wb = XLSX.read(await f.arrayBuffer(), { type: "array" });
+      let rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, blankrows: false })
+        .map((r) => ({ keyword: String(r[0] || "").trim(), url: String(r[1] || "").trim(), category: String(r[2] || "").trim() })).filter((r) => r.keyword);
+      if (rows.length && /^(từ khóa|tu khoa|keyword|kw)$/i.test(rows[0].keyword)) rows = rows.slice(1);
+      excelRows = rows;
+      $("#pcFileMsg").textContent = `✓ Đã đọc ${rows.length} từ khóa từ ${f.name}`;
+    } catch (err) { $("#pcFileMsg").textContent = "Lỗi đọc file: " + (err.message || err); }
+    finally { e.target.value = ""; }
+  });
+
+  function parseManual(text) {
+    return String(text || "").split(/\n/).map((l) => l.trim()).filter(Boolean).map((l) => {
+      const p = l.split("|").map((x) => x.trim());
+      return { keyword: p[0] || "", url: p[1] || "", category: p[2] || "" };
+    }).filter((r) => r.keyword);
+  }
+  const collect = () => (pcMode === "excel" ? (excelRows || []) : parseManual($("#pcManualInput").value));
+  function populate(sel, arr) { $(sel).innerHTML = `<option value="">Mọi ${sel.includes("Cat") ? "chuyên mục" : "topic"}</option>` + arr.map((t) => `<option value="${esc(t)}">${esc(t)}</option>`).join(""); }
+
+  /* ---------- BƯỚC 1: phân loại + topic (theo lô) ---------- */
+  analyzeBtn.addEventListener("click", async () => {
+    const raw = collect();
+    if (!raw.length) return setMsg("#pcMsg", "err", "❌ Chưa có từ khóa. Dán danh sách hoặc tải Excel.");
+    // dedup theo keyword
+    const seen = new Map(); let dups = 0;
+    raw.forEach((r) => { const k = normKw(r.keyword); if (!seen.has(k)) seen.set(k, { ...r, category: r.category || "(Chưa phân mục)" }); else dups++; });
+    const rows = Array.from(seen.values());
+    // conversion set
+    const convLines = String($("#pcConvInput").value || "").split(/\n/).map((s) => s.trim()).filter(Boolean);
+    const convUrl = new Set(), convKw = new Set();
+    convLines.forEach((c) => { if (/^https?:\/\//i.test(c) || c.includes("/")) convUrl.add(normUrl(c)); else convKw.add(normKw(c)); });
+    rows.forEach((r) => { r.conv = (r.url && convUrl.has(normUrl(r.url))) || convKw.has(normKw(r.keyword)); });
+    const convCount = rows.filter((r) => r.conv).length;
+
+    isEng = ($("#pcHl").value === "en");
+    const engine = $("#engine").value, model = $("#model").value, apiKey = $("#apiKey").value.trim();
+    if (engine !== "gemini" && engine !== "claude") return setMsg("#pcMsg", "err", "❌ Cần bật engine Gemini/Claude ở ⚙️.");
+
+    busy(analyzeBtn, true, "Đang phân loại...");
+    $("#pcClassifyCard").classList.add("hidden"); $("#pcResultCard").classList.add("hidden");
+    classifyRows = []; const knownTopics = new Set();
+    const batches = chunk(rows, 120);
+    try {
+      for (let i = 0; i < batches.length; i++) {
+        setMsg("#pcMsg", "info", `<span class="spinner" style="border-top-color:transparent"></span>Đang phân loại ${batches.length > 1 ? `lô ${i + 1}/${batches.length}` : ""} (${rows.length} từ, ${convCount} chuyển đổi${dups ? `, đã loại ${dups} trùng` : ""})...`);
+        const r = await _fetch("/api/internal/pillar/classify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows: batches[i], knownTopics: [...knownTopics], needTranslate: isEng, engine, model, apiKey }) });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || "Lỗi phân loại");
+        (d.items || []).forEach((it) => { classifyRows.push(it); knownTopics.add(it.topic); });
+      }
+      populate("#pcCatFilter", [...new Set(classifyRows.map((r) => r.category))]);
+      $("#pcKwCount").textContent = classifyRows.length;
+      renderClassify();
+      $("#pcClassifyCard").classList.remove("hidden");
+      const cd = classifyRows.filter((r) => r.phanLoai === "Chuyển đổi").length;
+      setMsg("#pcMsg", "info", `✓ Đã phân loại ${classifyRows.length} từ khóa (${cd} Chuyển đổi · ${classifyRows.length - cd} Tin tức)${dups ? `, đã loại ${dups} từ trùng` : ""}. Tick lại cột CĐ nếu cần rồi bấm Phân bậc.`);
+      $("#pcClassifyCard").scrollIntoView({ block: "start", behavior: "smooth" });
+    } catch (err) { setMsg("#pcMsg", "err", "❌ " + err.message); }
+    finally { busy(analyzeBtn, false); }
+  });
+
+  function classifyFiltered() {
+    const q = ($("#pcFilter").value || "").trim().toLowerCase();
+    const cat = $("#pcCatFilter").value, cls = $("#pcClassFilter").value;
+    return classifyRows.map((r, idx) => ({ r, idx })).filter(({ r }) => (!q || r.keyword.toLowerCase().includes(q)) && (!cat || r.category === cat) && (!cls || r.phanLoai === cls));
+  }
+  function renderClassify() {
+    const list = classifyFiltered();
+    $("#pcShown").textContent = `Hiển thị: ${list.length}`;
+    const head = `<tr><th>CĐ</th><th>#</th><th>Từ khóa</th>${isEng ? "<th>VI</th>" : ""}<th>Chuyên mục</th><th>Phân loại</th><th>Topic Content</th></tr>`;
+    const body = list.map(({ r, idx }, i) => `<tr><td style="text-align:center"><input type="checkbox" class="pc-conv" data-idx="${idx}" ${r.phanLoai === "Chuyển đổi" ? "checked" : ""} style="width:16px;height:16px;accent-color:var(--c-mint)"></td><td>${i + 1}</td><td>${esc(r.keyword)}</td>${isEng ? `<td>${esc(r.vi || "")}</td>` : ""}<td><span class="chip" style="padding:2px 8px">${esc(r.category)}</span></td><td data-pl="${idx}"><span class="badge ${r.phanLoai === "Chuyển đổi" ? "ok" : ""}">${esc(r.phanLoai)}</span></td><td>${esc(r.topic)}</td></tr>`).join("");
+    const sc = list.length > 20 ? ' style="max-height:600px;overflow:auto"' : ' style="overflow:auto"';
+    $("#pcClassifyTable").innerHTML = `<div${sc}><table class="cmp"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+    $$("#pcClassifyTable .pc-conv").forEach((cb) => cb.addEventListener("change", () => {
+      const idx = +cb.dataset.idx; classifyRows[idx].phanLoai = cb.checked ? "Chuyển đổi" : "Tin tức"; classifyRows[idx].conv = cb.checked;
+      const cell = $(`#pcClassifyTable td[data-pl="${idx}"]`);
+      if (cell) cell.innerHTML = `<span class="badge ${cb.checked ? "ok" : ""}">${classifyRows[idx].phanLoai}</span>`;
+    }));
+  }
+  $("#pcFilter").addEventListener("input", renderClassify);
+  $("#pcCatFilter").addEventListener("change", renderClassify);
+  $("#pcClassFilter").addEventListener("change", renderClassify);
+
+  /* ---------- BƯỚC 2: phân bậc theo từng chuyên mục ---------- */
+  $("#pcTier").addEventListener("click", async () => {
+    if (!classifyRows.length) return setMsg("#pcTierMsg", "err", "❌ Chưa có dữ liệu phân loại.");
+    const engine = $("#engine").value, model = $("#model").value, apiKey = $("#apiKey").value.trim();
+    if (engine !== "gemini" && engine !== "claude") return setMsg("#pcTierMsg", "err", "❌ Cần bật engine Gemini/Claude.");
+    const byCat = {}; classifyRows.forEach((r) => { (byCat[r.category] = byCat[r.category] || []).push(r); });
+    const cats = Object.keys(byCat);
+    const btn = $("#pcTier"); busy(btn, true, "Đang phân bậc...");
+    $("#pcResultCard").classList.add("hidden");
+    resultRows = [];
+    try {
+      for (let i = 0; i < cats.length; i++) {
+        const cat = cats[i]; const catRows = byCat[cat].slice(0, 200);
+        setMsg("#pcTierMsg", "info", `<span class="spinner" style="border-top-color:transparent"></span>Đang phân bậc & dựng cây chuyên mục "${esc(cat)}" (${i + 1}/${cats.length})...`);
+        const r = await _fetch("/api/internal/pillar/tier", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows: catRows, category: cat, engine, model, apiKey }) });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || "Lỗi phân bậc");
+        const tMap = {}; (d.items || []).forEach((it) => { tMap[normKw(it.keyword)] = it; });
+        byCat[cat].forEach((row) => { const t = tMap[normKw(row.keyword)] || {}; resultRows.push({ ...row, tier: t.tier || (row.phanLoai === "Chuyển đổi" ? 2 : 4), vaiTro: t.vaiTro || "", nhomThuocTinh: t.nhomThuocTinh || "", tuKhoaCha: t.tuKhoaCha || "" }); });
+      }
+      $("#pcResCount").textContent = resultRows.length;
+      populate("#pcResCatFilter", cats);
+      const tierCount = {}; resultRows.forEach((r) => { tierCount[r.tier] = (tierCount[r.tier] || 0) + 1; });
+      $("#pcTierChips").innerHTML = [1, 2, 3, 4, 5].filter((t) => tierCount[t]).map((t) => `<span class="chip">Bậc ${t} <b style="color:${TIER_COLOR[t]}">${tierCount[t]}</b></span>`).join("");
+      renderResult();
+      $("#pcResultCard").classList.remove("hidden");
+      setMsg("#pcTierMsg", "info", `✓ Đã phân bậc ${resultRows.length} từ khóa trong ${cats.length} chuyên mục.`);
+      $("#pcResultCard").scrollIntoView({ block: "start", behavior: "smooth" });
+    } catch (err) { setMsg("#pcTierMsg", "err", "❌ " + err.message); }
+    finally { busy(btn, false); }
+  });
+
+  function resultFiltered() {
+    const q = ($("#pcResFilter").value || "").trim().toLowerCase();
+    const cat = $("#pcResCatFilter").value, tier = $("#pcResTierFilter").value;
+    let list = resultRows.filter((r) => (!q || r.keyword.toLowerCase().includes(q)) && (!cat || r.category === cat) && (!tier || String(r.tier) === tier));
+    const s = $("#pcResSort").value;
+    if (s === "cat") list = list.slice().sort((a, b) => a.category.localeCompare(b.category, "vi") || a.tier - b.tier);
+    else if (s === "topic") list = list.slice().sort((a, b) => a.topic.localeCompare(b.topic, "vi"));
+    else if (s === "az") list = list.slice().sort((a, b) => a.keyword.localeCompare(b.keyword, "vi"));
+    else list = list.slice().sort((a, b) => a.category.localeCompare(b.category, "vi") || a.tier - b.tier || a.topic.localeCompare(b.topic, "vi"));
+    return list;
+  }
+  function renderResult() {
+    const list = resultFiltered();
+    $("#pcResShown").textContent = `Hiển thị: ${list.length}`;
+    const head = `<tr><th>#</th><th>Từ khóa</th>${isEng ? "<th>VI</th>" : ""}<th>Chuyên mục</th><th>Phân loại</th><th>Topic</th><th>Bậc</th><th>Vai trò</th><th>Nhóm thuộc tính</th><th>Từ khóa cha</th></tr>`;
+    const body = list.map((r, i) => `<tr><td>${i + 1}</td><td>${esc(r.keyword)}</td>${isEng ? `<td>${esc(r.vi || "")}</td>` : ""}<td>${esc(r.category)}</td><td><span class="badge ${r.phanLoai === "Chuyển đổi" ? "ok" : ""}">${esc(r.phanLoai)}</span></td><td>${esc(r.topic)}</td><td><b style="color:${TIER_COLOR[r.tier] || "var(--ink)"}">${r.tier}</b></td><td>${esc(r.vaiTro)}</td><td>${esc(r.nhomThuocTinh || "")}</td><td>${esc(r.tuKhoaCha || "")}</td></tr>`).join("");
+    const sc = list.length > 20 ? ' style="max-height:640px;overflow:auto"' : ' style="overflow:auto"';
+    $("#pcResultTable").innerHTML = `<div${sc}><table class="cmp"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+  }
+  $("#pcResFilter").addEventListener("input", renderResult);
+  $("#pcResCatFilter").addEventListener("change", renderResult);
+  $("#pcResTierFilter").addEventListener("change", renderResult);
+  $("#pcResSort").addEventListener("change", renderResult);
+
+  function resultAoa() {
+    const head = ["STT", "Từ khóa"].concat(isEng ? ["Bản dịch (VI)"] : []).concat(["URL", "Chuyên mục", "Phân loại", "Topic Content", "Bậc", "Vai trò bậc", "Nhóm thuộc tính", "Từ khóa cha", "Ghi chú"]);
+    const rows = resultFiltered().map((r, i) => [i + 1, r.keyword].concat(isEng ? [r.vi || ""] : []).concat([r.url || "", r.category, r.phanLoai, r.topic, r.tier, r.vaiTro, r.nhomThuocTinh || "", r.tuKhoaCha || "", r.ghiChu || ""]));
+    return [head].concat(rows);
+  }
+  $("#pcCopy").addEventListener("click", async () => {
+    if (!resultRows.length) return toast("Chưa có dữ liệu.");
+    const txt = resultAoa().map((r) => r.join("\t")).join("\n");
+    try { await navigator.clipboard.writeText(txt); toast("Đã copy!"); } catch { toast("Không copy được."); }
+  });
+  $("#pcExport").addEventListener("click", () => {
+    if (!resultRows.length) return toast("Chưa có dữ liệu.");
+    if (typeof XLSX === "undefined") return toast("Thư viện Excel chưa tải xong.");
+    const wb = XLSX.utils.book_new();
+    // Sheet 1: bảng chính
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(resultAoa()), "Phân loại");
+    // Sheet 2: tổng hợp topic + bậc
+    const topicMap = {}, tierMap = {};
+    resultRows.forEach((r) => { topicMap[r.topic] = topicMap[r.topic] || { total: 0, cd: 0 }; topicMap[r.topic].total++; if (r.phanLoai === "Chuyển đổi") topicMap[r.topic].cd++; tierMap[r.tier] = (tierMap[r.tier] || 0) + 1; });
+    const sum = [["TỔNG HỢP THEO TOPIC", "", ""], ["Topic Content", "Số bài", "Số Chuyển đổi"]]
+      .concat(Object.entries(topicMap).sort((a, b) => b[1].total - a[1].total).map(([t, v]) => [t, v.total, v.cd]))
+      .concat([["", "", ""], ["TỔNG HỢP THEO BẬC", "", ""], ["Bậc", "Số bài", ""]])
+      .concat([1, 2, 3, 4, 5].filter((t) => tierMap[t]).map((t) => [`Bậc ${t}`, tierMap[t], ""]));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sum), "Tổng hợp");
+    // Sheet 3: pillar ngang (mỗi bậc 1 cột, cây thụt lề), theo chuyên mục
+    const cats = [...new Set(resultRows.map((r) => r.category))];
+    const aoa = [["Bậc 1 · Dịch vụ", "Bậc 2 · Chuyển đổi", "Bậc 3 · SEO", "Bậc 4 · Tin tức", "Bậc 5 · Bổ trợ"]];
+    cats.forEach((cat) => {
+      aoa.push([`▣ CHUYÊN MỤC: ${cat}`, "", "", "", ""]);
+      const catRows = resultRows.filter((r) => r.category === cat);
+      const roots = catRows.filter((r) => !r.tuKhoaCha);
+      const childrenOf = (kw) => catRows.filter((r) => normKw(r.tuKhoaCha) === normKw(kw));
+      const emit = (r, depth) => {
+        const row = ["", "", "", "", ""];
+        row[Math.min(4, Math.max(0, (r.tier || 4) - 1))] = (depth ? "— ".repeat(depth) : "") + r.keyword;
+        aoa.push(row);
+        childrenOf(r.keyword).forEach((c) => emit(c, depth + 1));
+      };
+      roots.sort((a, b) => a.tier - b.tier).forEach((r) => emit(r, 0));
+      aoa.push(["", "", "", "", ""]);
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "Pillar ngang");
+    XLSX.writeFile(wb, "seoshark-pillar-content.xlsx");
   });
 })();

@@ -23,6 +23,7 @@ import { googleTrends, bingVolume } from "./src/volume.js";
 import { fetchCompetitors, extractManyHeadings, mergeOutlinesLocal, markKeywords, normalizeOutline } from "./src/outline.js";
 import { buildOutlinePrompt, OUTLINE_SCHEMA, buildUniquePrompt, UNIQUE_SCHEMA } from "./src/outline-prompt.js";
 import { buildClassifyPrompt as buildPillarClassifyPrompt, buildSuggestPrompt as buildPillarSuggestPrompt } from "./src/pillar-prompt.js";
+import { buildPcClassifyPrompt, buildPcTierPrompt } from "./src/pillar-content-prompt.js";
 import * as store from "./src/store.js";
 import {
   ONPAGE_SYSTEM, RECOMMEND_SCHEMA, OPTIMIZE_SCHEMA, SUGGEST_SCHEMA,
@@ -1121,6 +1122,61 @@ app.post("/api/keywords/pillar/suggest", requireAuth, async (req, res) => {
       }),
     }));
     res.json({ topics: suggestions, count: allKw.length, trendUsed: trendMap.size > 0, bingUsed: bingMap.size > 0 });
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
+});
+
+// ===================== XAY DUNG PILLAR CONTENT (tab Internal Link) =====================
+// Buoc 1: phan loai Chuyen doi/Tin tuc + gom Topic (theo lo, per-chuyen-muc; dich VI neu can)
+app.post("/api/internal/pillar/classify", requireAuth, async (req, res) => {
+  try {
+    const { rows, knownTopics, needTranslate, engine, model, apiKey } = req.body || {};
+    const list = (Array.isArray(rows) ? rows : [])
+      .map((r) => ({ keyword: String(r.keyword || "").trim(), url: String(r.url || "").trim(), category: String(r.category || "").trim(), conv: !!r.conv }))
+      .filter((r) => r.keyword).slice(0, 300);
+    if (!list.length) return res.status(400).json({ error: "Chưa có từ khóa nào." });
+    const eng = (engine || "local").toLowerCase();
+    if (eng !== "gemini" && eng !== "claude") return res.status(400).json({ error: "Cần bật engine Gemini/Claude để phân loại & gom topic." });
+    const known = (Array.isArray(knownTopics) ? knownTopics : []).map((t) => String(t || "").trim()).filter(Boolean).slice(0, 200);
+    const tr = !!needTranslate;
+    const { system, user, schema } = buildPcClassifyPrompt(list, { knownTopics: known, needTranslate: tr });
+    const d = await aiJson(eng, { system, user, schema, maxTokens: 8192, model, apiKey });
+    const map = {};
+    (d.items || []).forEach((it) => { if (it && it.keyword) map[_norm(it.keyword)] = it; });
+    const items = list.map((r) => {
+      const m = map[_norm(r.keyword)] || {};
+      let phanLoai = String(m.phanLoai || "").trim();
+      if (r.conv) phanLoai = "Chuyển đổi";
+      if (phanLoai !== "Chuyển đổi" && phanLoai !== "Tin tức") phanLoai = r.conv ? "Chuyển đổi" : "Tin tức";
+      return { keyword: r.keyword, url: r.url, category: r.category, phanLoai, topic: String(m.topic || "Khác").trim(), ghiChu: String(m.ghiChu || "").trim(), vi: tr ? String(m.vi || "").trim() : "" };
+    });
+    res.json({ items });
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
+});
+
+// Buoc 2: phan bac 1-5 + cay cha-con cho 1 chuyen muc
+app.post("/api/internal/pillar/tier", requireAuth, async (req, res) => {
+  try {
+    const { rows, category, engine, model, apiKey } = req.body || {};
+    const list = (Array.isArray(rows) ? rows : [])
+      .map((r) => ({ keyword: String(r.keyword || "").trim(), url: String(r.url || "").trim(), category: String(r.category || "").trim(), phanLoai: String(r.phanLoai || "").trim(), topic: String(r.topic || "").trim(), conv: !!r.conv }))
+      .filter((r) => r.keyword).slice(0, 200);
+    if (!list.length) return res.status(400).json({ error: "Chưa có từ khóa." });
+    const eng = (engine || "local").toLowerCase();
+    if (eng !== "gemini" && eng !== "claude") return res.status(400).json({ error: "Cần bật engine Gemini/Claude để phân bậc." });
+    const { system, user, schema } = buildPcTierPrompt(list, { category: String(category || "").trim() });
+    const d = await aiJson(eng, { system, user, schema, maxTokens: 8192, model, apiKey });
+    const roleName = { 1: "Dịch vụ", 2: "Chuyển đổi", 3: "SEO", 4: "Tin tức", 5: "Bổ trợ" };
+    const map = {};
+    (d.items || []).forEach((it) => { if (it && it.keyword) map[_norm(it.keyword)] = it; });
+    const haveKw = new Set(list.map((r) => _norm(r.keyword)));
+    const items = list.map((r) => {
+      const m = map[_norm(r.keyword)] || {};
+      let tier = Number(m.tier); if (!(tier >= 1 && tier <= 5)) tier = r.phanLoai === "Chuyển đổi" ? 2 : 4;
+      let cha = String(m.tuKhoaCha || "").trim();
+      if (cha && !haveKw.has(_norm(cha))) cha = ""; // cha phai co trong danh sach
+      return { keyword: r.keyword, tier, vaiTro: String(m.vaiTro || roleName[tier] || "").trim() || roleName[tier], nhomThuocTinh: String(m.nhomThuocTinh || "").trim(), tuKhoaCha: cha };
+    });
+    res.json({ items });
   } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
 });
 
