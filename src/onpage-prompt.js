@@ -295,6 +295,88 @@ YEU CAU (RAT QUAN TRONG):
 - KHONG bia so lieu. Tra ve DUNG schema {items:[{criterion, before, after, note}]}.`;
 }
 
+// ====== AI DANH GIA ONPAGE dua tren SO LIEU GSC THAT + DOI THU (bao cao tong hop) ======
+export const EVALUATE_SCHEMA = {
+  type: "object",
+  properties: {
+    overview: { type: "string", description: "Nhan xet tong quan KHACH QUAN ve hieu qua Onpage cua URL: dua tren so lieu GSC that + so sanh doi thu. 3-5 cau." },
+    performance: { type: "string", description: "Danh gia hieu suat tim kiem tu GSC: clicks/impressions/CTR/vi tri trung binh; xu huong TANG/GIAM so voi ky truoc (neu co); thiet bi & quoc gia dang manh/yeu." },
+    opportunities: {
+      type: "array",
+      description: "Co hoi tu GSC: truy van co IMPRESSION cao nhung CTR thap hoac VI TRI 5-20 (gan trang 1) -> toi uu title/meta/noi dung de bat duoc traffic.",
+      items: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Truy van thuc te tu GSC." },
+          insight: { type: "string", description: "Vi sao la co hoi (vd: 1200 impression, CTR 0.8%, vi tri 8.5)." },
+          action: { type: "string", description: "Hanh dong cu the de khai thac." },
+        },
+        required: ["insight", "action"],
+      },
+    },
+    onpageGaps: { type: "array", items: { type: "string" }, description: "Diem yeu Onpage so voi doi thu (content gap, tieu chi thieu) can cai thien - bam bang so sanh." },
+    actions: {
+      type: "array",
+      description: "Viec can lam theo thu tu uu tien, KET HOP ca tin hieu GSC va onpage/doi thu.",
+      items: {
+        type: "object",
+        properties: {
+          priority: { type: "string", description: '"Cao" | "Trung binh" | "Thap".' },
+          action: { type: "string", description: "Hanh dong cu the." },
+          why: { type: "string", description: "Ly do (bam so lieu GSC hoac khoang cach doi thu)." },
+        },
+        required: ["priority", "action"],
+      },
+    },
+  },
+  required: ["overview", "actions"],
+};
+
+// gsc: { rangeLabel, totals:{clicks,impressions,ctr,position}, prevTotals?, queries:[{query,clicks,impressions,ctr,position}], devices:[{k,clicks,impressions,ctr}], countries:[...] }
+export function buildEvaluatePrompt({ target, competitors, bench, mainKeyword, subKeywords, recommendations, gsc }) {
+  const comp = (competitors || []).map((c, i) => fmtAudit(c, `Doi thu #${i + 1}`)).join("\n\n");
+  const pct = (x) => (x == null ? "?" : (x * 100).toFixed(1) + "%");
+  const pos = (x) => (x == null ? "?" : Number(x).toFixed(1));
+  const g = gsc || {};
+  const t = g.totals || {};
+  const pv = g.prevTotals;
+  const delta = pv ? `(ky truoc: ${pv.clicks} clicks, ${pv.impressions} impr, CTR ${pct(pv.ctr)}, vi tri ${pos(pv.position)})` : "(khong co ky truoc de so sanh)";
+  const qLines = (g.queries || []).slice(0, 25).map((q) => `  - "${q.query}": ${q.clicks} clicks | ${q.impressions} impr | CTR ${pct(q.ctr)} | vi tri ${pos(q.position)}`).join("\n");
+  const dLines = (g.devices || []).map((d) => `  - ${d.k}: ${d.clicks} clicks | ${d.impressions} impr | CTR ${pct(d.ctr)}`).join("\n");
+  const cLines = (g.countries || []).slice(0, 8).map((d) => `  - ${d.k}: ${d.clicks} clicks | ${d.impressions} impr | CTR ${pct(d.ctr)}`).join("\n");
+  const recLines = (recommendations || []).slice(0, 15).map((r) => `  - [${r.priority || "?"}] ${r.criterion}: ${r.action || ""}`).join("\n");
+
+  return `Ban dang lam CONG CU tu dong danh gia Onpage. Ket hop 3 nguon: (1) SO LIEU GSC THAT cua URL, (2) SO SANH DOI THU tren SERP, (3) khuyen nghi tieu chi. Dua ra danh gia KHACH QUAN, bam so lieu, KHONG chung chung.
+
+TU KHOA CHINH: ${mainKeyword}
+TU KHOA PHU: ${(subKeywords || []).join(", ") || "(khong co)"}
+
+=== SO LIEU GOOGLE SEARCH CONSOLE (khoang: ${g.rangeLabel || "?"}) ===
+Tong: ${t.clicks || 0} clicks | ${t.impressions || 0} impressions | CTR ${pct(t.ctr)} | vi tri TB ${pos(t.position)} ${delta}
+TOP TRUY VAN (thuc te nguoi dung dang tim & thay URL nay):
+${qLines || "  (khong co du lieu)"}
+THEO THIET BI:
+${dLines || "  (khong co)"}
+THEO QUOC GIA:
+${cLines || "  (khong co)"}
+
+=== TRANG CUA NGUOI DUNG (audit onpage) ===
+${fmtAudit(target, "Trang dich")}
+
+=== DOI THU TOP SERP ===
+${comp || "(khong co)"}
+${bench ? `\nTRUNG BINH DOI THU: ${bench.wordCount} tu, ${bench.headingCount} heading, ${bench.internalLinks} internal, ${bench.withSchema}/${bench.count} co schema.` : ""}
+${recLines ? `\n=== KHUYEN NGHI TIEU CHI (tu audit) ===\n${recLines}` : ""}
+
+YEU CAU (theo phuong phap onpage-competitor-analysis):
+1. overview: danh gia tong quan URL dang manh/yeu the nao (bam ca GSC lan doi thu).
+2. performance: doc hieu suat GSC — nhan xet xu huong (tang/giam so ky truoc), thiet bi/quoc gia.
+3. opportunities: TIM truy van co IMPRESSION cao ma CTR thap (title/meta chua hap dan) HOAC vi tri 5-20 (sap len trang 1) — moi cai kem hanh dong toi uu cu the. Day la phan gia tri nhat.
+4. onpageGaps: khoang cach onpage so voi doi thu (content gap, do dai, schema, internal link, E-E-A-T...).
+5. actions: tong hop viec can lam theo uu tien Cao/TB/Thap, KET HOP tin hieu GSC (co hoi) + khoang cach doi thu. Cu the, lam duoc ngay.
+KHONG bia so lieu; chi dung con so GSC & audit o tren. Tieng Viet tu nhien.`;
+}
+
 // ====== Khuyen nghi CO HOC (Local - khong AI) ======
 const PR = { CAO: "Cao", TB: "Trung binh", THAP: "Thap" };
 function norm(s) {

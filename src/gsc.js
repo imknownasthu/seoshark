@@ -115,11 +115,16 @@ export async function gscListSites(accessToken) {
 const _fmtDate = (d) => d.toISOString().slice(0, 10);
 
 // Query Search Analytics. url=loc theo 1 trang cu the (tuy chon). dimensions vd ["query"] hoac ["date"].
-export async function gscQuery(accessToken, siteUrl, { url = "", days = 28, dimensions = ["query"], rowLimit = 25 } = {}) {
-  const end = new Date();
-  const start = new Date();
-  start.setDate(start.getDate() - Math.max(1, Math.min(480, days)));
-  const body = { startDate: _fmtDate(start), endDate: _fmtDate(end), dimensions, rowLimit };
+// startDate/endDate (YYYY-MM-DD) override "days" neu duoc truyen (dung cho so sanh ky truoc / tuy chinh).
+export async function gscQuery(accessToken, siteUrl, { url = "", days = 28, startDate = "", endDate = "", dimensions = ["query"], rowLimit = 25 } = {}) {
+  let sd = startDate, ed = endDate;
+  if (!sd || !ed) {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(start.getDate() - Math.max(1, Math.min(480, days)));
+    sd = _fmtDate(start); ed = _fmtDate(end);
+  }
+  const body = { startDate: sd, endDate: ed, dimensions, rowLimit };
   if (url) body.dimensionFilterGroups = [{ filters: [{ dimension: "page", operator: "equals", expression: url }] }];
   const r = await fetch(`${API}/sites/${encodeURIComponent(siteUrl)}/searchAnalytics/query`, {
     method: "POST",

@@ -1059,10 +1059,21 @@ function opGscReveal(url) {
   // Hiện box khi đã đăng nhập Google (GIS token còn hạn)
   box.classList.toggle("hidden", !(window.gscConnected && window.gscConnected()));
 }
+// Khoảng thời gian GSC: đổi 'range' -> số ngày (raw view) / {range,start,end} (evaluate)
+const OP_GSC_DAYS = { "24h": 1, "7d": 7, "28d": 28, "3m": 90, "6m": 180, "12m": 365 };
+function opGscRangeInfo() {
+  const range = ($("#opGscRange") && $("#opGscRange").value) || "28d";
+  const start = ($("#opGscStart") && $("#opGscStart").value) || "";
+  const end = ($("#opGscEnd") && $("#opGscEnd").value) || "";
+  let days = OP_GSC_DAYS[range] || 28;
+  if (range === "custom" && start && end) { days = Math.max(1, Math.round((new Date(end) - new Date(start)) / 86400000)); }
+  return { range, start, end, days };
+}
+if ($("#opGscRange")) $("#opGscRange").addEventListener("change", (e) => { $("#opGscCustom").classList.toggle("hidden", e.target.value !== "custom"); });
 if ($("#opGscBtn")) $("#opGscBtn").addEventListener("click", async () => {
   const url = _opGscUrl || $("#opUrl").value.trim();
   if (!url) return;
-  const days = +($("#opGscDays").value || 28);
+  const { days } = opGscRangeInfo();
   if (!(window.gscConnected && window.gscConnected())) { $("#opGscMsg").innerHTML = `<span style="color:#c0392b">Chưa đăng nhập Google. Vào ⚙️ → Google Search Console → Đăng nhập bằng Google.</span>`; return; }
   const btn = $("#opGscBtn"); busy(btn, true, "Đang lấy số liệu...");
   $("#opGscMsg").textContent = "";
@@ -1085,6 +1096,44 @@ if ($("#opGscBtn")) $("#opGscBtn").addEventListener("click", async () => {
   } catch (e) { $("#opGscMsg").innerHTML = `<span style="color:#c0392b">❌ ${esc(e.message)}</span>`; }
   finally { busy(btn, false); }
 });
+
+// AI đánh giá Onpage tổng hợp (GSC thật + đối thủ + tiêu chí)
+if ($("#opGscEval")) $("#opGscEval").addEventListener("click", async () => {
+  const url = _opGscUrl || $("#opUrl").value.trim();
+  if (!url) return;
+  if (!opSession.id) { $("#opGscMsg").innerHTML = `<span style="color:#c0392b">Hãy phân tích On-page trước.</span>`; return; }
+  if (!(window.gscConnected && window.gscConnected())) { $("#opGscMsg").innerHTML = `<span style="color:#c0392b">Chưa đăng nhập Google (⚙️ → Đăng nhập bằng Google).</span>`; return; }
+  const engine = $("#engine").value;
+  if (engine !== "gemini" && engine !== "claude") { $("#opGscMsg").innerHTML = `<span style="color:#c0392b">Cần bật Gemini/Claude ở ⚙️ để AI đánh giá.</span>`; return; }
+  const { range, start, end } = opGscRangeInfo();
+  if (range === "custom" && (!start || !end)) { $("#opGscMsg").innerHTML = `<span style="color:#c0392b">Chọn ngày bắt đầu & kết thúc.</span>`; return; }
+  const btn = $("#opGscEval"); busy(btn, true, "AI đang đánh giá theo số liệu GSC...");
+  $("#opGscMsg").textContent = ""; $("#opGscEvalResult").innerHTML = "";
+  try {
+    const r = await fetch("/api/onpage/evaluate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: opSession.id, range, start, end, accessToken: (window.GSC || {}).token, siteUrl: (window.GSC || {}).siteUrl, engine, model: $("#model").value || undefined, apiKey: $("#apiKey").value.trim() || undefined }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "Lỗi đánh giá");
+    renderOpEvaluate(d);
+    $("#opGscEvalResult").scrollIntoView({ block: "nearest", behavior: "smooth" });
+  } catch (e) { $("#opGscMsg").innerHTML = `<span style="color:#c0392b">❌ ${esc(e.message)}</span>`; }
+  finally { busy(btn, false); }
+});
+function renderOpEvaluate(d) {
+  const pct = (x) => (x == null ? "—" : (x * 100).toFixed(1) + "%");
+  const pos = (x) => (x == null ? "—" : Number(x).toFixed(1));
+  const g = d.gsc || {}; const t = g.totals || {}; const pv = g.prevTotals;
+  const arrow = (cur, prev) => { if (prev == null) return ""; const dv = cur - prev; const good = dv >= 0; return ` <span style="color:${good ? "#2e9e6b" : "#c0392b"};font-size:.8rem">(${dv >= 0 ? "+" : ""}${dv} vs kỳ trước)</span>`; };
+  const stat = (label, val, extra) => `<div style="flex:1;min-width:120px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff"><div class="muted" style="font-size:.72rem;text-transform:uppercase">${label}</div><div style="font-size:1.2rem;font-weight:700;color:var(--ink)">${val}${extra || ""}</div></div>`;
+  const pill = (p) => `<span class="badge ${p === "Cao" ? "sapo" : (p === "Thấp" || p === "Thap") ? "ket" : "ok"}">${esc(p || "TB")}</span>`;
+  let html = `<div class="alert info" style="margin-bottom:10px"><b>Báo cáo AI đánh giá Onpage</b> — Engine: ${esc(d.engineUsed || "")} · GSC: ${esc(g.rangeLabel || "")} · Property: ${esc(g.siteUrl || "")}</div>`;
+  html += `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">${stat("Clicks", t.clicks || 0, arrow(t.clicks || 0, pv && pv.clicks))}${stat("Impressions", t.impressions || 0, arrow(t.impressions || 0, pv && pv.impressions))}${stat("CTR", pct(t.ctr))}${stat("Vị trí TB", pos(t.position))}</div>`;
+  if (d.overview) html += `<h3 style="margin:6px 0">Tổng quan</h3><p>${esc(d.overview)}</p>`;
+  if (d.performance) html += `<h3 style="margin:12px 0 6px">Hiệu suất tìm kiếm (GSC)</h3><p>${esc(d.performance)}</p>`;
+  if (d.opportunities && d.opportunities.length) html += `<h3 style="margin:12px 0 6px">🎯 Cơ hội từ GSC (impression cao / sắp lên trang 1)</h3>` + d.opportunities.map((o) => `<div class="opd"><b>${esc(o.query || "")}</b>${o.insight ? `<div class="muted">${esc(o.insight)}</div>` : ""}<div>→ ${esc(o.action || "")}</div></div>`).join("");
+  if (d.onpageGaps && d.onpageGaps.length) html += `<h3 style="margin:12px 0 6px">Khoảng cách Onpage vs đối thủ</h3><ul style="margin:0 0 0 18px">${d.onpageGaps.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`;
+  if (d.actions && d.actions.length) html += `<h3 style="margin:12px 0 6px">✅ Việc cần làm (ưu tiên)</h3>` + d.actions.map((a) => `<div class="rec-item"><div class="rec-body"><label>${pill(a.priority)} <b>${esc(a.action)}</b></label>${a.why ? `<div class="muted">💡 ${esc(a.why)}</div>` : ""}</div></div>`).join("");
+  $("#opGscEvalResult").innerHTML = html;
+}
 
 function opNorm(s) { return (s || "").toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/đ/g, "d"); }
 function opHasKw(text, kw) { return kw && opNorm(text).includes(opNorm(kw)); }

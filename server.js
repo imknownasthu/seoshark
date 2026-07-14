@@ -30,8 +30,8 @@ import {
   gscSaConfigured, gscServiceAccountEmail, gscSaAccessToken,
 } from "./src/gsc.js";
 import {
-  ONPAGE_SYSTEM, RECOMMEND_SCHEMA, OPTIMIZE_SCHEMA, SUGGEST_SCHEMA, CRITERIA_SCHEMA,
-  buildRecommendPrompt, buildOptimizePrompt, buildSuggestPrompt, buildCriteriaPrompt, mechanicalRecommendations,
+  ONPAGE_SYSTEM, RECOMMEND_SCHEMA, OPTIMIZE_SCHEMA, SUGGEST_SCHEMA, CRITERIA_SCHEMA, EVALUATE_SCHEMA,
+  buildRecommendPrompt, buildOptimizePrompt, buildSuggestPrompt, buildCriteriaPrompt, buildEvaluatePrompt, mechanicalRecommendations,
 } from "./src/onpage-prompt.js";
 import * as auth from "./src/auth.js";
 import { sendVerifyEmail, sendOwnerNotify, sendResetCodeEmail, sendPasswordEmail, mailMode } from "./src/mailer.js";
@@ -664,6 +664,7 @@ app.post("/api/onpage/audit", requireAuth, async (req, res) => {
     sessions.set(id, {
       type: "onpage", createdAt: Date.now(),
       target, mainKeyword: mainKeyword.trim(), subKeywords: subs, bench,
+      competitors: competitorsAudit, recommendations,
     });
 
     res.json({
@@ -755,6 +756,78 @@ app.post("/api/onpage/optimize", requireAuth, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message || String(err) });
   }
+});
+
+// --- POST /api/onpage/evaluate : AI danh gia Onpage dua tren SO LIEU GSC THAT + doi thu ---
+const _GSC_RANGE_DAYS = { "24h": 1, "7d": 7, "28d": 28, "3m": 90, "6m": 180, "12m": 365 };
+const _gscFmt = (d) => d.toISOString().slice(0, 10);
+app.post("/api/onpage/evaluate", requireAuth, async (req, res) => {
+  try {
+    const owner = (req.user?.email || "guest").toLowerCase();
+    const body = req.body || {};
+    const session = sessions.get(body.id);
+    if (!session || session.type !== "onpage") return res.status(400).json({ error: "Phiên hết hạn. Hãy phân tích On-page lại." });
+    const { target, competitors, bench, mainKeyword, subKeywords, recommendations } = session;
+    const { engine, model, apiKey } = body;
+    if (engine !== "gemini" && engine !== "claude") return res.status(400).json({ error: "Cần bật engine Gemini/Claude ở ⚙️ để AI đánh giá." });
+
+    // 1) Xac dinh khoang thoi gian + ky truoc (de so sanh tang truong)
+    const range = String(body.range || "28d");
+    let startDate = "", endDate = "", prevStart = "", prevEnd = "", rangeLabel = "";
+    const today = new Date();
+    if (range === "custom" && body.start && body.end) {
+      startDate = String(body.start); endDate = String(body.end); rangeLabel = `${startDate} → ${endDate}`;
+      const ms = new Date(endDate) - new Date(startDate);
+      prevEnd = _gscFmt(new Date(new Date(startDate) - 86400000));
+      prevStart = _gscFmt(new Date(new Date(prevEnd) - ms));
+    } else {
+      const days = _GSC_RANGE_DAYS[range] || 28;
+      const end = new Date(today); const start = new Date(today); start.setDate(start.getDate() - days);
+      startDate = _gscFmt(start); endDate = _gscFmt(end);
+      const ps = new Date(start); ps.setDate(ps.getDate() - days);
+      prevStart = _gscFmt(ps); prevEnd = _gscFmt(new Date(start - 86400000));
+      rangeLabel = { "24h": "24 giờ qua", "7d": "7 ngày", "28d": "28 ngày", "3m": "3 tháng", "6m": "6 tháng", "12m": "12 tháng" }[range] || range;
+    }
+
+    // 2) Lay du lieu GSC that
+    const url = target.url;
+    const accessToken = await _gscToken(body, owner);
+    let siteUrl = String(body.siteUrl || "").trim();
+    if (!siteUrl) { const sites = await gscListSites(accessToken); siteUrl = gscPickSiteForUrl(sites, url); }
+    if (!siteUrl) return res.status(400).json({ error: "Chưa có property GSC cho URL này (kiểm tra đã đăng nhập & chọn property)." });
+
+    const qy = (opts) => gscQuery(accessToken, siteUrl, { url, startDate, endDate, ...opts }).catch(() => []);
+    const [totalRows, queryRows, deviceRows, countryRows, prevRows] = await Promise.all([
+      qy({ dimensions: [], rowLimit: 1 }),
+      qy({ dimensions: ["query"], rowLimit: 25 }),
+      qy({ dimensions: ["device"], rowLimit: 5 }),
+      qy({ dimensions: ["country"], rowLimit: 10 }),
+      gscQuery(accessToken, siteUrl, { url, startDate: prevStart, endDate: prevEnd, dimensions: [], rowLimit: 1 }).catch(() => []),
+    ]);
+    const rowMap = (rows) => (rows || []).map((r) => ({ k: (r.keys || [])[0] || "", clicks: r.clicks || 0, impressions: r.impressions || 0, ctr: r.ctr != null ? r.ctr : null, position: r.position != null ? r.position : null }));
+    const gsc = {
+      rangeLabel, siteUrl,
+      totals: gscTotals(totalRows),
+      prevTotals: (prevRows && prevRows.length) ? gscTotals(prevRows) : null,
+      queries: (queryRows || []).map((r) => ({ query: (r.keys || [])[0] || "", clicks: r.clicks || 0, impressions: r.impressions || 0, ctr: r.ctr != null ? r.ctr : null, position: r.position != null ? r.position : null })),
+      devices: rowMap(deviceRows),
+      countries: rowMap(countryRows),
+    };
+
+    // 3) AI danh gia tong hop
+    try {
+      const { data, engineUsed } = await onpageAI({
+        engine, key: apiKey, model,
+        system: ONPAGE_SYSTEM,
+        user: buildEvaluatePrompt({ target, competitors, bench, mainKeyword, subKeywords, recommendations, gsc }),
+        schema: EVALUATE_SCHEMA, maxTokens: 8192,
+      });
+      res.json({ ...data, gsc, engineUsed });
+    } catch (e) {
+      if (e.message === "local") return res.status(400).json({ error: "Cần engine Gemini/Claude để đánh giá." });
+      return res.status(400).json({ error: "AI lỗi: " + e.message, gsc });
+    }
+  } catch (e) { res.status(400).json({ error: e.message || "Lỗi GSC/đánh giá" }); }
 });
 
 // ====== SERP: CHECK INDEX + CHECK THU HANG (Serper.dev) ======
