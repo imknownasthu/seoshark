@@ -166,56 +166,80 @@ $("#apiKey").addEventListener("change", (e) => {
 $("#apiKey").addEventListener("input", checkConnDebounced);
 $("#sitemapUrl").addEventListener("change", (e) => localStorage.setItem("seoshark_sitemap", e.target.value.trim()));
 
-/* ---------- Google Search Console (số liệu thật) ---------- */
+/* ---------- Google Search Console — Đăng nhập bằng Google (GIS token client, như Screaming Frog) ---------- */
+window.GSC = { token: "", exp: 0, siteUrl: localStorage.getItem("gsc_site") || "", clientId: "", tokenClient: null };
+window.gscConnected = () => !!(GSC.token && Date.now() < GSC.exp - 60000);
 (function initGsc() {
   const state = $("#gscState");
   if (!state) return;
   const gmsg = (type, m) => { const el = $("#gscMsg"); if (el) el.innerHTML = m ? `<span style="color:${type === "err" ? "#c0392b" : type === "info" ? "var(--green,#2e9e6b)" : "var(--muted)"}">${m}</span>` : ""; };
-  const H = { "Content-Type": "application/json" };
-  async function refresh() {
-    const connect = $("#gscConnectBtn"), sel = $("#gscSiteSelect"), disc = $("#gscDisconnectBtn"), guide = $("#gscSetupGuide");
-    const hint = $("#gscRedirectHint"); if (hint) hint.textContent = location.origin + "/api/gsc/callback";
+  const signBtn = $("#gscSignInBtn"), sel = $("#gscSiteSelect"), disc = $("#gscDisconnectBtn"), guide = $("#gscSetupGuide");
+  const originHint = $("#gscOriginHint"); if (originHint) originHint.textContent = location.origin;
+  const setState = (t, c) => { state.textContent = t; state.style.color = c; };
+
+  // Nạp thư viện Google Identity Services (1 lần)
+  let gisReady = null;
+  function loadGis() {
+    if (gisReady) return gisReady;
+    gisReady = new Promise((resolve, reject) => {
+      if (window.google && google.accounts && google.accounts.oauth2) return resolve();
+      const s = document.createElement("script");
+      s.src = "https://accounts.google.com/gsi/client"; s.async = true; s.defer = true;
+      s.onload = resolve; s.onerror = () => reject(new Error("Không tải được Google Identity Services"));
+      document.head.appendChild(s);
+    });
+    return gisReady;
+  }
+  async function loadSites() {
     try {
-      const r = await fetch("/api/gsc/status"); const d = await r.json();
-      if (!d.configured) {
-        state.textContent = "● Chưa cấu hình OAuth"; state.style.color = "var(--muted)";
-        connect.classList.add("hidden"); sel.classList.add("hidden"); disc.classList.add("hidden"); guide.classList.remove("hidden");
-        return;
-      }
-      guide.classList.add("hidden");
-      if (!d.connected) {
-        state.textContent = "● Chưa kết nối"; state.style.color = "var(--muted)";
-        connect.classList.remove("hidden"); sel.classList.add("hidden"); disc.classList.add("hidden");
-        return;
-      }
-      state.textContent = "● Đã kết nối"; state.style.color = "var(--green,#2e9e6b)";
-      connect.classList.add("hidden"); disc.classList.remove("hidden"); sel.classList.remove("hidden");
-      try {
-        const rs = await fetch("/api/gsc/sites"); const ds = await rs.json();
-        if (rs.ok) {
-          sel.innerHTML = `<option value="">— Chọn property —</option>` + (ds.sites || []).map((s) => `<option value="${esc(s.siteUrl)}">${esc(s.siteUrl)}</option>`).join("");
-          if (ds.siteUrl) sel.value = ds.siteUrl;
-        } else { gmsg("err", esc(ds.error || "Không lấy được site.")); }
-      } catch {}
+      const rs = await fetch("/api/gsc/sites", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ accessToken: GSC.token }) });
+      const ds = await rs.json();
+      if (!rs.ok) return gmsg("err", esc(ds.error || "Không lấy được property."));
+      sel.innerHTML = `<option value="">— Chọn property —</option>` + (ds.sites || []).map((s) => `<option value="${esc(s.siteUrl)}">${esc(s.siteUrl)}</option>`).join("");
+      if (GSC.siteUrl && (ds.sites || []).some((s) => s.siteUrl === GSC.siteUrl)) sel.value = GSC.siteUrl;
+      sel.classList.remove("hidden");
+      if (!(ds.sites || []).length) gmsg("info", "Tài khoản Google này chưa có property nào trong Search Console.");
     } catch {}
   }
-  $("#gscSiteSelect").addEventListener("change", async (e) => {
-    try { await fetch("/api/gsc/site", { method: "POST", headers: H, body: JSON.stringify({ siteUrl: e.target.value }) }); gmsg("info", "✓ Đã chọn property GSC."); } catch {}
-  });
-  $("#gscDisconnectBtn").addEventListener("click", async () => {
-    if (!confirm("Ngắt kết nối Google Search Console?")) return;
-    try { await fetch("/api/gsc/disconnect", { method: "POST" }); await refresh(); gmsg("info", "Đã ngắt kết nối."); } catch {}
-  });
-  // Quay về sau OAuth: hiện thông báo + mở hộp Engine
-  const q = new URLSearchParams(location.search);
-  if (q.has("gsc")) {
-    const g = q.get("gsc");
-    const map = { connected: "✓ Đã kết nối Google Search Console!", denied: "Bạn đã từ chối cấp quyền.", badstate: "Phiên kết nối hết hạn, thử lại.", norefresh: "Google không trả refresh token — gỡ quyền app tại tài khoản Google rồi kết nối lại.", error: "Lỗi kết nối GSC: " + (q.get("msg") || "") };
-    gmsg(g === "connected" ? "info" : "err", map[g] || g);
-    const box = $("#engineBox"); if (box) box.open = true;
-    history.replaceState(null, "", location.pathname);
+  function onToken(resp) {
+    if (resp && resp.access_token) {
+      GSC.token = resp.access_token; GSC.exp = Date.now() + (Number(resp.expires_in || 3600) * 1000);
+      setState("● Đã đăng nhập", "var(--green,#2e9e6b)");
+      signBtn.textContent = "Đăng nhập lại"; disc.classList.remove("hidden");
+      gmsg("info", "✓ Đã đăng nhập Google. Chọn property để xem số liệu.");
+      loadSites();
+    } else gmsg("err", "Không lấy được quyền truy cập.");
   }
-  refresh();
+  async function signIn() {
+    try {
+      gmsg("", ""); await loadGis();
+      if (!GSC.tokenClient) {
+        GSC.tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: GSC.clientId,
+          scope: "https://www.googleapis.com/auth/webmasters.readonly",
+          callback: onToken,
+        });
+      }
+      GSC.tokenClient.requestAccessToken({ prompt: gscConnected() ? "" : "consent" });
+    } catch (e) { gmsg("err", esc(e.message || "Lỗi đăng nhập")); }
+  }
+  signBtn.addEventListener("click", signIn);
+  sel.addEventListener("change", (e) => { GSC.siteUrl = e.target.value; localStorage.setItem("gsc_site", GSC.siteUrl); gmsg("info", "✓ Đã chọn property."); });
+  disc.addEventListener("click", () => {
+    try { if (GSC.token && window.google) google.accounts.oauth2.revoke(GSC.token, () => {}); } catch {}
+    GSC.token = ""; GSC.exp = 0; setState("● Chưa đăng nhập", "var(--muted)");
+    signBtn.textContent = "Đăng nhập bằng Google"; disc.classList.add("hidden"); sel.classList.add("hidden");
+    gmsg("info", "Đã đăng xuất.");
+  });
+  // Kiểm tra đã cấu hình Client ID chưa
+  (async function () {
+    try {
+      const r = await fetch("/api/gsc/config"); const d = await r.json();
+      GSC.clientId = String(d.clientId || "").trim();
+      if (!GSC.clientId) { setState("● Chưa cấu hình Client ID", "var(--muted)"); guide.classList.remove("hidden"); signBtn.classList.add("hidden"); return; }
+      guide.classList.add("hidden"); setState("● Chưa đăng nhập", "var(--muted)"); signBtn.classList.remove("hidden");
+    } catch { setState("● Không kiểm tra được", "var(--muted)"); }
+  })();
 })();
 
 function toast(msg) {
@@ -1009,23 +1033,22 @@ $("#btnOpAudit").addEventListener("click", async () => {
 
 // GSC trong Onpage: hiện box nếu đã kết nối; nút xem số liệu thật cho URL vừa audit
 let _opGscUrl = "";
-async function opGscReveal(url) {
+function opGscReveal(url) {
   _opGscUrl = url || "";
   const box = $("#opGscBox"); if (!box) return;
   $("#opGscResult").innerHTML = ""; $("#opGscMsg").textContent = "";
-  try {
-    const r = await fetch("/api/gsc/status"); const d = await r.json();
-    box.classList.toggle("hidden", !(d.configured && d.connected));
-  } catch { box.classList.add("hidden"); }
+  // Hiện box khi đã đăng nhập Google (GIS token còn hạn)
+  box.classList.toggle("hidden", !(window.gscConnected && window.gscConnected()));
 }
 if ($("#opGscBtn")) $("#opGscBtn").addEventListener("click", async () => {
   const url = _opGscUrl || $("#opUrl").value.trim();
   if (!url) return;
   const days = +($("#opGscDays").value || 28);
+  if (!(window.gscConnected && window.gscConnected())) { $("#opGscMsg").innerHTML = `<span style="color:#c0392b">Chưa đăng nhập Google. Vào ⚙️ → Google Search Console → Đăng nhập bằng Google.</span>`; return; }
   const btn = $("#opGscBtn"); busy(btn, true, "Đang lấy số liệu...");
   $("#opGscMsg").textContent = "";
   try {
-    const r = await fetch("/api/gsc/metrics", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url, days }) });
+    const r = await fetch("/api/gsc/metrics", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url, days, accessToken: (window.GSC || {}).token, siteUrl: (window.GSC || {}).siteUrl }) });
     const d = await r.json();
     if (!r.ok) throw new Error(d.error || "Lỗi GSC");
     const t = d.totals || {};

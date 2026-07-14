@@ -190,18 +190,19 @@
               <p class="muted" style="margin:4px 0 8px;font-size:.85rem">Kết nối tài khoản Google dùng GSC để công cụ đọc <b>clicks · impressions · CTR · vị trí</b> + top truy vấn thật cho URL khi đánh giá Onpage.</p>
               <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
                 <span id="gscState" class="muted" style="font-size:13px">Đang kiểm tra...</span>
-                <a id="gscConnectBtn" class="ghost small hidden" href="/api/gsc/connect">Kết nối Google Search Console</a>
+                <button id="gscSignInBtn" class="ghost small hidden" type="button">Đăng nhập bằng Google</button>
                 <select id="gscSiteSelect" class="hidden" style="max-width:300px"></select>
-                <button id="gscDisconnectBtn" class="ghost small hidden" type="button">Ngắt kết nối</button>
+                <button id="gscDisconnectBtn" class="ghost small hidden" type="button">Đăng xuất</button>
               </div>
               <details id="gscSetupGuide" class="hidden" style="margin-top:8px;font-size:.85rem">
-                <summary style="cursor:pointer;color:var(--c-blue);font-weight:600">Cần cấu hình OAuth Google Cloud — hướng dẫn (bấm để mở)</summary>
-                <ol style="margin:8px 0 0;padding-left:20px;line-height:1.7">
+                <summary style="cursor:pointer;color:var(--c-blue);font-weight:600">Cần cấu hình một lần (Client ID) — hướng dẫn (bấm để mở)</summary>
+                <p class="muted" style="margin:8px 0 4px">Giống Screaming Frog, chỉ cần tạo <b>1 OAuth Client ID</b> một lần; sau đó chỉ việc bấm “Đăng nhập bằng Google” (không cần secret, không redirect).</p>
+                <ol style="margin:4px 0 0;padding-left:20px;line-height:1.7">
                   <li>Vào <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a> → tạo project (hoặc dùng project có sẵn).</li>
-                  <li>Bật API: <b>APIs &amp; Services → Library</b> → tìm <b>Google Search Console API</b> → <b>Enable</b>.</li>
-                  <li><b>OAuth consent screen</b>: chọn <b>External</b>, điền tên app, thêm email của bạn vào <b>Test users</b>.</li>
-                  <li><b>Credentials → Create Credentials → OAuth client ID → Web application</b>. Ở <b>Authorized redirect URIs</b> thêm đúng: <code id="gscRedirectHint">https://seo.tail9be4da.ts.net/api/gsc/callback</code></li>
-                  <li>Copy <b>Client ID</b> + <b>Client secret</b> → đặt vào <code>.env</code> trên VPS: <code>GOOGLE_OAUTH_CLIENT_ID</code>, <code>GOOGLE_OAUTH_CLIENT_SECRET</code>, <code>PUBLIC_BASE_URL=https://seo.tail9be4da.ts.net</code> → <code>pm2 restart seoshark</code>.</li>
+                  <li><b>APIs &amp; Services → Library</b> → tìm <b>Google Search Console API</b> → <b>Enable</b>.</li>
+                  <li><b>OAuth consent screen</b>: chọn <b>External</b>, điền tên app, thêm email GSC của bạn vào <b>Test users</b>.</li>
+                  <li><b>Credentials → Create Credentials → OAuth client ID → Web application</b>. Ở <b>Authorized JavaScript origins</b> thêm đúng: <code id="gscOriginHint">https://seo.tail9be4da.ts.net</code> (KHÔNG cần redirect URI).</li>
+                  <li>Copy <b>Client ID</b> → đặt vào <code>.env</code> trên VPS: <code>GOOGLE_OAUTH_CLIENT_ID=...</code> → <code>pm2 restart seoshark</code>. Xong!</li>
                 </ol>
               </details>
               <div id="gscMsg" class="muted" style="font-size:.82rem;margin-top:6px"></div>

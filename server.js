@@ -1375,6 +1375,11 @@ async function _gscAccess(owner) {
   return { accessToken: at, siteUrl: tok.siteUrl || "" };
 }
 
+// Cau hinh cho client-side Sign in with Google (GIS token client): chi can Client ID (public).
+app.get("/api/gsc/config", requireAuth, (req, res) => {
+  res.json({ clientId: (process.env.GOOGLE_OAUTH_CLIENT_ID || "").trim() });
+});
+
 app.get("/api/gsc/status", requireAuth, async (req, res) => {
   try {
     const owner = (req.user?.email || "guest").toLowerCase();
@@ -1414,10 +1419,13 @@ app.get("/api/gsc/callback", requireAuth, async (req, res) => {
   }
 });
 
-app.get("/api/gsc/sites", requireAuth, async (req, res) => {
+// Nhan access_token tu client (GIS Sign in with Google) hoac fallback refresh_token da luu
+app.post("/api/gsc/sites", requireAuth, async (req, res) => {
   try {
     const owner = (req.user?.email || "guest").toLowerCase();
-    const { accessToken, siteUrl } = await _gscAccess(owner);
+    let accessToken = String((req.body || {}).accessToken || "").trim();
+    let siteUrl = "";
+    if (!accessToken) ({ accessToken, siteUrl } = await _gscAccess(owner));
     const sites = await gscListSites(accessToken);
     res.json({ sites, siteUrl });
   } catch (e) { res.status(400).json({ error: e.message || "Lỗi GSC" }); }
@@ -1444,16 +1452,18 @@ app.post("/api/gsc/disconnect", requireAuth, async (req, res) => {
 app.post("/api/gsc/metrics", requireAuth, async (req, res) => {
   try {
     const owner = (req.user?.email || "guest").toLowerCase();
-    const url = String((req.body || {}).url || "").trim();
-    const days = Number((req.body || {}).days) || 28;
-    const { accessToken, siteUrl: savedSite } = await _gscAccess(owner);
-    let siteUrl = savedSite;
+    const body = req.body || {};
+    const url = String(body.url || "").trim();
+    const days = Number(body.days) || 28;
+    // Uu tien access_token client (GIS); else refresh_token da luu
+    let accessToken = String(body.accessToken || "").trim();
+    let siteUrl = String(body.siteUrl || "").trim();
+    if (!accessToken) { const acc = await _gscAccess(owner); accessToken = acc.accessToken; if (!siteUrl) siteUrl = acc.siteUrl; }
     if (!siteUrl) {
       const sites = await gscListSites(accessToken);
       siteUrl = gscPickSiteForUrl(sites, url);
-      if (siteUrl) await store.putGscToken({ owner, refreshToken: "", siteUrl });
     }
-    if (!siteUrl) return res.status(400).json({ error: "Chưa chọn site GSC. Vào ⚙️ chọn property." });
+    if (!siteUrl) return res.status(400).json({ error: "Chưa chọn site GSC (property). Hãy chọn property ở ⚙️." });
     const [totalRows, queryRows] = await Promise.all([
       gscQuery(accessToken, siteUrl, { url, days, dimensions: [], rowLimit: 1 }),
       gscQuery(accessToken, siteUrl, { url, days, dimensions: ["query"], rowLimit: 25 }),
