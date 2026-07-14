@@ -536,12 +536,17 @@
             </div>
           </details>
 
-          <div style="margin-top:16px">
-            <label style="font-weight:600;font-size:13px">Phạm vi tối ưu:</label>
-            <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px">
-              <label style="display:flex;gap:6px;align-items:flex-start;font-weight:400;cursor:pointer"><input type="radio" name="opMode" value="full" checked style="margin-top:3px;accent-color:var(--brand)"> <span>Tối ưu <b>toàn bộ bài</b> (gồm tiêu chí đã tick + viết lại nội dung chuẩn SEO hơn)</span></label>
-              <label style="display:flex;gap:6px;align-items:flex-start;font-weight:400;cursor:pointer"><input type="radio" name="opMode" value="criteria" style="margin-top:3px;accent-color:var(--brand)"> <span>Viết lại bài nhưng <b>chỉ tối ưu đúng các tiêu chí đã tick</b> (giữ nguyên phần còn lại)</span></label>
-              <label style="display:flex;gap:6px;align-items:flex-start;font-weight:400;cursor:pointer"><input type="radio" name="opMode" value="suggest" style="margin-top:3px;accent-color:var(--brand)"> <span>Chỉ các tiêu chí đã tick — <b>đề xuất tối đa 3 phương án/tiêu chí</b> để bạn chọn (không viết lại cả bài)</span></label>
+          <div style="margin-top:18px">
+            <label style="font-weight:700;font-size:13px;color:var(--ink)">Phạm vi tối ưu</label>
+            <div class="opmode-grid">
+              <label class="opmode-card">
+                <input type="radio" name="opMode" value="criteria" checked>
+                <span><span class="opm-t">Chỉ tối ưu tiêu chí đã tick</span><span class="opm-d">AI viết lại bài nhưng chỉ sửa đúng các tiêu chí bạn đã tick, giữ nguyên phần còn lại.</span></span>
+              </label>
+              <label class="opmode-card">
+                <input type="radio" name="opMode" value="full">
+                <span><span class="opm-t">Tối ưu toàn bộ bài chuẩn SEO</span><span class="opm-d">AI viết lại toàn bộ nội dung cho chuẩn SEO hơn (bao gồm cả các tiêu chí đã tick).</span></span>
+              </label>
             </div>
           </div>
           <div class="flexbar" style="margin-top:14px">
@@ -980,6 +985,19 @@
               <p class="muted" style="margin-top:8px;font-size:.85rem">Cột A = <b>từ khóa</b> (bắt buộc), cột B = <b>topic</b> (tùy chọn). Có/không có dòng tiêu đề đều được.</p>
             </div>
 
+            <div id="plSetsBar" style="margin-top:12px;padding:11px 13px;border:1px solid var(--line);border-radius:12px;background:#FBFCFE">
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+                <div style="flex:1;min-width:210px">
+                  <label style="font-size:.85rem">Bộ từ khóa đã lưu <span class="muted" style="font-weight:400">(nghiên cứu tiếp không cần upload lại)</span></label>
+                  <select id="plSetSelect"><option value="">— Chọn bộ đã lưu —</option></select>
+                </div>
+                <button class="ghost small" id="plSetLoad" type="button">Nạp</button>
+                <button class="ghost small" id="plSetSave" type="button">Lưu bộ hiện tại</button>
+                <button class="ghost small" id="plSetDelete" type="button">Xóa</button>
+              </div>
+              <div class="muted" id="plSetMsg" style="font-size:.82rem;margin-top:6px"></div>
+            </div>
+
             <div class="grid cols-2" style="margin-top:12px">
               <div><label>Quốc gia (Google)</label>
                 <select id="plGl"><option value="vn">Việt Nam</option><option value="us">Hoa Kỳ</option><option value="gb">Anh</option><option value="sg">Singapore</option><option value="th">Thái Lan</option><option value="jp">Nhật Bản</option><option value="kr">Hàn Quốc</option><option value="au">Úc</option><option value="in">Ấn Độ</option></select>
@@ -1026,7 +1044,7 @@
             </div>
             <div id="plStatsTable" style="overflow:auto"></div>
             <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
-              <p class="hint" style="margin:0 0 10px">Gợi ý thêm <b>≥20 từ khóa/topic</b> để bao phủ thị trường — có volume, không trùng ngữ nghĩa với từ khóa của bạn.</p>
+              <p class="hint" style="margin:0 0 10px">Gợi ý thêm <b>≥30 từ khóa/topic</b> để bao phủ thị trường — có volume, không trùng ngữ nghĩa với từ khóa của bạn.</p>
               <button id="plSuggest">Gợi ý từ khóa bổ sung cho mỗi topic</button>
               <div id="plSuggestMsg" style="margin-top:10px"></div>
             </div>
@@ -1037,7 +1055,8 @@
             <div class="step">BƯỚC 3</div>
             <div class="flexbar">
               <h2 style="margin:0">Từ khóa bổ sung theo topic (<span id="plSugCount">0</span>)</h2>
-              <div style="display:flex;gap:8px">
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="ghost small" id="plSuggestSave">Lưu vào bộ từ khóa</button>
                 <button class="ghost small" id="plSuggestCopy">Copy</button>
                 <button class="ghost small" id="plSuggestExport">Xuất Excel</button>
               </div>
@@ -1056,6 +1075,17 @@
                 <b style="font-size:15px">Lên outline cho: <span id="plOlKw" style="color:var(--c-blue)"></span></b>
                 <a id="plOlClose" class="muted" style="cursor:pointer">Đóng ✕</a>
               </div>
+              <label>Kiến thức website <span class="muted" style="font-weight:400;font-size:.85rem">(tùy chọn — giúp outline đi đúng định vị non-commodity)</span></label>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px">
+                <div style="flex:1;min-width:200px"><select id="plOlKnow"><option value="">— Không dùng —</option></select></div>
+                <button class="ghost small" id="plOlKnowNew" type="button">Nhập kiến thức mới</button>
+              </div>
+              <div id="plOlKnowEditor" class="hidden" style="margin-bottom:10px;padding:11px;border:1px dashed var(--line);border-radius:10px;background:#fff">
+                <input id="plOlKnowTitle" type="text" placeholder="Tiêu đề tài liệu (VD: USP &amp; thế mạnh Nha khoa Shark)" />
+                <textarea id="plOlKnowContent" rows="4" style="margin-top:7px" placeholder="Điểm khác biệt, USP, bác sĩ, công nghệ, cam kết, dịch vụ nổi bật, giọng văn, đối tượng khách hàng..."></textarea>
+                <label style="margin-top:7px;display:flex;gap:6px;align-items:center;font-weight:400;font-size:13px;cursor:pointer"><input type="checkbox" id="plOlKnowSaveLib" style="width:16px;height:16px;accent-color:var(--c-blue)"> Lưu vào thư viện để dùng lần sau</label>
+              </div>
+
               <label>Dán 1–10 URL đối thủ TOP đầu (mỗi URL 1 dòng)</label>
               <textarea id="plOlUrls" rows="4" placeholder="https://doithu-1.com/bai-viet&#10;https://doithu-2.com/bai-viet"></textarea>
               <div style="margin-top:10px"><button id="plOlRun">Phân tích &amp; tạo outline</button></div>

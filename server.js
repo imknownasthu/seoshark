@@ -1254,6 +1254,55 @@ app.post("/api/knowledge/delete", requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
 });
 
+// ===== Bo tu khoa da luu (Pillar Topic) - de nghien cuu tiep, khong can upload lai =====
+const _cleanKwRows = (arr) => (Array.isArray(arr) ? arr : [])
+  .map((k) => (typeof k === "string" ? { keyword: k } : (k || {})))
+  .map((k) => ({
+    keyword: String(k.keyword || "").trim(), topic: String(k.topic || "").trim(),
+    vi: String(k.vi || "").trim(), url: String(k.url || "").trim(), category: String(k.category || "").trim(),
+  }))
+  .filter((k) => k.keyword);
+
+app.get("/api/keywords/sets", requireAuth, async (req, res) => {
+  try {
+    const owner = (req.user?.email || "guest").toLowerCase();
+    const sets = await store.listKeywordSets(owner);
+    res.json({ sets: sets.map((s) => ({ id: s.id, name: s.name, count: (s.keywords || []).length, updatedAt: s.updatedAt, keywords: s.keywords || [] })) });
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
+});
+
+app.post("/api/keywords/sets/save", requireAuth, async (req, res) => {
+  try {
+    const owner = (req.user?.email || "guest").toLowerCase();
+    const { id, name, keywords, append } = req.body || {};
+    const clean = _cleanKwRows(keywords);
+    if (!clean.length && !append) return res.status(400).json({ error: "Chưa có từ khóa nào để lưu." });
+    let setId = id && String(id).trim() ? String(id).trim() : "";
+    let merged = clean, keepName = "";
+    if (append && setId) {
+      const ex = await store.getKeywordSet(setId, owner);
+      if (ex) {
+        keepName = ex.name || "";
+        const seen = new Set((ex.keywords || []).map((k) => _norm(k.keyword)));
+        const add = clean.filter((k) => !seen.has(_norm(k.keyword)));
+        merged = (ex.keywords || []).concat(add);
+      }
+    }
+    if (!setId) setId = randomUUID();
+    const finalName = String(name || "").trim() || keepName || ("Bộ từ khóa " + new Date().toISOString().slice(0, 10));
+    await store.putKeywordSet({ id: setId, owner, name: finalName, keywords: merged.slice(0, 20000) });
+    res.json({ ok: true, id: setId, name: finalName, count: merged.length });
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
+});
+
+app.post("/api/keywords/sets/delete", requireAuth, async (req, res) => {
+  try {
+    const owner = (req.user?.email || "guest").toLowerCase();
+    const ok = await store.deleteKeywordSet(String((req.body || {}).id || "").trim(), owner);
+    res.json({ ok });
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
+});
+
 // ===================== LEN OUTLINE CHUAN SEO =====================
 // Buoc 1: lay + boc tach outline cua doi thu (auto SERP hoac dan URL thu cong)
 app.post("/api/outline/competitors", requireAuth, async (req, res) => {

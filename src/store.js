@@ -10,11 +10,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, "..", "data");
 const USERS_FILE = path.join(DATA_DIR, "users.json");
 const KNOW_FILE = path.join(DATA_DIR, "knowledge.json");
+const KWSET_FILE = path.join(DATA_DIR, "keyword_sets.json");
 
 let mode = "json"; // "json" | "pg"
 let pool = null;
 let jsonUsers = {};
 let jsonKnow = {}; // id -> { id, owner, website, title, content, createdAt }
+let jsonKwset = {}; // id -> { id, owner, name, keywords:[...], createdAt, updatedAt }
 
 export function storeMode() {
   return mode;
@@ -33,6 +35,11 @@ function initJson() {
     jsonKnow = fs.existsSync(KNOW_FILE) ? (JSON.parse(fs.readFileSync(KNOW_FILE, "utf8")) || {}) : {};
   } catch {
     jsonKnow = {};
+  }
+  try {
+    jsonKwset = fs.existsSync(KWSET_FILE) ? (JSON.parse(fs.readFileSync(KWSET_FILE, "utf8")) || {}) : {};
+  } catch {
+    jsonKwset = {};
   }
 }
 
@@ -76,6 +83,18 @@ export async function initStore() {
         )
       `);
       await pool.query(`CREATE INDEX IF NOT EXISTS knowledge_owner_idx ON knowledge(owner)`);
+      // Bo tu khoa da luu (rieng theo tai khoan) - de nghien cuu tiep sau nay
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS keyword_sets (
+          id         TEXT PRIMARY KEY,
+          owner      TEXT NOT NULL,
+          name       TEXT,
+          data       TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS keyword_sets_owner_idx ON keyword_sets(owner)`);
       mode = "pg";
       console.log("  [store] Dung Postgres (DATABASE_URL) - tai khoan luu vinh vien.");
       return;
@@ -167,5 +186,65 @@ export async function deleteKnowledge(id, owner) {
     return r.rowCount > 0;
   }
   if (jsonKnow[id] && jsonKnow[id].owner === owner) { delete jsonKnow[id]; saveJsonKnow(); return true; }
+  return false;
+}
+
+// ===== Bo tu khoa da luu (rieng theo tai khoan) =====
+function saveJsonKwset() {
+  fs.writeFileSync(KWSET_FILE, JSON.stringify(jsonKwset, null, 2), "utf8");
+}
+const _kwArr = (v) => { try { const a = typeof v === "string" ? JSON.parse(v) : v; return Array.isArray(a) ? a : []; } catch { return []; } };
+
+// Liet ke bo tu khoa cua 1 owner (moi cap nhat truoc) - KEM keywords day du
+export async function listKeywordSets(owner) {
+  if (mode === "pg") {
+    const r = await pool.query("SELECT id, owner, name, data, created_at, updated_at FROM keyword_sets WHERE owner=$1 ORDER BY updated_at DESC", [owner]);
+    return r.rows.map((x) => ({ id: x.id, owner: x.owner, name: x.name || "", keywords: _kwArr(x.data), createdAt: x.created_at, updatedAt: x.updated_at }));
+  }
+  return Object.values(jsonKwset)
+    .filter((s) => s.owner === owner)
+    .map((s) => ({ ...s, keywords: _kwArr(s.keywords) }))
+    .sort((a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)));
+}
+
+// Lay 1 bo (chi khi dung owner)
+export async function getKeywordSet(id, owner) {
+  if (mode === "pg") {
+    const r = await pool.query("SELECT id, owner, name, data, created_at, updated_at FROM keyword_sets WHERE id=$1 AND owner=$2", [id, owner]);
+    const x = r.rows[0]; if (!x) return null;
+    return { id: x.id, owner: x.owner, name: x.name || "", keywords: _kwArr(x.data), createdAt: x.created_at, updatedAt: x.updated_at };
+  }
+  const s = jsonKwset[id];
+  return s && s.owner === owner ? { ...s, keywords: _kwArr(s.keywords) } : null;
+}
+
+// Them/cap nhat 1 bo (upsert theo id)
+export async function putKeywordSet(s) {
+  const data = JSON.stringify(_kwArr(s.keywords));
+  const nowIso = new Date().toISOString();
+  if (mode === "pg") {
+    await pool.query(
+      `INSERT INTO keyword_sets (id, owner, name, data)
+       VALUES ($1,$2,$3,$4)
+       ON CONFLICT (id) DO UPDATE SET name=$3, data=$4, updated_at=now()`,
+      [s.id, s.owner, s.name || "", data]
+    );
+    return;
+  }
+  const prev = jsonKwset[s.id] || {};
+  jsonKwset[s.id] = {
+    id: s.id, owner: s.owner, name: s.name || "", keywords: _kwArr(s.keywords),
+    createdAt: prev.createdAt || nowIso, updatedAt: nowIso,
+  };
+  saveJsonKwset();
+}
+
+// Xoa 1 bo (chi khi dung owner)
+export async function deleteKeywordSet(id, owner) {
+  if (mode === "pg") {
+    const r = await pool.query("DELETE FROM keyword_sets WHERE id=$1 AND owner=$2", [id, owner]);
+    return r.rowCount > 0;
+  }
+  if (jsonKwset[id] && jsonKwset[id].owner === owner) { delete jsonKwset[id]; saveJsonKwset(); return true; }
   return false;
 }

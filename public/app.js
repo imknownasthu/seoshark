@@ -2359,6 +2359,95 @@ $("#opClearSkill").addEventListener("click", () => {
     return { uniq: Array.from(seen.values()), dups, samples };
   }
 
+  /* ---------- Bộ từ khóa đã lưu (nghiên cứu tiếp không cần upload lại) ---------- */
+  let plSets = [], plSetsLoaded = false, plLoadedSetId = "", plLoadedSetName = "";
+  async function loadPlSets() {
+    try {
+      const r = await _fetch("/api/keywords/sets");
+      if (!r.ok) return;
+      const d = await r.json();
+      plSets = d.sets || [];
+      const sel = $("#plSetSelect"); if (!sel) return;
+      const cur = sel.value;
+      sel.innerHTML = `<option value="">— Chọn bộ đã lưu —</option>` +
+        plSets.map((s) => `<option value="${esc(s.id)}">${esc(s.name)} (${s.count})</option>`).join("");
+      if (cur && plSets.some((s) => s.id === cur)) sel.value = cur;
+    } catch {}
+  }
+  function ensurePlSets() { if (!plSetsLoaded) { plSetsLoaded = true; loadPlSets(); } }
+  $$("#kwMainTabs .tab").forEach((t) => t.addEventListener("click", () => { if (t.dataset.kwmain === "pillar") ensurePlSets(); }));
+  $$('#menu .menu-item').forEach((mi) => mi.addEventListener("click", () => { if (mi.dataset.section === "keywords") ensurePlSets(); }));
+  ensurePlSets();
+
+  $("#plSetLoad").addEventListener("click", () => {
+    const id = $("#plSetSelect").value;
+    if (!id) return setMsg("#plSetMsg", "err", "Chọn một bộ để nạp.");
+    const s = plSets.find((x) => x.id === id);
+    if (!s) return;
+    excelRows = (s.keywords || []).map((k) => ({ keyword: k.keyword, topic: k.topic || "" }));
+    plMode = "excel";
+    $$("#plTabs .tab").forEach((x) => x.classList.toggle("active", x.dataset.plmode === "excel"));
+    $$("[data-plpane]").forEach((p) => p.classList.toggle("active", p.dataset.plpane === "excel"));
+    $("#plFileMsg").textContent = `✓ Đã nạp ${excelRows.length} từ khóa từ bộ "${s.name}"`;
+    plLoadedSetId = s.id; plLoadedSetName = s.name;
+    setMsg("#plSetMsg", "info", `✓ Đã nạp bộ "${esc(s.name)}" (${excelRows.length} từ). Bấm "Phân tích &amp; phân nhóm topic" để tiếp tục.`);
+  });
+
+  $("#plSetSave").addEventListener("click", async () => {
+    // Ưu tiên lưu kết quả đã phân nhóm (có topic) nếu có; else input thô hiện tại
+    const rows = (statsRows && statsRows.length)
+      ? statsRows.map((r) => ({ keyword: r.keyword, topic: r.topic, vi: r.vi || "" }))
+      : dedupInput(collectInput()).uniq;
+    if (!rows.length) return setMsg("#plSetMsg", "err", "Chưa có từ khóa để lưu (dán/tải danh sách hoặc phân nhóm trước).");
+    const defName = plLoadedSetName || ("Bộ từ khóa " + new Date().toLocaleDateString("vi-VN"));
+    const name = prompt("Tên bộ từ khóa:", defName);
+    if (name === null) return;
+    const btn = $("#plSetSave"); busy(btn, true, "Đang lưu...");
+    try {
+      const r = await _fetch("/api/keywords/sets/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: plLoadedSetId || "", name: (name || "").trim(), keywords: rows }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Lưu thất bại");
+      plLoadedSetId = d.id; plLoadedSetName = d.name;
+      await loadPlSets(); $("#plSetSelect").value = d.id;
+      setMsg("#plSetMsg", "info", `✓ Đã lưu bộ "${esc(d.name)}" (${d.count} từ khóa).`);
+    } catch (e) { setMsg("#plSetMsg", "err", "❌ " + e.message); }
+    finally { busy(btn, false); }
+  });
+
+  $("#plSetDelete").addEventListener("click", async () => {
+    const id = $("#plSetSelect").value;
+    if (!id) return setMsg("#plSetMsg", "err", "Chọn một bộ để xóa.");
+    if (!confirm("Xóa bộ từ khóa này?")) return;
+    try {
+      const r = await _fetch("/api/keywords/sets/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+      const d = await r.json();
+      if (d.ok) { if (plLoadedSetId === id) { plLoadedSetId = ""; plLoadedSetName = ""; } await loadPlSets(); setMsg("#plSetMsg", "info", "Đã xóa."); }
+      else setMsg("#plSetMsg", "err", "Không xóa được.");
+    } catch { setMsg("#plSetMsg", "err", "Lỗi xóa."); }
+  });
+
+  // Bước 3: lưu (thêm) từ khóa gợi ý vào bộ đã upload/đã lưu — không cần tải Excel mới
+  $("#plSuggestSave").addEventListener("click", async () => {
+    const rows = (suggestData || []).flatMap((t) => (t.keywords || []).map((k) => ({ keyword: k.keyword, topic: t.topic, vi: k.vi || "" })));
+    if (!rows.length) return setMsg("#plSuggestMsg", "err", "❌ Chưa có từ khóa gợi ý để lưu.");
+    const targetId = $("#plSetSelect").value || plLoadedSetId || "";
+    let name = "";
+    if (!targetId) {
+      name = prompt("Chưa chọn bộ nào. Nhập tên bộ MỚI để lưu các từ khóa gợi ý:", plLoadedSetName || ("Bộ từ khóa " + new Date().toLocaleDateString("vi-VN")));
+      if (name === null) return;
+    }
+    const btn = $("#plSuggestSave"); busy(btn, true, "Đang lưu...");
+    try {
+      const r = await _fetch("/api/keywords/sets/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: targetId, name: (name || "").trim(), keywords: rows, append: true }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Lưu thất bại");
+      plLoadedSetId = d.id; plLoadedSetName = d.name;
+      await loadPlSets(); $("#plSetSelect").value = d.id;
+      setMsg("#plSuggestMsg", "info", `✓ Đã thêm từ khóa gợi ý vào bộ "${esc(d.name)}" — tổng ${d.count} từ khóa.`);
+    } catch (e) { setMsg("#plSuggestMsg", "err", "❌ " + e.message); }
+    finally { busy(btn, false); }
+  });
+
   /* ---------- BƯỚC 1+2: phân tích theo LÔ ---------- */
   analyzeBtn.addEventListener("click", async () => {
     const raw = collectInput();
@@ -2525,14 +2614,35 @@ $("#opClearSkill").addEventListener("click", () => {
 
   /* ---------- Outline nội tuyến cho 1 từ khóa gợi ý ---------- */
   let olKw = "", olOutline = [];
+  // Kiến thức website (dùng chung thư viện /api/knowledge với tab Lên outline)
+  let plKnow = [], plKnowLoaded = false;
+  async function loadPlKnow() {
+    try {
+      const r = await _fetch("/api/knowledge/list");
+      if (!r.ok) return;
+      const d = await r.json();
+      plKnow = d.items || [];
+      const sel = $("#plOlKnow"); if (!sel) return;
+      const cur = sel.value;
+      sel.innerHTML = `<option value="">— Không dùng —</option>` +
+        plKnow.map((k) => `<option value="${esc(k.id)}">${esc((k.website ? k.website + " · " : "") + (k.title || "Kiến thức"))}</option>`).join("");
+      if (cur && plKnow.some((k) => k.id === cur)) sel.value = cur;
+    } catch {}
+  }
   function openOutline(kw) {
     olKw = kw; olOutline = [];
     $("#plOlKw").textContent = kw;
     $("#plOlResult").classList.add("hidden"); $("#plOlMsg").innerHTML = ""; $("#plOlTree").innerHTML = "";
+    if (!plKnowLoaded) { plKnowLoaded = true; loadPlKnow(); }
     $("#plOutlinePanel").classList.remove("hidden");
     $("#plOutlinePanel").scrollIntoView({ block: "center", behavior: "smooth" });
   }
   $("#plOlClose").addEventListener("click", () => $("#plOutlinePanel").classList.add("hidden"));
+  $("#plOlKnowNew").addEventListener("click", () => {
+    const ed = $("#plOlKnowEditor"); ed.classList.toggle("hidden");
+    const k = plKnow.find((x) => x.id === $("#plOlKnow").value);
+    if (!ed.classList.contains("hidden") && k) { $("#plOlKnowTitle").value = k.title || ""; $("#plOlKnowContent").value = k.content || ""; }
+  });
 
   $("#plOlRun").addEventListener("click", async () => {
     const kw = ($("#plOlKw").textContent || olKw || "").trim();
@@ -2550,7 +2660,22 @@ $("#opClearSkill").addEventListener("click", () => {
       if (!rc.ok) throw new Error(dc.error || "Lỗi phân tích đối thủ");
       const comps = (dc.competitors || []).filter((c) => (c.headings || []).length);
       if (!comps.length) throw new Error("Không bóc tách được heading từ URL đã dán (có thể trang dựng JS). Thử URL bài viết khác.");
-      const rg = await _fetch("/api/outline/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mainKw: kw, subKws: [], competitors: comps, engine, model, apiKey }) });
+      // Kiến thức website: ưu tiên nội dung vừa nhập (editor đang mở), else tài liệu đã chọn
+      let knowledge = "", websiteName = "";
+      const typed = ($("#plOlKnowContent").value || "").trim();
+      if (typed && !$("#plOlKnowEditor").classList.contains("hidden")) {
+        knowledge = typed;
+        if ($("#plOlKnowSaveLib").checked) {
+          try {
+            const rs = await _fetch("/api/knowledge/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: "", website: "", title: $("#plOlKnowTitle").value.trim() || kw, content: typed }) });
+            const ds = await rs.json(); if (rs.ok) { await loadPlKnow(); $("#plOlKnow").value = ds.id; $("#plOlKnowSaveLib").checked = false; }
+          } catch {}
+        }
+      } else {
+        const k = plKnow.find((x) => x.id === $("#plOlKnow").value);
+        if (k) { knowledge = k.content || ""; websiteName = k.website || ""; }
+      }
+      const rg = await _fetch("/api/outline/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mainKw: kw, subKws: [], competitors: comps, knowledge, websiteName, engine, model, apiKey }) });
       const dg = await rg.json();
       if (!rg.ok) throw new Error(dg.error || "Lỗi tạo outline");
       olOutline = dg.outline || [];

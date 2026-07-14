@@ -338,3 +338,15 @@ table.cmp tbody tr:hover{background:#f9fbff}
   .menu-item{padding:8px 10px;font-size:13px}
   .topbar{padding:14px 18px}.page,.section{padding:18px}
 }
+
+/* Phạm vi tối ưu Onpage — 2 lựa chọn dạng card */
+.opmode-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px}
+@media (max-width:640px){.opmode-grid{grid-template-columns:1fr}}
+.opmode-card{display:flex;gap:11px;align-items:flex-start;padding:14px 15px;border:1.5px solid var(--line);
+  border-radius:14px;background:#fff;cursor:pointer;transition:border-color .15s,box-shadow .15s,background .15s;font-weight:400}
+.opmode-card:hover{border-color:rgba(108,140,255,.5)}
+.opmode-card input{margin-top:2px;width:18px;height:18px;accent-color:var(--c-blue);flex:0 0 auto}
+.opmode-card .opm-t{display:block;font-weight:700;color:var(--ink);font-size:14px;margin-bottom:3px}
+.opmode-card .opm-d{display:block;color:var(--muted);font-size:12.5px;line-height:1.45}
+.opmode-card:has(input:checked){border-color:var(--c-blue);background:var(--brand-light);
+  box-shadow:0 0 0 3px rgba(108,140,255,.12)}
