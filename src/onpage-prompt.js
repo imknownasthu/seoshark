@@ -20,7 +20,14 @@ CÁC TIÊU CHÍ ĐÁNH GIÁ ONPAGE (kèm mức quan trọng):
 E-E-A-T (áp dụng mọi lĩnh vực; CỰC nghiêm với YMYL y tế/tài chính/pháp lý): Experience (số liệu/case thật), Expertise (chuyên gia đứng tên), Authoritativeness (được dẫn nguồn ngoài), Trustworthiness (chính xác, có dẫn chứng, không tuyên bố tuyệt đối).
 GEO/AIO (Google AI Overview): cấu trúc rõ (heading/bullet/bảng), câu đầu mỗi mục trả lời thẳng câu hỏi, có số liệu cụ thể, trích nguồn uy tín → để AI dễ trích dẫn.
 
-Luôn bám DỮ LIỆU AUDIT thực tế của trang mục tiêu & đối thủ. Ngắn gọn, chính xác, ưu tiên theo mức ảnh hưởng xếp hạng. KHÔNG nhồi từ khóa, KHÔNG bịa số liệu/case.`;
+Luôn bám DỮ LIỆU AUDIT thực tế của trang mục tiêu & đối thủ. Ngắn gọn, chính xác, ưu tiên theo mức ảnh hưởng xếp hạng. KHÔNG nhồi từ khóa, KHÔNG bịa số liệu/case.
+
+⚠️ NGÔN NGỮ ĐẦU RA — QUY TẮC TỐI THƯỢNG, KHÔNG NGOẠI LỆ:
+• TOÀN BỘ nội dung bạn trả về PHẢI là TIẾNG VIỆT CÓ DẤU đầy đủ, chuẩn chính tả (VD: "bọc răng sứ thẩm mỹ", "chi phí niềng răng", "quy trình điều trị").
+• TUYỆT ĐỐI KHÔNG viết tiếng Việt KHÔNG DẤU (VD SAI: "boc rang su tham my", "chi phi nieng rang", "quy trinh dieu tri").
+• Áp dụng cho MỌI trường trong JSON trả về: title, meta, heading, nội dung, lý do, ghi chú, khuyến nghị, hành động — không sót trường nào.
+• LƯU Ý QUAN TRỌNG: phần HƯỚNG DẪN gửi cho bạn có thể được viết KHÔNG DẤU cho gọn. ĐỪNG bắt chước kiểu viết đó. Đầu ra của bạn BẮT BUỘC phải CÓ DẤU.
+• Trước khi trả lời, hãy tự rà lại: nếu thấy bất kỳ từ tiếng Việt nào thiếu dấu → sửa lại cho có dấu rồi mới trả về.`;
 
 // ---- Schema khuyen nghi (cho Gemini responseSchema / Claude tool) ----
 export const RECOMMEND_SCHEMA = {
@@ -138,6 +145,13 @@ export const CRITERIA_SCHEMA = {
   required: ["items"],
 };
 
+// Nhac lai quy tac ngon ngu dau ra o CUOI moi prompt (vi tri gan cuoi -> model bam chac nhat).
+// Cac prompt duoi day viet TIENG VIET KHONG DAU cho gon; dau ra BAT BUOC phai CO DAU.
+const VN_RULE = `
+
+⚠️ BẮT BUỘC — NGÔN NGỮ ĐẦU RA: Trả về 100% TIẾNG VIỆT CÓ DẤU, đúng chính tả, ở MỌI trường trong JSON (title, meta, heading, nội dung, lý do, ghi chú, hành động...).
+KHÔNG được viết tiếng Việt không dấu. Phần hướng dẫn ở trên viết không dấu chỉ để cho gọn — ĐỪNG bắt chước. Tự rà lại lần cuối: còn từ nào thiếu dấu thì sửa cho có dấu rồi mới trả kết quả.`;
+
 // Khoi SKILL + KIEN THUC WEBSITE (ca nhan hoa) - dung chung cho ca 2 che do
 function personaBlock(knowledge, skill) {
   let s = "";
@@ -185,7 +199,7 @@ Voi MOI tieu chi, dua ra TOI DA 3 PHUONG AN toi uu tot nhat (cu the, san sang du
 - Meta description: 3 meta 140-160 ky tu co CTA.
 - Cau truc Heading: 3 dan y heading (H1/H2/H3, moi phuong an la 1 chuoi nhieu dong) bao phu du sub-topic theo intent.
 - Cac tieu chi khac: 3 cach lam/giai phap cu the.
-KHONG bia so lieu. Tra ve dung schema (suggestions[].options la mang chuoi).`;
+KHONG bia so lieu. Tra ve dung schema (suggestions[].options la mang chuoi).${VN_RULE}`;
 }
 
 function fmtAudit(a, label) {
@@ -217,7 +231,7 @@ YEU CAU:
 1. So sanh tung tieu chi On-page giua trang muc tieu va doi thu (Title, Meta, H1, Heading, Sapo, mat do tu khoa, do dai, Schema, anh/alt, internal/external, video, E-E-A-T, FAQ/social proof).
 2. Liet ke CONTENT GAP: cac sub-topic/noi dung doi thu co ma trang muc tieu thieu (lien quan search intent cua "${mainKeyword}").
 3. Dua khuyen nghi cu the de dua tu khoa "${mainKeyword}" len top: moi khuyen nghi co priority (Cao/Trung binh/Thap), hien trang, muc tieu (tham chieu doi thu/chuan), hanh dong cu the co the lam ngay, ly do/loi ich. Bao gom ca goi y E-E-A-T va GEO/AIO khi phu hop.
-4. Sap xep khuyen nghi tu Cao den Thap. Ngan gon, chinh xac, khong chung chung.`;
+4. Sap xep khuyen nghi tu Cao den Thap. Ngan gon, chinh xac, khong chung chung.${VN_RULE}`;
 }
 
 export function buildOptimizePrompt({ target, mainKeyword, subKeywords, selected, bench, extra, optimizeMode, knowledge, skill, outline }) {
@@ -271,7 +285,7 @@ TRA VE:
 - internalLinks: anchor + loai trang dich goi y.
 - externalLinks: anchor + loai nguon uy tin (E-E-A-T).
 - schemaJsonLd: code JSON-LD san sang (BreadcrumbList + Article/WebPage + schema dac thu nganh + FAQPage neu co FAQ).
-- changes: cac cai thien chinh.`;
+- changes: cac cai thien chinh.${VN_RULE}`;
 }
 
 // ---- CHE DO CRITERIA: chi tra TRUOC/SAU cho DUNG cac tieu chi da tick (khong viet lai ca bai) ----
@@ -295,7 +309,7 @@ YEU CAU (RAT QUAN TRONG):
   • after: ban DA TOI UU tot nhat, san sang dung ngay, dung chuan SEO On-page + AIO, tu nhien tieng Viet, khong van AI, ap dung Skill & Kien thuc website neu co.
   • note: ghi chu ngan (vi sao/luu y).
 - Quy uoc "after" theo tung tieu chi: Title -> 1 title 50-60 ky tu tu khoa o dau; Meta -> 1 meta 140-160 ky tu co CTA; Heading/Cau truc -> dan y H1/H2/H3 nhieu dong bao phu du sub-topic; cac tieu chi khac -> noi dung/giai phap cu the ap dung duoc ngay.
-- KHONG bia so lieu. Tra ve DUNG schema {items:[{criterion, before, after, note}]}.`;
+- KHONG bia so lieu. Tra ve DUNG schema {items:[{criterion, before, after, note}]}.${VN_RULE}`;
 }
 
 // ====== TOI UU CAU TRUC HEADING (GIU / SUA / XOA / THEM) - nhu chuyen gia SEO ======
@@ -376,7 +390,7 @@ NGUYEN TAC (moi linh vuc):
 - E-E-A-T: voi linh vuc YMYL (y te/tai chinh/phap ly) can co muc the hien kinh nghiem/chuyen mon/dan nguon.
 - Giong tu nhien nhu chuyen gia nguoi Viet viet, KHONG sao rong, KHONG dau vet AI.
 ${skill && skill.trim() ? "- TUAN THU tuyet doi SKILL cua nguoi dung o tren (giong van, cau truc, quy tac).\n" : ""}${knowledge && knowledge.trim() ? "- Van dung KIEN THUC WEBSITE de dat muc the hien the manh rieng (non-commodity), khong bia.\n" : ""}
-KHONG bia so lieu. Tra ve DUNG schema (items co du keep/rewrite/remove/add + finalOutline).`;
+KHONG bia so lieu. Tra ve DUNG schema (items co du keep/rewrite/remove/add + finalOutline).${VN_RULE}`;
 }
 
 // ====== AI DANH GIA ONPAGE dua tren SO LIEU GSC THAT + DOI THU (bao cao tong hop) ======
@@ -458,7 +472,7 @@ YEU CAU (theo phuong phap onpage-competitor-analysis):
 3. opportunities: TIM truy van co IMPRESSION cao ma CTR thap (title/meta chua hap dan) HOAC vi tri 5-20 (sap len trang 1) — moi cai kem hanh dong toi uu cu the. Day la phan gia tri nhat.
 4. onpageGaps: khoang cach onpage so voi doi thu (content gap, do dai, schema, internal link, E-E-A-T...).
 5. actions: tong hop viec can lam theo uu tien Cao/TB/Thap, KET HOP tin hieu GSC (co hoi) + khoang cach doi thu. Cu the, lam duoc ngay.
-KHONG bia so lieu; chi dung con so GSC & audit o tren. Tieng Viet tu nhien.`;
+KHONG bia so lieu; chi dung con so GSC & audit o tren.${VN_RULE}`;
 }
 
 // ====== Khuyen nghi CO HOC (Local - khong AI) ======

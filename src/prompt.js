@@ -24,7 +24,12 @@ DOC HIEU TRUOC KHI CHEN: phai doc & hieu noi dung + tu khoa cua bai goc VA cua t
 ĐUNG lam: chen kieu "Tham khao [tu khoa] de biet them." giua cau mot cach co hoc, hoac nhet anchor vao giua cau lam cau gay, hoac doi anchor cua link cu.
 NEN lam: dien dat lai cau tu nhien quanh anchor, vd: "Khi nieng rang, viec ve sinh dung cach giup han che mang bam" -> "Khi <a href=...>nieng rang</a>, ve sinh dung cach giup han che mang bam".
 
-Chi tra ve nhung block ban thuc su chinh sua.`;
+Chi tra ve nhung block ban thuc su chinh sua.
+
+⚠️ NGÔN NGỮ ĐẦU RA — QUY TẮC TỐI THƯỢNG:
+• MỌI nội dung bạn trả về (newHtml, anchor, reason, notes...) PHẢI là TIẾNG VIỆT CÓ DẤU đầy đủ, đúng chính tả.
+• TUYỆT ĐỐI KHÔNG viết tiếng Việt không dấu (SAI: "nieng rang", "ve sinh dung cach" — ĐÚNG: "niềng răng", "vệ sinh đúng cách").
+• Hướng dẫn ở trên viết không dấu chỉ cho gọn — ĐỪNG bắt chước. Giữ nguyên dấu của văn bản gốc và viết mọi câu mới CÓ DẤU.`;
 
 export function buildBlocksView(blocks) {
   return blocks

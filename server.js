@@ -570,7 +570,39 @@ app.post("/api/incoming/insert", requireAuth, async (req, res) => {
 // ==================== ON-PAGE ====================
 
 // Goi AI JSON theo engine (gemini/claude). Tra ve {data, engineUsed}. Throw neu khong dung duoc AI.
-async function onpageAI({ engine, key, model, system, user, schema, maxTokens }) {
+// ===== Bao dam ket qua LUON la tieng Viet CO DAU =====
+// Cac prompt onpage viet tieng Viet khong dau (cho gon) -> AI doi khi "bat chuoc" tra ve khong dau.
+const _VI_DIA_RE = /[àáảãạăằắẳẵặâầấẩẫậđèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵ]/gi;
+const _VI_ASCII_RE = /\b(cua|nguoi|khong|duoc|nhung|voi|trong|cac|mot|noi dung|tu khoa|bai viet|toi uu|khuyen nghi|hien trang|de xuat|chi phi|quy trinh|tieu chi|cau truc|tu nhien)\b/gi;
+// true neu van ban la TIENG VIET nhung THIEU DAU
+function _looksUnaccentedVi(text) {
+  const s = String(text || "");
+  if (s.length < 80) return false;
+  const letters = (s.match(/[a-zA-ZÀ-ỹ]/g) || []).length;
+  if (!letters) return false;
+  const dia = (s.match(_VI_DIA_RE) || []).length;
+  const marks = (s.match(_VI_ASCII_RE) || []).length;
+  return marks >= 4 && dia / letters < 0.02; // nhieu tu Viet dang ASCII + gan nhu khong co dau
+}
+const _VN_HARD_RETRY = `
+
+!!! LỖI Ở LẦN TRẢ LỜI TRƯỚC: bạn đã trả về TIẾNG VIỆT KHÔNG DẤU. Hãy trả lời LẠI TOÀN BỘ bằng TIẾNG VIỆT CÓ DẤU đầy đủ, đúng chính tả, ở MỌI trường trong JSON.
+ĐÚNG: "bọc răng sứ thẩm mỹ", "chi phí niềng răng", "quy trình điều trị", "cấu trúc heading".
+SAI:  "boc rang su tham my", "chi phi nieng rang", "quy trinh dieu tri", "cau truc heading".`;
+
+// Goi AI + TU DONG THU LAI 1 lan neu ket qua bi khong dau
+async function onpageAI(opts) {
+  const r = await _onpageAIOnce(opts);
+  try {
+    if (_looksUnaccentedVi(JSON.stringify(r.data))) {
+      const r2 = await _onpageAIOnce({ ...opts, user: (opts.user || "") + _VN_HARD_RETRY });
+      if (r2 && r2.data) return r2;
+    }
+  } catch { /* giu ket qua lan dau neu retry loi */ }
+  return r;
+}
+
+async function _onpageAIOnce({ engine, key, model, system, user, schema, maxTokens }) {
   const eng = (engine || "local").toLowerCase();
   if (eng === "gemini") {
     const gKey = (key || process.env.GEMINI_API_KEY || "").trim();
