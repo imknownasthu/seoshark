@@ -10,6 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, "..", "data");
 const USERS_FILE = path.join(DATA_DIR, "users.json");
 const KNOW_FILE = path.join(DATA_DIR, "knowledge.json");
+const SKILL_FILE = path.join(DATA_DIR, "skills.json");
 const KWSET_FILE = path.join(DATA_DIR, "keyword_sets.json");
 const GSC_FILE = path.join(DATA_DIR, "gsc_tokens.json");
 
@@ -17,6 +18,7 @@ let mode = "json"; // "json" | "pg"
 let pool = null;
 let jsonUsers = {};
 let jsonKnow = {}; // id -> { id, owner, website, title, content, createdAt }
+let jsonSkill = {}; // id -> { id, owner, title, content, createdAt }
 let jsonKwset = {}; // id -> { id, owner, name, keywords:[...], createdAt, updatedAt }
 let jsonGsc = {}; // owner -> { owner, refreshToken, siteUrl, updatedAt }
 
@@ -37,6 +39,11 @@ function initJson() {
     jsonKnow = fs.existsSync(KNOW_FILE) ? (JSON.parse(fs.readFileSync(KNOW_FILE, "utf8")) || {}) : {};
   } catch {
     jsonKnow = {};
+  }
+  try {
+    jsonSkill = fs.existsSync(SKILL_FILE) ? (JSON.parse(fs.readFileSync(SKILL_FILE, "utf8")) || {}) : {};
+  } catch {
+    jsonSkill = {};
   }
   try {
     jsonKwset = fs.existsSync(KWSET_FILE) ? (JSON.parse(fs.readFileSync(KWSET_FILE, "utf8")) || {}) : {};
@@ -90,6 +97,17 @@ export async function initStore() {
         )
       `);
       await pool.query(`CREATE INDEX IF NOT EXISTS knowledge_owner_idx ON knowledge(owner)`);
+      // Thu vien Skill (chi dan viet noi dung ca nhan hoa, kieu GEM) - rieng theo tai khoan
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS skills (
+          id         TEXT PRIMARY KEY,
+          owner      TEXT NOT NULL,
+          title      TEXT,
+          content    TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS skills_owner_idx ON skills(owner)`);
       // Bo tu khoa da luu (rieng theo tai khoan) - de nghien cuu tiep sau nay
       await pool.query(`
         CREATE TABLE IF NOT EXISTS keyword_sets (
@@ -202,6 +220,41 @@ export async function deleteKnowledge(id, owner) {
     return r.rowCount > 0;
   }
   if (jsonKnow[id] && jsonKnow[id].owner === owner) { delete jsonKnow[id]; saveJsonKnow(); return true; }
+  return false;
+}
+
+// ===== Thu vien Skill (chi dan viet noi dung, rieng theo tai khoan) =====
+function saveJsonSkill() {
+  fs.writeFileSync(SKILL_FILE, JSON.stringify(jsonSkill, null, 2), "utf8");
+}
+export async function listSkills(owner) {
+  if (mode === "pg") {
+    const r = await pool.query("SELECT id, owner, title, content, created_at FROM skills WHERE owner=$1 ORDER BY created_at DESC", [owner]);
+    return r.rows.map((x) => ({ ...x, createdAt: x.created_at }));
+  }
+  return Object.values(jsonSkill)
+    .filter((k) => k.owner === owner)
+    .sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+export async function putSkill(k) {
+  if (mode === "pg") {
+    await pool.query(
+      `INSERT INTO skills (id, owner, title, content) VALUES ($1,$2,$3,$4)
+       ON CONFLICT (id) DO UPDATE SET title=$3, content=$4`,
+      [k.id, k.owner, k.title || "", k.content || ""]
+    );
+    return;
+  }
+  const prev = jsonSkill[k.id] || {};
+  jsonSkill[k.id] = { id: k.id, owner: k.owner, title: k.title || "", content: k.content || "", createdAt: prev.createdAt || new Date().toISOString() };
+  saveJsonSkill();
+}
+export async function deleteSkill(id, owner) {
+  if (mode === "pg") {
+    const r = await pool.query("DELETE FROM skills WHERE id=$1 AND owner=$2", [id, owner]);
+    return r.rowCount > 0;
+  }
+  if (jsonSkill[id] && jsonSkill[id].owner === owner) { delete jsonSkill[id]; saveJsonSkill(); return true; }
   return false;
 }
 

@@ -29,8 +29,8 @@ import {
   gscConfigured, gscAuthUrl, gscExchangeCode, gscAccessToken, gscListSites, gscQuery, gscPickSiteForUrl, gscTotals,
 } from "./src/gsc.js";
 import {
-  ONPAGE_SYSTEM, RECOMMEND_SCHEMA, OPTIMIZE_SCHEMA, SUGGEST_SCHEMA,
-  buildRecommendPrompt, buildOptimizePrompt, buildSuggestPrompt, mechanicalRecommendations,
+  ONPAGE_SYSTEM, RECOMMEND_SCHEMA, OPTIMIZE_SCHEMA, SUGGEST_SCHEMA, CRITERIA_SCHEMA,
+  buildRecommendPrompt, buildOptimizePrompt, buildSuggestPrompt, buildCriteriaPrompt, mechanicalRecommendations,
 } from "./src/onpage-prompt.js";
 import * as auth from "./src/auth.js";
 import { sendVerifyEmail, sendOwnerNotify, sendResetCodeEmail, sendPasswordEmail, mailMode } from "./src/mailer.js";
@@ -676,38 +676,51 @@ app.post("/api/onpage/audit", requireAuth, async (req, res) => {
 });
 
 // --- POST /api/onpage/optimize : viet lai bai chuan SEO (truoc/sau) ---
+// Dem so lan xuat hien 1 cum tu trong text (khong dau, ranh gioi long leo)
+function _countOccur(text, phrase) {
+  const norm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/đ/g, "d");
+  const H = norm(text), N = norm(phrase).trim();
+  if (!N) return 0;
+  let n = 0, i = 0;
+  while ((i = H.indexOf(N, i)) !== -1) { n++; i += N.length; }
+  return n;
+}
+
 app.post("/api/onpage/optimize", requireAuth, async (req, res) => {
   try {
-    const { id, selected, extra, optimizeMode, engine, model, apiKey } = req.body || {};
+    const { id, selected, extra, optimizeMode, engine, model, apiKey, knowledge, skill } = req.body || {};
     const session = sessions.get(id);
     if (!session || session.type !== "onpage") {
       return res.status(400).json({ error: "Phiên hết hạn. Hãy phân tích On-page lại." });
     }
     const { target, mainKeyword, subKeywords, bench } = session;
+    const know = String(knowledge || "").slice(0, 200000);
+    const skl = String(skill || "").slice(0, 100000);
 
-    // CHE DO 3: de xuat 3 phuong an cho moi tieu chi da tick
-    if (optimizeMode === "suggest") {
+    // CHE DO CRITERIA: chi tra TRUOC/SAU cho dung cac tieu chi da tick (khong viet lai ca bai)
+    if (optimizeMode === "criteria") {
       try {
         const { data, engineUsed } = await onpageAI({
           engine, key: apiKey, model,
           system: ONPAGE_SYSTEM,
-          user: buildSuggestPrompt({ target, mainKeyword, subKeywords, selected, bench, extra }),
-          schema: SUGGEST_SCHEMA, maxTokens: 4096,
+          user: buildCriteriaPrompt({ target, mainKeyword, subKeywords, selected, bench, extra, knowledge: know, skill: skl }),
+          schema: CRITERIA_SCHEMA, maxTokens: 8192,
         });
-        return res.json({ mode: "suggest", suggestions: Array.isArray(data.suggestions) ? data.suggestions : [], engineUsed });
+        return res.json({ mode: "criteria", items: Array.isArray(data.items) ? data.items : [], mainKeyword, subKeywords, engineUsed });
       } catch (e) {
         if (e.message === "local")
-          return res.status(400).json({ error: "Chế độ đề xuất cần engine Gemini hoặc Claude. Hãy chọn Gemini ở ⚙️." });
+          return res.status(400).json({ error: "Bước tối ưu cần engine Gemini hoặc Claude (Local không viết lại được). Hãy chọn Gemini ở ⚙️." });
         return res.status(400).json({ error: "AI lỗi: " + e.message });
       }
     }
 
+    // CHE DO FULL: viet lai toan bai chuan SEO
     let result;
     try {
       const { data, engineUsed } = await onpageAI({
         engine, key: apiKey, model,
         system: ONPAGE_SYSTEM,
-        user: buildOptimizePrompt({ target, mainKeyword, subKeywords, selected, bench, extra, optimizeMode }),
+        user: buildOptimizePrompt({ target, mainKeyword, subKeywords, selected, bench, extra, optimizeMode, knowledge: know, skill: skl }),
         schema: OPTIMIZE_SCHEMA, maxTokens: 8192,
       });
       result = { ...data, engineUsed };
@@ -717,13 +730,22 @@ app.post("/api/onpage/optimize", requireAuth, async (req, res) => {
       return res.status(400).json({ error: "AI lỗi: " + e.message });
     }
 
+    // Dem so tu + so keyword (tu tinh de chinh xac, khong phu thuoc AI)
+    const beforeText = target.contentMarkdown || target.contentText || "";
+    const afterText = result.optimizedMarkdown || "";
+    const wc = (s) => (String(s || "").replace(/[#>*_`~\[\]()-]/g, " ").replace(/\s+/g, " ").trim().split(" ").filter(Boolean).length);
+    const subCount = (txt) => (subKeywords || []).reduce((a, k) => a + _countOccur(txt, k), 0);
+    const stats = (txt) => ({ words: wc(txt), mainKw: _countOccur(txt, mainKeyword), subKw: subCount(txt) });
+
     res.json({
+      mode: "full",
       mainKeyword, subKeywords,
-      before: { title: target.titleTag, metaDescription: target.metaDescription, markdown: target.contentMarkdown || target.contentText },
-      after: { title: result.title, metaDescription: result.metaDescription, markdown: result.optimizedMarkdown, slug: result.slug || "" },
+      before: { title: target.titleTag, metaDescription: target.metaDescription, markdown: beforeText, stats: stats(beforeText) },
+      after: { title: result.title, metaDescription: result.metaDescription, markdown: afterText, slug: result.slug || "", stats: stats(afterText) },
       faq: result.faq || [],
       imageSuggestions: result.imageSuggestions || [],
       internalLinks: result.internalLinks || [],
+      externalLinks: result.externalLinks || [],
       schemaJsonLd: result.schemaJsonLd || "",
       changes: result.changes || [],
       notes: result.notes || "",
@@ -1253,6 +1275,35 @@ app.post("/api/knowledge/delete", requireAuth, async (req, res) => {
     const owner = (req.user?.email || "guest").toLowerCase();
     const { id } = req.body || {};
     const ok = await store.deleteKnowledge(String(id || "").trim(), owner);
+    res.json({ ok });
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
+});
+
+// ===== Thu vien Skill (chi dan viet noi dung ca nhan hoa, kieu GEM) =====
+app.get("/api/skills/list", requireAuth, async (req, res) => {
+  try {
+    const owner = (req.user?.email || "guest").toLowerCase();
+    res.json({ items: await store.listSkills(owner) });
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
+});
+app.post("/api/skills/save", requireAuth, async (req, res) => {
+  try {
+    const owner = (req.user?.email || "guest").toLowerCase();
+    const { id, title, content } = req.body || {};
+    const text = String(content || "").trim();
+    if (!text) return res.status(400).json({ error: "Nội dung skill đang trống." });
+    const rec = {
+      id: id && String(id).trim() ? String(id).trim() : randomUUID(),
+      owner, title: String(title || "").trim() || "Skill viết nội dung", content: text.slice(0, 100000),
+    };
+    await store.putSkill(rec);
+    res.json({ ok: true, id: rec.id });
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
+});
+app.post("/api/skills/delete", requireAuth, async (req, res) => {
+  try {
+    const owner = (req.user?.email || "guest").toLowerCase();
+    const ok = await store.deleteSkill(String((req.body || {}).id || "").trim(), owner);
     res.json({ ok });
   } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
 });

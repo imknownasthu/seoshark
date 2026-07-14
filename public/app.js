@@ -1141,27 +1141,87 @@ $("#opSelectAll").addEventListener("change", (e) => {
   $$("#opCompareTable .op-rec-check").forEach((c) => { c.checked = e.target.checked; });
 });
 
+/* ---------- Onpage: Kiến thức website + Skill (chỉ dùng khi 'Tối ưu toàn bộ bài') ---------- */
+let opKnowList = [], opSkillList = [], opExtrasLoaded = false;
+function opSetWsMsg(m, t) { const el = $("#opWsMsg"); if (el) el.innerHTML = m ? `<span style="color:${t === "err" ? "#c0392b" : "var(--green,#2e9e6b)"}">${esc(m)}</span>` : ""; }
+async function opLoadKnow() {
+  try {
+    const r = await fetch("/api/knowledge/list"); const d = await r.json(); opKnowList = d.items || [];
+    const sel = $("#opKnowSelect"); const cur = sel.value;
+    sel.innerHTML = `<option value="">— Không dùng —</option>` + opKnowList.map((k) => `<option value="${esc(k.id)}">${esc((k.website ? k.website + " · " : "") + (k.title || "Kiến thức"))}</option>`).join("");
+    if (cur && opKnowList.some((k) => k.id === cur)) sel.value = cur;
+  } catch {}
+}
+async function opLoadSkills() {
+  try {
+    const r = await fetch("/api/skills/list"); const d = await r.json(); opSkillList = d.items || [];
+    const sel = $("#opWsSelect"); const cur = sel.value;
+    sel.innerHTML = `<option value="">— Không dùng —</option>` + opSkillList.map((k) => `<option value="${esc(k.id)}">${esc(k.title || "Skill")}</option>`).join("");
+    if (cur && opSkillList.some((k) => k.id === cur)) sel.value = cur;
+  } catch {}
+}
+function opToggleFullExtras() {
+  const full = ((document.querySelector('input[name="opMode"]:checked') || {}).value) === "full";
+  $("#opFullExtras").classList.toggle("hidden", !full);
+  if (full && !opExtrasLoaded) { opExtrasLoaded = true; opLoadKnow(); opLoadSkills(); }
+}
+$$('input[name="opMode"]').forEach((r) => r.addEventListener("change", opToggleFullExtras));
+opToggleFullExtras();
+function opResolveKnowledge() {
+  const typed = ($("#opKnowContent").value || "").trim();
+  if (typed && !$("#opKnowEditor").classList.contains("hidden")) return typed;
+  const k = opKnowList.find((x) => x.id === $("#opKnowSelect").value);
+  return k ? (k.content || "") : "";
+}
+function opResolveSkill() {
+  const typed = ($("#opWsContent").value || "").trim();
+  if (typed && !$("#opWsEditor").classList.contains("hidden")) return typed;
+  const s = opSkillList.find((x) => x.id === $("#opWsSelect").value);
+  return s ? (s.content || "") : "";
+}
+// Đọc file docx/xlsx/txt -> text
+async function opReadDocFile(f, allowXlsx) {
+  const buf = await f.arrayBuffer();
+  if (/\.docx$/i.test(f.name)) { const res = await window.mammoth.extractRawText({ arrayBuffer: buf }); return res.value || ""; }
+  if (/\.txt$/i.test(f.name)) return new TextDecoder("utf-8").decode(buf);
+  if (allowXlsx && /\.xlsx?$/i.test(f.name)) { const wb = XLSX.read(buf, { type: "array" }); return wb.SheetNames.map((n) => XLSX.utils.sheet_to_csv(wb.Sheets[n])).join("\n"); }
+  throw new Error(allowXlsx ? "Chỉ .docx/.xlsx" : "Chỉ .docx/.txt");
+}
+// Knowledge editor
+$("#opKnowNew").addEventListener("click", () => { const ed = $("#opKnowEditor"); ed.classList.toggle("hidden"); const k = opKnowList.find((x) => x.id === $("#opKnowSelect").value); if (!ed.classList.contains("hidden") && k) { $("#opKnowTitle").value = k.title || ""; $("#opKnowContent").value = k.content || ""; } });
+$("#opKnowFile").addEventListener("change", async (e) => { const f = e.target.files[0]; if (!f) return; $("#opKnowFileMsg").textContent = "Đang đọc..."; try { const text = await opReadDocFile(f, true); const box = $("#opKnowContent"); box.value = (box.value.trim() ? box.value.trim() + "\n\n" : "") + text.trim(); if (!$("#opKnowTitle").value.trim()) $("#opKnowTitle").value = f.name.replace(/\.(docx|xlsx?)$/i, ""); $("#opKnowFileMsg").textContent = `✓ Đã nạp ${text.trim().length.toLocaleString("vi")} ký tự`; } catch (err) { $("#opKnowFileMsg").textContent = "Lỗi: " + (err.message || err); } finally { e.target.value = ""; } });
+$("#opKnowSave").addEventListener("click", async () => { const content = $("#opKnowContent").value.trim(); if (!content) return toast("Nội dung kiến thức trống."); const editingId = opKnowList.find((x) => x.id === $("#opKnowSelect").value) ? $("#opKnowSelect").value : ""; const btn = $("#opKnowSave"); busy(btn, true, "Đang lưu..."); try { const r = await fetch("/api/knowledge/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: editingId, website: "", title: $("#opKnowTitle").value.trim(), content }) }); const d = await r.json(); if (!r.ok) throw new Error(d.error || "Lưu lỗi"); await opLoadKnow(); $("#opKnowSelect").value = d.id; $("#opKnowEditor").classList.add("hidden"); toast("Đã lưu kiến thức."); } catch (e) { toast("❌ " + e.message); } finally { busy(btn, false); } });
+// Skill editor
+$("#opWsNew").addEventListener("click", () => { const ed = $("#opWsEditor"); ed.classList.toggle("hidden"); const k = opSkillList.find((x) => x.id === $("#opWsSelect").value); if (!ed.classList.contains("hidden") && k) { $("#opWsTitle").value = k.title || ""; $("#opWsContent").value = k.content || ""; } });
+$("#opWsFile").addEventListener("change", async (e) => { const f = e.target.files[0]; if (!f) return; $("#opWsFileMsg").textContent = "Đang đọc..."; try { const text = await opReadDocFile(f, false); const box = $("#opWsContent"); box.value = (box.value.trim() ? box.value.trim() + "\n\n" : "") + text.trim(); if (!$("#opWsTitle").value.trim()) $("#opWsTitle").value = f.name.replace(/\.(docx|txt)$/i, ""); $("#opWsFileMsg").textContent = `✓ Đã nạp ${text.trim().length.toLocaleString("vi")} ký tự`; } catch (err) { $("#opWsFileMsg").textContent = "Lỗi: " + (err.message || err); } finally { e.target.value = ""; } });
+$("#opWsSave").addEventListener("click", async () => { const content = $("#opWsContent").value.trim(); if (!content) return opSetWsMsg("Nội dung skill trống.", "err"); const editingId = opSkillList.find((x) => x.id === $("#opWsSelect").value) ? $("#opWsSelect").value : ""; const btn = $("#opWsSave"); busy(btn, true, "Đang lưu..."); try { const r = await fetch("/api/skills/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: editingId, title: $("#opWsTitle").value.trim(), content }) }); const d = await r.json(); if (!r.ok) throw new Error(d.error || "Lưu lỗi"); await opLoadSkills(); $("#opWsSelect").value = d.id; $("#opWsEditor").classList.add("hidden"); opSetWsMsg("✓ Đã lưu skill.", "info"); } catch (e) { opSetWsMsg("❌ " + e.message, "err"); } finally { busy(btn, false); } });
+$("#opWsDelete").addEventListener("click", async () => { const id = $("#opWsSelect").value; if (!id) return opSetWsMsg("Chọn skill để xóa.", "err"); if (!confirm("Xóa skill này?")) return; try { const r = await fetch("/api/skills/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) }); const d = await r.json(); if (d.ok) { await opLoadSkills(); opSetWsMsg("Đã xóa.", "info"); } else opSetWsMsg("Không xóa được.", "err"); } catch { opSetWsMsg("Lỗi xóa.", "err"); } });
+
 // Buoc 2: Toi uu (viet lai)
 $("#btnOpOptimize").addEventListener("click", async () => {
   const msg = $("#opOptMsg"); msg.innerHTML = "";
   if (!opSession.id) { msg.innerHTML = alertHtml("err", "Hãy phân tích trước."); return; }
   const selected = $$("#opCompareTable .op-rec-check:checked").map((c) => c.dataset.criterion);
 
+  const mode = (document.querySelector('input[name="opMode"]:checked') || {}).value || "criteria";
+  const payload = {
+    id: opSession.id, selected, extra: $("#opExtra").value.trim() || undefined,
+    optimizeMode: mode,
+    engine: $("#engine").value, apiKey: $("#apiKey").value.trim() || undefined, model: $("#model").value || undefined,
+  };
+  if (mode === "full") { payload.knowledge = opResolveKnowledge() || undefined; payload.skill = opResolveSkill() || undefined; }
+
   const btn = $("#btnOpOptimize");
-  busy(btn, true, "AI đang viết lại bài chuẩn SEO...");
+  busy(btn, true, mode === "criteria" ? "AI đang tối ưu các tiêu chí đã tick..." : "AI đang viết lại bài chuẩn SEO...");
   try {
     const res = await fetch("/api/onpage/optimize", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: opSession.id, selected, extra: $("#opExtra").value.trim() || undefined,
-        optimizeMode: (document.querySelector('input[name="opMode"]:checked') || {}).value || "full",
-        engine: $("#engine").value, apiKey: $("#apiKey").value.trim() || undefined, model: $("#model").value || undefined,
-      }),
+      body: JSON.stringify(payload),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Lỗi không xác định");
     opSession.optimize = data;
-    if (data.mode === "suggest") renderOpSuggest(data);
+    if (data.mode === "criteria") renderOpCriteria(data);
     else renderOpOptimize(data);
     $("#opOptResultCard").classList.remove("hidden");
     $("#opOptResultCard").scrollIntoView({ behavior: "smooth" });
@@ -1178,20 +1238,29 @@ function opCountOccur(hay, needle) {
   return H.split(N).length - 1;
 }
 
-function renderOpSuggest(d) {
+// Chế độ CRITERIA: chỉ hiển thị TRƯỚC/SAU của đúng các tiêu chí đã tick
+function renderOpCriteria(d) {
   $("#opFullResult").classList.add("hidden");
   $("#opSuggestResult").classList.remove("hidden");
-  $("#opOptMeta").textContent = `Engine: ${d.engineUsed}`;
-  $("#opChanges").innerHTML = alertHtml("info", "💡 Mỗi tiêu chí đã tick có tối đa 3 phương án — chọn cái phù hợp rồi bấm <b>Copy</b> để dùng.");
-  const html = (d.suggestions || []).map((s, si) => `
+  $("#opOptMeta").textContent = `Engine: ${d.engineUsed} · Chỉ tiêu chí đã tick`;
+  $("#opChanges").innerHTML = alertHtml("info", "Chỉ hiển thị bản <b>TRƯỚC/SAU</b> của đúng các tiêu chí bạn đã tick — không đụng phần khác.");
+  const items = d.items || [];
+  $("#opSuggestResult").innerHTML = items.length ? items.map((it, i) => `
     <div class="src-card">
-      <div class="src-head"><div class="stitle">${esc(s.criterion)}</div>${s.note ? `<div class="surl">${esc(s.note)}</div>` : ""}</div>
-      <div class="src-body">${(s.options || []).map((o, oi) =>
-        `<div class="opd"><b>Phương án ${oi + 1}</b> <button class="ghost small" data-sc="${si}|${oi}">Copy</button><div style="white-space:pre-wrap;margin-top:4px">${esc(o)}</div></div>`
-      ).join("") || "(không có phương án)"}</div>
-    </div>`).join("");
-  $("#opSuggestResult").innerHTML = html || alertHtml("warn", "Không có đề xuất.");
+      <div class="src-head"><div class="stitle">${esc(it.criterion)}</div>${it.note ? `<div class="surl">${esc(it.note)}</div>` : ""}</div>
+      <div class="src-body">
+        <div class="opd"><b>TRƯỚC:</b><div style="white-space:pre-wrap;margin-top:4px">${esc(it.before || "(trống)")}</div></div>
+        <div class="opd" style="margin-top:8px"><b>SAU:</b> <button class="ghost small" data-copycrit="${i}">Copy</button><div class="opnew" style="white-space:pre-wrap;margin-top:4px;padding:6px;border-radius:6px">${esc(it.after || "")}</div></div>
+      </div>
+    </div>`).join("") : alertHtml("warn", "Không có kết quả cho tiêu chí đã tick.");
 }
+// Copy bản SAU của 1 tiêu chí (chế độ criteria)
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-copycrit]");
+  if (!b || !opSession.optimize) return;
+  const it = (opSession.optimize.items || [])[+b.dataset.copycrit];
+  if (it && it.after != null) navigator.clipboard.writeText(it.after).then(() => toast("Đã copy bản tối ưu!"));
+});
 
 function renderOpOptimize(d) {
   $("#opFullResult").classList.remove("hidden");
@@ -1208,13 +1277,18 @@ function renderOpOptimize(d) {
       ${d.after.slug ? `<tr><td><b>Slug gợi ý</b></td><td>—</td><td class="snip-after">${esc(d.after.slug)}</td></tr>` : ""}
     </tbody></table>`;
 
-  // So lieu ban SAU: so tu + so lan xuat hien tu khoa chinh/phu
+  // So lieu TRUOC -> SAU: so tu + so lan xuat hien tu khoa chinh/phu (uu tien so lieu server)
   const md = d.after.markdown || "";
   const mk = d.mainKeyword || "";
   const subs = d.subKeywords || [];
-  let stats = `<div class="stat"><b>${opCountWords(md).toLocaleString("vi")}</b><span>Số từ (sau)</span></div>`;
-  if (mk) stats += `<div class="stat"><b>${opCountOccur(md, mk)}</b><span>KW chính: "${esc(mk)}"</span></div>`;
-  stats += subs.map((s) => `<div class="stat"><b>${opCountOccur(md, s)}</b><span>KW phụ: "${esc(s)}"</span></div>`).join("");
+  const bMd = d.before.markdown || "";
+  const bStats = d.before.stats || { words: opCountWords(bMd), mainKw: mk ? opCountOccur(bMd, mk) : 0, subKw: subs.reduce((a, s) => a + opCountOccur(bMd, s), 0) };
+  const aStats = d.after.stats || { words: opCountWords(md), mainKw: mk ? opCountOccur(md, mk) : 0, subKw: subs.reduce((a, s) => a + opCountOccur(md, s), 0) };
+  const nf = (x) => Number(x || 0).toLocaleString("vi");
+  const statCell = (label, b, a) => `<div class="stat"><b>${nf(a)}</b><span>${label}<br><small class="muted">trước: ${nf(b)}</small></span></div>`;
+  let stats = statCell("Số từ", bStats.words, aStats.words);
+  if (mk) stats += statCell(`KW chính: "${esc(mk)}"`, bStats.mainKw, aStats.mainKw);
+  stats += statCell("KW phụ (tổng)", bStats.subKw, aStats.subKw);
   $("#opAfterStats").innerHTML = stats;
 
   // To mau phan da toi uu/them moi (so voi ban truoc)
@@ -1235,6 +1309,10 @@ function renderOpOptimize(d) {
   if (d.internalLinks && d.internalLinks.length) {
     ex += `<h3 style="margin:14px 0 6px">🔗 Gợi ý Internal link</h3><ul style="margin:0 0 0 18px">` +
       d.internalLinks.map((l) => `<li><b>${esc(l.anchor)}</b> → ${esc(l.targetType)}</li>`).join("") + `</ul>`;
+  }
+  if (d.externalLinks && d.externalLinks.length) {
+    ex += `<h3 style="margin:14px 0 6px">🌐 Gợi ý External link (E-E-A-T)</h3><ul style="margin:0 0 0 18px">` +
+      d.externalLinks.map((l) => `<li><b>${esc(l.anchor)}</b> → ${esc(l.source)}</li>`).join("") + `</ul>`;
   }
   if (d.imageSuggestions && d.imageSuggestions.length) {
     ex += `<h3 style="margin:14px 0 6px">📷 Gợi ý hình ảnh</h3>` +

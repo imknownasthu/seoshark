@@ -580,6 +580,46 @@
               </label>
             </div>
           </div>
+
+          <!-- Chỉ hiện khi 'Tối ưu toàn bộ bài': Kiến thức website + Skill để AI cá nhân hóa -->
+          <div id="opFullExtras" class="hidden" style="margin-top:14px;display:grid;gap:14px;padding:14px;border:1px solid var(--line);border-radius:12px;background:#FBFCFE">
+            <div>
+              <label style="font-weight:700;font-size:13px;color:var(--ink)">Kiến thức website <span class="muted" style="font-weight:400">(để AI viết đúng định vị, dùng chung với Lên outline)</span></label>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-top:4px">
+                <div style="flex:1;min-width:220px"><select id="opKnowSelect"><option value="">— Không dùng —</option></select></div>
+                <button class="ghost small" id="opKnowNew" type="button">Nhập mới</button>
+              </div>
+              <div id="opKnowEditor" class="hidden" style="margin-top:8px;padding:10px;border:1px dashed var(--line);border-radius:10px;background:#fff">
+                <input id="opKnowTitle" type="text" placeholder="Tiêu đề (VD: USP &amp; thế mạnh Nha khoa Shark)" />
+                <textarea id="opKnowContent" rows="4" style="margin-top:6px" placeholder="USP, thế mạnh, bác sĩ, công nghệ, cam kết, dịch vụ nổi bật, đối tượng khách hàng..."></textarea>
+                <div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">
+                  <label class="ghost small" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;margin:0">Nạp Word/Excel<input id="opKnowFile" type="file" accept=".docx,.xlsx,.xls" style="display:none" /></label>
+                  <span class="muted" id="opKnowFileMsg" style="font-size:.82rem"></span>
+                  <button class="ghost small" id="opKnowSave" type="button" style="margin-left:auto">Lưu vào thư viện</button>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label style="font-weight:700;font-size:13px;color:var(--ink)">Skill hướng dẫn AI viết <span class="muted" style="font-weight:400">(cá nhân hóa như chỉ dẫn của GEM)</span></label>
+              <p class="muted" style="margin:3px 0 6px;font-size:.83rem">Nhập chỉ dẫn (vai trò, giọng văn, cấu trúc, quy tắc do &amp; don't) hoặc tải Word/TXT. AI sẽ <b>tuân thủ</b> để viết đúng phong cách &amp; yêu cầu của bạn.</p>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+                <div style="flex:1;min-width:220px"><select id="opWsSelect"><option value="">— Không dùng —</option></select></div>
+                <button class="ghost small" id="opWsNew" type="button">Nhập/Sửa</button>
+                <button class="ghost small" id="opWsDelete" type="button">Xóa</button>
+              </div>
+              <div id="opWsEditor" class="hidden" style="margin-top:8px;padding:10px;border:1px dashed var(--line);border-radius:10px;background:#fff">
+                <input id="opWsTitle" type="text" placeholder="Tên skill (VD: Giọng văn nha khoa Shark)" />
+                <textarea id="opWsContent" rows="6" style="margin-top:6px" placeholder="VAI TRÒ: chuyên gia nội dung nha khoa.&#10;GIỌNG VĂN: gần gũi, đáng tin, chuyên môn.&#10;CẤU TRÚC: mở bằng vấn đề khách quan tâm → giải pháp → CTA đặt lịch.&#10;QUY TẮC: không hứa tuyệt đối; luôn có yếu tố E-E-A-T; ưu tiên câu ngắn dễ đọc; không dùng từ sáo rỗng..."></textarea>
+                <div style="display:flex;gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">
+                  <label class="ghost small" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;margin:0">Nạp Word/TXT<input id="opWsFile" type="file" accept=".docx,.txt" style="display:none" /></label>
+                  <span class="muted" id="opWsFileMsg" style="font-size:.82rem"></span>
+                  <button class="ghost small" id="opWsSave" type="button" style="margin-left:auto">Lưu vào thư viện</button>
+                </div>
+              </div>
+              <div id="opWsMsg" class="muted" style="font-size:.82rem;margin-top:4px"></div>
+            </div>
+          </div>
+
           <div class="flexbar" style="margin-top:14px">
             <label style="display:flex;gap:7px;align-items:center;font-weight:600"><input type="checkbox" id="opSelectAll" style="width:17px;height:17px;accent-color:var(--brand)"> Chọn tất cả tiêu chí</label>
             <button id="btnOpOptimize">Tự động tối ưu</button>
