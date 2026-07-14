@@ -252,8 +252,10 @@ window.gscConnected = () => (GSC.mode === "sa" ? (GSC.sites || []).length > 0 : 
         signBtn.classList.remove("hidden");
         setState("● Chưa đăng nhập", "var(--muted)");
       } else {
+        // Chưa cấu hình gì: ưu tiên hướng dẫn OAuth "Đăng nhập bằng Google" (không bị chặn key như SA)
+        guideOauth.classList.remove("hidden");
         guideSa.classList.remove("hidden");
-        setState("● Chưa cấu hình", "var(--muted)");
+        setState("● Chưa cấu hình — xem hướng dẫn kết nối bên dưới", "var(--muted)");
       }
     } catch { setState("● Không kiểm tra được", "var(--muted)"); }
   })();

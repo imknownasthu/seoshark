@@ -208,8 +208,8 @@
               <button id="gscDisconnectBtn" class="ghost small hidden" type="button" style="margin-top:8px">Đăng xuất</button>
 
               <details id="gscSetupGuideSa" class="hidden" style="margin-top:10px;font-size:.85rem">
-                <summary style="cursor:pointer;color:var(--c-blue);font-weight:600">Chưa cấu hình — Hướng dẫn tạo Service Account A→Z (bấm để mở)</summary>
-                <p class="muted" style="margin:8px 0 6px">Chỉ làm <b>MỘT LẦN</b>. Sau đó, mỗi lần kết nối chỉ là dán 1 email vào GSC — không đăng nhập, không hết hạn, không cảnh báo “app chưa xác minh”.</p>
+                <summary style="cursor:pointer;color:var(--c-blue);font-weight:600">(Cách thay thế) Kết nối bằng Service Account A→Z — nếu tài khoản cho phép tạo key</summary>
+                <p class="muted" style="margin:8px 0 6px">⚠️ Nhiều tài khoản Google nay CHẶN tạo key Service Account (chính sách "Secure by Default"). Nếu bị chặn, hãy dùng cách "Đăng nhập bằng Google" ở trên. Nếu tạo được key: mỗi lần kết nối chỉ là dán 1 email vào GSC — không đăng nhập, không hết hạn.</p>
                 <ol style="margin:4px 0 0;padding-left:20px;line-height:1.75">
                   <li>Mở <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">console.cloud.google.com</a>, đăng nhập Gmail. Ở thanh trên cùng bấm dropdown chọn project → <b>New Project</b> → đặt tên (VD “seoshark-gsc”) → <b>Create</b>, rồi chọn đúng project vừa tạo.</li>
                   <li>Vào <a href="https://console.cloud.google.com/apis/library/searchconsole.googleapis.com" target="_blank" rel="noopener">API “Google Search Console API”</a> → bấm <b>Enable</b> (Bật).</li>
@@ -221,12 +221,18 @@
                 </ol>
               </details>
               <details id="gscSetupGuide" class="hidden" style="margin-top:8px;font-size:.85rem">
-                <summary style="cursor:pointer;color:var(--c-blue);font-weight:600">(Nâng cao) Kết nối bằng Đăng nhập Google — cấu hình OAuth Client ID</summary>
-                <ol style="margin:8px 0 0;padding-left:20px;line-height:1.7">
-                  <li><a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a> → project → bật <b>Google Search Console API</b>.</li>
-                  <li><b>OAuth consent screen</b> → External → thêm email vào <b>Test users</b>.</li>
-                  <li><b>Credentials → OAuth client ID → Web application</b> → <b>Authorized JavaScript origins</b>: <code id="gscOriginHint">https://seo.tail9be4da.ts.net</code>.</li>
-                  <li><code>.env</code>: <code>GOOGLE_OAUTH_CLIENT_ID=...</code> → <code>pm2 restart seoshark</code>.</li>
+                <summary style="cursor:pointer;color:var(--c-blue);font-weight:600">Hướng dẫn kết nối "Đăng nhập bằng Google" A→Z (bấm để mở)</summary>
+                <p class="muted" style="margin:8px 0 6px">Cách này KHÔNG cần file key (không bị chặn như Service Account). Chỉ tạo <b>1 OAuth Client ID</b> một lần, sau đó bấm "Đăng nhập bằng Google" là xong.</p>
+                <ol style="margin:4px 0 0;padding-left:20px;line-height:1.75">
+                  <li>Mở <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">console.cloud.google.com</a> → đăng nhập Gmail. Thanh trên cùng bấm chọn project → <b>New Project</b> → đặt tên (VD "seoshark") → <b>Create</b>, rồi chọn đúng project đó.</li>
+                  <li>Mở <a href="https://console.cloud.google.com/apis/library/searchconsole.googleapis.com" target="_blank" rel="noopener">Google Search Console API</a> → bấm <b>Enable</b>.</li>
+                  <li>Menu trái <b>APIs &amp; Services → OAuth consent screen</b>: chọn <b>External</b> → <b>Create</b>. Điền <b>App name</b> (VD "SeoShark"), <b>User support email</b> = Gmail của bạn, <b>Developer contact</b> = Gmail của bạn → Save. Ở bước <b>Test users</b> bấm <b>Add users</b> → thêm chính Gmail bạn dùng GSC → Save.</li>
+                  <li>Menu trái <b>Credentials</b> → <b>Create Credentials</b> → <b>OAuth client ID</b> → Application type = <b>Web application</b>. Ở ô <b>Authorized JavaScript origins</b> bấm <b>Add URI</b> → dán đúng: <code id="gscOriginHint">https://seo.tail9be4da.ts.net</code> (KHÔNG cần Authorized redirect URIs) → <b>Create</b>.</li>
+                  <li>Hộp thoại hiện <b>Client ID</b> — bấm Copy (dạng <code>....apps.googleusercontent.com</code>).</li>
+                  <li>Trên VPS, thêm vào <code>.env</code>: <code>GOOGLE_OAUTH_CLIENT_ID=&lt;client id vừa copy&gt;</code> → <code>pm2 restart seoshark</code>.</li>
+                  <li>Tải lại trang này → nút <b>"Đăng nhập bằng Google"</b> hiện ra → bấm, chọn Gmail có GSC.</li>
+                  <li><b>Nếu gặp màn "Google chưa xác minh ứng dụng này"</b> (do app đang ở chế độ thử nghiệm): bấm <b>Nâng cao / Advanced</b> → <b>"Đi tới SeoShark (không an toàn)"</b> → <b>Cho phép/Allow</b>. (An toàn vì đây là app của chính bạn.)</li>
+                  <li>Xong! Chọn property → vào Onpage phân tích URL sẽ có số liệu thật.</li>
                 </ol>
               </details>
               <div id="gscMsg" class="muted" style="font-size:.82rem;margin-top:6px"></div>
