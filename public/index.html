@@ -184,6 +184,28 @@
               <button class="ghost small" id="engineCheckBtn" type="button">Kiểm tra kết nối</button>
               <span id="engineStatus" style="font-size:13px;font-weight:600"></span>
             </div>
+
+            <div id="gscBox" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
+              <label style="font-weight:700;font-size:13px;color:var(--ink)">Google Search Console <span class="muted" style="font-weight:400">— số liệu thật</span></label>
+              <p class="muted" style="margin:4px 0 8px;font-size:.85rem">Kết nối tài khoản Google dùng GSC để công cụ đọc <b>clicks · impressions · CTR · vị trí</b> + top truy vấn thật cho URL khi đánh giá Onpage.</p>
+              <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                <span id="gscState" class="muted" style="font-size:13px">Đang kiểm tra...</span>
+                <a id="gscConnectBtn" class="ghost small hidden" href="/api/gsc/connect">Kết nối Google Search Console</a>
+                <select id="gscSiteSelect" class="hidden" style="max-width:300px"></select>
+                <button id="gscDisconnectBtn" class="ghost small hidden" type="button">Ngắt kết nối</button>
+              </div>
+              <details id="gscSetupGuide" class="hidden" style="margin-top:8px;font-size:.85rem">
+                <summary style="cursor:pointer;color:var(--c-blue);font-weight:600">Cần cấu hình OAuth Google Cloud — hướng dẫn (bấm để mở)</summary>
+                <ol style="margin:8px 0 0;padding-left:20px;line-height:1.7">
+                  <li>Vào <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a> → tạo project (hoặc dùng project có sẵn).</li>
+                  <li>Bật API: <b>APIs &amp; Services → Library</b> → tìm <b>Google Search Console API</b> → <b>Enable</b>.</li>
+                  <li><b>OAuth consent screen</b>: chọn <b>External</b>, điền tên app, thêm email của bạn vào <b>Test users</b>.</li>
+                  <li><b>Credentials → Create Credentials → OAuth client ID → Web application</b>. Ở <b>Authorized redirect URIs</b> thêm đúng: <code id="gscRedirectHint">https://seo.tail9be4da.ts.net/api/gsc/callback</code></li>
+                  <li>Copy <b>Client ID</b> + <b>Client secret</b> → đặt vào <code>.env</code> trên VPS: <code>GOOGLE_OAUTH_CLIENT_ID</code>, <code>GOOGLE_OAUTH_CLIENT_SECRET</code>, <code>PUBLIC_BASE_URL=https://seo.tail9be4da.ts.net</code> → <code>pm2 restart seoshark</code>.</li>
+                </ol>
+              </details>
+              <div id="gscMsg" class="muted" style="font-size:.82rem;margin-top:6px"></div>
+            </div>
           </details>
         </section>
       </div>
@@ -522,6 +544,15 @@
             <span class="muted" id="opResMeta"></span>
           </div>
           <div id="opSummary"></div>
+          <div id="opGscBox" class="hidden" style="margin:12px 0;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#FBFCFE">
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <b style="font-size:13px">Số liệu Google Search Console (thật)</b>
+              <select id="opGscDays" style="max-width:150px"><option value="28">28 ngày</option><option value="90">3 tháng</option><option value="180">6 tháng</option></select>
+              <button class="ghost small" id="opGscBtn" type="button">Xem số liệu cho URL này</button>
+              <span class="muted" id="opGscMsg" style="font-size:.82rem"></span>
+            </div>
+            <div id="opGscResult" style="margin-top:10px"></div>
+          </div>
           <h3 style="margin:14px 0 4px">Bảng so sánh &amp; tiêu chí cần cải thiện</h3>
           <p class="muted" style="margin:0 0 10px">Tick tiêu chí muốn tối ưu (mục yếu đã tự tick). Bấm tên tiêu chí để <b>mở/đóng chi tiết</b> của bạn &amp; từng đối thủ.</p>
           <div id="opCompareTable" style="overflow:auto"></div>

@@ -11,12 +11,14 @@ const DATA_DIR = path.join(__dirname, "..", "data");
 const USERS_FILE = path.join(DATA_DIR, "users.json");
 const KNOW_FILE = path.join(DATA_DIR, "knowledge.json");
 const KWSET_FILE = path.join(DATA_DIR, "keyword_sets.json");
+const GSC_FILE = path.join(DATA_DIR, "gsc_tokens.json");
 
 let mode = "json"; // "json" | "pg"
 let pool = null;
 let jsonUsers = {};
 let jsonKnow = {}; // id -> { id, owner, website, title, content, createdAt }
 let jsonKwset = {}; // id -> { id, owner, name, keywords:[...], createdAt, updatedAt }
+let jsonGsc = {}; // owner -> { owner, refreshToken, siteUrl, updatedAt }
 
 export function storeMode() {
   return mode;
@@ -40,6 +42,11 @@ function initJson() {
     jsonKwset = fs.existsSync(KWSET_FILE) ? (JSON.parse(fs.readFileSync(KWSET_FILE, "utf8")) || {}) : {};
   } catch {
     jsonKwset = {};
+  }
+  try {
+    jsonGsc = fs.existsSync(GSC_FILE) ? (JSON.parse(fs.readFileSync(GSC_FILE, "utf8")) || {}) : {};
+  } catch {
+    jsonGsc = {};
   }
 }
 
@@ -95,6 +102,15 @@ export async function initStore() {
         )
       `);
       await pool.query(`CREATE INDEX IF NOT EXISTS keyword_sets_owner_idx ON keyword_sets(owner)`);
+      // Token Google Search Console (rieng theo tai khoan)
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS gsc_tokens (
+          owner         TEXT PRIMARY KEY,
+          refresh_token TEXT,
+          site_url      TEXT,
+          updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
       mode = "pg";
       console.log("  [store] Dung Postgres (DATABASE_URL) - tai khoan luu vinh vien.");
       return;
@@ -246,5 +262,47 @@ export async function deleteKeywordSet(id, owner) {
     return r.rowCount > 0;
   }
   if (jsonKwset[id] && jsonKwset[id].owner === owner) { delete jsonKwset[id]; saveJsonKwset(); return true; }
+  return false;
+}
+
+// ===== Token Google Search Console (rieng theo tai khoan) =====
+function saveJsonGsc() {
+  fs.writeFileSync(GSC_FILE, JSON.stringify(jsonGsc, null, 2), "utf8");
+}
+export async function getGscToken(owner) {
+  if (mode === "pg") {
+    const r = await pool.query("SELECT owner, refresh_token, site_url, updated_at FROM gsc_tokens WHERE owner=$1", [owner]);
+    const x = r.rows[0]; if (!x) return null;
+    return { owner: x.owner, refreshToken: x.refresh_token || "", siteUrl: x.site_url || "", updatedAt: x.updated_at };
+  }
+  return jsonGsc[owner] || null;
+}
+export async function putGscToken({ owner, refreshToken, siteUrl }) {
+  const nowIso = new Date().toISOString();
+  if (mode === "pg") {
+    // Neu refreshToken rong (chi cap nhat site) -> giu token cu
+    if (refreshToken) {
+      await pool.query(
+        `INSERT INTO gsc_tokens (owner, refresh_token, site_url) VALUES ($1,$2,$3)
+         ON CONFLICT (owner) DO UPDATE SET refresh_token=$2, site_url=COALESCE($3, gsc_tokens.site_url), updated_at=now()`,
+        [owner, refreshToken, siteUrl || null]
+      );
+    } else {
+      await pool.query(`UPDATE gsc_tokens SET site_url=$2, updated_at=now() WHERE owner=$1`, [owner, siteUrl || null]);
+    }
+    return;
+  }
+  const prev = jsonGsc[owner] || {};
+  jsonGsc[owner] = {
+    owner,
+    refreshToken: refreshToken || prev.refreshToken || "",
+    siteUrl: siteUrl != null ? siteUrl : (prev.siteUrl || ""),
+    updatedAt: nowIso,
+  };
+  saveJsonGsc();
+}
+export async function deleteGscToken(owner) {
+  if (mode === "pg") { await pool.query("DELETE FROM gsc_tokens WHERE owner=$1", [owner]); return true; }
+  if (jsonGsc[owner]) { delete jsonGsc[owner]; saveJsonGsc(); return true; }
   return false;
 }

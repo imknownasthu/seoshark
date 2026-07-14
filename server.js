@@ -26,6 +26,9 @@ import { buildClassifyPrompt as buildPillarClassifyPrompt, buildSuggestPrompt as
 import { buildPcClassifyPrompt, buildPcTierPrompt } from "./src/pillar-content-prompt.js";
 import * as store from "./src/store.js";
 import {
+  gscConfigured, gscAuthUrl, gscExchangeCode, gscAccessToken, gscListSites, gscQuery, gscPickSiteForUrl, gscTotals,
+} from "./src/gsc.js";
+import {
   ONPAGE_SYSTEM, RECOMMEND_SCHEMA, OPTIMIZE_SCHEMA, SUGGEST_SCHEMA,
   buildRecommendPrompt, buildOptimizePrompt, buildSuggestPrompt, mechanicalRecommendations,
 } from "./src/onpage-prompt.js";
@@ -1301,6 +1304,116 @@ app.post("/api/keywords/sets/delete", requireAuth, async (req, res) => {
     const ok = await store.deleteKeywordSet(String((req.body || {}).id || "").trim(), owner);
     res.json({ ok });
   } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
+});
+
+// ===================== GOOGLE SEARCH CONSOLE (engine so lieu that) =====================
+// State chong CSRF cho luong OAuth (nonce -> {owner, ts}), song ngan (10 phut)
+const _gscStates = new Map();
+function _gscNewState(owner) {
+  const s = randomUUID();
+  _gscStates.set(s, { owner, ts: Date.now() });
+  // don state cu
+  for (const [k, v] of _gscStates) if (Date.now() - v.ts > 10 * 60 * 1000) _gscStates.delete(k);
+  return s;
+}
+// Lay access_token tu refresh_token da luu (nem loi neu chua ket noi)
+async function _gscAccess(owner) {
+  const tok = await store.getGscToken(owner);
+  if (!tok || !tok.refreshToken) throw new Error("Chưa kết nối Google Search Console.");
+  const at = await gscAccessToken(tok.refreshToken);
+  return { accessToken: at, siteUrl: tok.siteUrl || "" };
+}
+
+app.get("/api/gsc/status", requireAuth, async (req, res) => {
+  try {
+    const owner = (req.user?.email || "guest").toLowerCase();
+    const tok = await store.getGscToken(owner);
+    res.json({ configured: gscConfigured(), connected: !!(tok && tok.refreshToken), siteUrl: (tok && tok.siteUrl) || "" });
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
+});
+
+app.get("/api/gsc/connect", requireAuth, (req, res) => {
+  try {
+    if (!gscConfigured()) return res.status(400).send("Chưa cấu hình OAuth (thiếu GOOGLE_OAUTH_CLIENT_ID/SECRET).");
+    const owner = (req.user?.email || "guest").toLowerCase();
+    const state = _gscNewState(owner);
+    res.redirect(gscAuthUrl(req, state));
+  } catch (e) { res.status(500).send("Lỗi: " + (e.message || "server")); }
+});
+
+app.get("/api/gsc/callback", requireAuth, async (req, res) => {
+  try {
+    const { code, state, error } = req.query || {};
+    if (error) return res.redirect("/?gsc=denied");
+    const st = state && _gscStates.get(String(state));
+    if (!st) return res.redirect("/?gsc=badstate");
+    _gscStates.delete(String(state));
+    const owner = (req.user?.email || "guest").toLowerCase();
+    const tokens = await gscExchangeCode(req, String(code || ""));
+    if (!tokens.refresh_token) {
+      // Google chi tra refresh_token lan dau dong y; neu thieu -> van coi la ket noi neu da co truoc do
+      const prev = await store.getGscToken(owner);
+      if (!prev || !prev.refreshToken) return res.redirect("/?gsc=norefresh");
+    } else {
+      await store.putGscToken({ owner, refreshToken: tokens.refresh_token, siteUrl: "" });
+    }
+    res.redirect("/?gsc=connected");
+  } catch (e) {
+    res.redirect("/?gsc=error&msg=" + encodeURIComponent(e.message || "server"));
+  }
+});
+
+app.get("/api/gsc/sites", requireAuth, async (req, res) => {
+  try {
+    const owner = (req.user?.email || "guest").toLowerCase();
+    const { accessToken, siteUrl } = await _gscAccess(owner);
+    const sites = await gscListSites(accessToken);
+    res.json({ sites, siteUrl });
+  } catch (e) { res.status(400).json({ error: e.message || "Lỗi GSC" }); }
+});
+
+app.post("/api/gsc/site", requireAuth, async (req, res) => {
+  try {
+    const owner = (req.user?.email || "guest").toLowerCase();
+    const siteUrl = String((req.body || {}).siteUrl || "").trim();
+    await store.putGscToken({ owner, refreshToken: "", siteUrl });
+    res.json({ ok: true, siteUrl });
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
+});
+
+app.post("/api/gsc/disconnect", requireAuth, async (req, res) => {
+  try {
+    const owner = (req.user?.email || "guest").toLowerCase();
+    await store.deleteGscToken(owner);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
+});
+
+// So lieu thuc te cho 1 URL: tong (clicks/impressions/ctr/vi tri) + top truy van
+app.post("/api/gsc/metrics", requireAuth, async (req, res) => {
+  try {
+    const owner = (req.user?.email || "guest").toLowerCase();
+    const url = String((req.body || {}).url || "").trim();
+    const days = Number((req.body || {}).days) || 28;
+    const { accessToken, siteUrl: savedSite } = await _gscAccess(owner);
+    let siteUrl = savedSite;
+    if (!siteUrl) {
+      const sites = await gscListSites(accessToken);
+      siteUrl = gscPickSiteForUrl(sites, url);
+      if (siteUrl) await store.putGscToken({ owner, refreshToken: "", siteUrl });
+    }
+    if (!siteUrl) return res.status(400).json({ error: "Chưa chọn site GSC. Vào ⚙️ chọn property." });
+    const [totalRows, queryRows] = await Promise.all([
+      gscQuery(accessToken, siteUrl, { url, days, dimensions: [], rowLimit: 1 }),
+      gscQuery(accessToken, siteUrl, { url, days, dimensions: ["query"], rowLimit: 25 }),
+    ]);
+    const totals = gscTotals(totalRows);
+    const queries = queryRows.map((r) => ({
+      query: (r.keys || [])[0] || "", clicks: r.clicks || 0, impressions: r.impressions || 0,
+      ctr: r.ctr != null ? r.ctr : null, position: r.position != null ? r.position : null,
+    }));
+    res.json({ siteUrl, days, totals, queries });
+  } catch (e) { res.status(400).json({ error: e.message || "Lỗi GSC" }); }
 });
 
 // ===================== LEN OUTLINE CHUAN SEO =====================

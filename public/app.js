@@ -166,6 +166,58 @@ $("#apiKey").addEventListener("change", (e) => {
 $("#apiKey").addEventListener("input", checkConnDebounced);
 $("#sitemapUrl").addEventListener("change", (e) => localStorage.setItem("seoshark_sitemap", e.target.value.trim()));
 
+/* ---------- Google Search Console (số liệu thật) ---------- */
+(function initGsc() {
+  const state = $("#gscState");
+  if (!state) return;
+  const gmsg = (type, m) => { const el = $("#gscMsg"); if (el) el.innerHTML = m ? `<span style="color:${type === "err" ? "#c0392b" : type === "info" ? "var(--green,#2e9e6b)" : "var(--muted)"}">${m}</span>` : ""; };
+  const H = { "Content-Type": "application/json" };
+  async function refresh() {
+    const connect = $("#gscConnectBtn"), sel = $("#gscSiteSelect"), disc = $("#gscDisconnectBtn"), guide = $("#gscSetupGuide");
+    const hint = $("#gscRedirectHint"); if (hint) hint.textContent = location.origin + "/api/gsc/callback";
+    try {
+      const r = await fetch("/api/gsc/status"); const d = await r.json();
+      if (!d.configured) {
+        state.textContent = "● Chưa cấu hình OAuth"; state.style.color = "var(--muted)";
+        connect.classList.add("hidden"); sel.classList.add("hidden"); disc.classList.add("hidden"); guide.classList.remove("hidden");
+        return;
+      }
+      guide.classList.add("hidden");
+      if (!d.connected) {
+        state.textContent = "● Chưa kết nối"; state.style.color = "var(--muted)";
+        connect.classList.remove("hidden"); sel.classList.add("hidden"); disc.classList.add("hidden");
+        return;
+      }
+      state.textContent = "● Đã kết nối"; state.style.color = "var(--green,#2e9e6b)";
+      connect.classList.add("hidden"); disc.classList.remove("hidden"); sel.classList.remove("hidden");
+      try {
+        const rs = await fetch("/api/gsc/sites"); const ds = await rs.json();
+        if (rs.ok) {
+          sel.innerHTML = `<option value="">— Chọn property —</option>` + (ds.sites || []).map((s) => `<option value="${esc(s.siteUrl)}">${esc(s.siteUrl)}</option>`).join("");
+          if (ds.siteUrl) sel.value = ds.siteUrl;
+        } else { gmsg("err", esc(ds.error || "Không lấy được site.")); }
+      } catch {}
+    } catch {}
+  }
+  $("#gscSiteSelect").addEventListener("change", async (e) => {
+    try { await fetch("/api/gsc/site", { method: "POST", headers: H, body: JSON.stringify({ siteUrl: e.target.value }) }); gmsg("info", "✓ Đã chọn property GSC."); } catch {}
+  });
+  $("#gscDisconnectBtn").addEventListener("click", async () => {
+    if (!confirm("Ngắt kết nối Google Search Console?")) return;
+    try { await fetch("/api/gsc/disconnect", { method: "POST" }); await refresh(); gmsg("info", "Đã ngắt kết nối."); } catch {}
+  });
+  // Quay về sau OAuth: hiện thông báo + mở hộp Engine
+  const q = new URLSearchParams(location.search);
+  if (q.has("gsc")) {
+    const g = q.get("gsc");
+    const map = { connected: "✓ Đã kết nối Google Search Console!", denied: "Bạn đã từ chối cấp quyền.", badstate: "Phiên kết nối hết hạn, thử lại.", norefresh: "Google không trả refresh token — gỡ quyền app tại tài khoản Google rồi kết nối lại.", error: "Lỗi kết nối GSC: " + (q.get("msg") || "") };
+    gmsg(g === "connected" ? "info" : "err", map[g] || g);
+    const box = $("#engineBox"); if (box) box.open = true;
+    history.replaceState(null, "", location.pathname);
+  }
+  refresh();
+})();
+
 function toast(msg) {
   const t = $("#toast");
   t.textContent = msg;
@@ -949,8 +1001,46 @@ $("#btnOpAudit").addEventListener("click", async () => {
     renderOpResult(data);
     $("#opResultCard").classList.remove("hidden");
     $("#opOptResultCard").classList.add("hidden");
+    opGscReveal(url);
     $("#opResultCard").scrollIntoView({ behavior: "smooth" });
   } catch (e) { msg.innerHTML = alertHtml("err", "❌ " + e.message); }
+  finally { busy(btn, false); }
+});
+
+// GSC trong Onpage: hiện box nếu đã kết nối; nút xem số liệu thật cho URL vừa audit
+let _opGscUrl = "";
+async function opGscReveal(url) {
+  _opGscUrl = url || "";
+  const box = $("#opGscBox"); if (!box) return;
+  $("#opGscResult").innerHTML = ""; $("#opGscMsg").textContent = "";
+  try {
+    const r = await fetch("/api/gsc/status"); const d = await r.json();
+    box.classList.toggle("hidden", !(d.configured && d.connected));
+  } catch { box.classList.add("hidden"); }
+}
+if ($("#opGscBtn")) $("#opGscBtn").addEventListener("click", async () => {
+  const url = _opGscUrl || $("#opUrl").value.trim();
+  if (!url) return;
+  const days = +($("#opGscDays").value || 28);
+  const btn = $("#opGscBtn"); busy(btn, true, "Đang lấy số liệu...");
+  $("#opGscMsg").textContent = "";
+  try {
+    const r = await fetch("/api/gsc/metrics", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url, days }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "Lỗi GSC");
+    const t = d.totals || {};
+    const pct = (x) => (x == null ? "—" : (x * 100).toFixed(1) + "%");
+    const pos = (x) => (x == null ? "—" : x.toFixed(1));
+    const stat = (label, val) => `<div style="flex:1;min-width:120px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff"><div class="muted" style="font-size:.72rem;text-transform:uppercase;letter-spacing:.04em">${label}</div><div style="font-size:1.3rem;font-weight:700;color:var(--ink)">${val}</div></div>`;
+    const cell = (v, r2) => `<td style="padding:5px 8px;border-bottom:1px solid var(--line);${r2 ? "text-align:right" : ""}">${v}</td>`;
+    const rows = (d.queries || []).map((q) => `<tr>${cell(esc(q.query))}${cell(q.clicks, 1)}${cell(q.impressions, 1)}${cell(pct(q.ctr), 1)}${cell(pos(q.position), 1)}</tr>`).join("");
+    $("#opGscResult").innerHTML =
+      `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">${stat("Clicks", t.clicks || 0)}${stat("Impressions", t.impressions || 0)}${stat("CTR", pct(t.ctr))}${stat("Vị trí TB", pos(t.position))}</div>` +
+      `<div class="muted" style="font-size:.8rem;margin-bottom:4px">Property: ${esc(d.siteUrl || "")} · ${d.days} ngày · Top truy vấn:</div>` +
+      (rows
+        ? `<div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:.85rem"><thead><tr><th style="text-align:left;padding:5px 8px;border-bottom:2px solid var(--line)">Truy vấn</th><th style="text-align:right;padding:5px 8px;border-bottom:2px solid var(--line)">Clicks</th><th style="text-align:right;padding:5px 8px;border-bottom:2px solid var(--line)">Impr.</th><th style="text-align:right;padding:5px 8px;border-bottom:2px solid var(--line)">CTR</th><th style="text-align:right;padding:5px 8px;border-bottom:2px solid var(--line)">Vị trí</th></tr></thead><tbody>${rows}</tbody></table></div>`
+        : `<div class="muted">Chưa có dữ liệu truy vấn cho URL này trong khoảng thời gian đã chọn.</div>`);
+  } catch (e) { $("#opGscMsg").innerHTML = `<span style="color:#c0392b">❌ ${esc(e.message)}</span>`; }
   finally { busy(btn, false); }
 });
 
