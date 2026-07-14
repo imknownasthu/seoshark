@@ -226,13 +226,14 @@
                 <ol style="margin:4px 0 0;padding-left:20px;line-height:1.75">
                   <li>Mở <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">console.cloud.google.com</a> → đăng nhập Gmail. Thanh trên cùng bấm chọn project → <b>New Project</b> → đặt tên (VD "seoshark") → <b>Create</b>, rồi chọn đúng project đó.</li>
                   <li>Mở <a href="https://console.cloud.google.com/apis/library/searchconsole.googleapis.com" target="_blank" rel="noopener">Google Search Console API</a> → bấm <b>Enable</b>.</li>
-                  <li>Menu trái <b>APIs &amp; Services → OAuth consent screen</b>: chọn <b>External</b> → <b>Create</b>. Điền <b>App name</b> (VD "SeoShark"), <b>User support email</b> = Gmail của bạn, <b>Developer contact</b> = Gmail của bạn → Save. Ở bước <b>Test users</b> bấm <b>Add users</b> → thêm chính Gmail bạn dùng GSC → Save.</li>
+                  <li>Menu trái <b>APIs &amp; Services → OAuth consent screen</b>: chọn <b>External</b> → <b>Create</b>. Điền <b>App name</b> (VD "SeoShark"), <b>User support email</b> = Gmail của bạn, <b>Developer contact</b> = Gmail của bạn → Save and Continue qua các bước → Back to Dashboard.</li>
+                  <li><b>QUAN TRỌNG — Publish app (để BẤT KỲ AI cũng đăng nhập được, dưới 100 người):</b> vẫn ở <b>OAuth consent screen</b>, mục <b>Publishing status</b> đang là "Testing" → bấm <b>PUBLISH APP</b> → xác nhận. (Nếu để "Testing" thì chỉ email trong Test users mới vào được.) App sẽ ở trạng thái "In production" — chưa cần Google verify vẫn dùng được cho &lt;100 người, chỉ có 1 màn cảnh báo (xem bước cuối).</li>
                   <li>Menu trái <b>Credentials</b> → <b>Create Credentials</b> → <b>OAuth client ID</b> → Application type = <b>Web application</b>. Ở ô <b>Authorized JavaScript origins</b> bấm <b>Add URI</b> → dán đúng: <code id="gscOriginHint">https://seo.tail9be4da.ts.net</code> (KHÔNG cần Authorized redirect URIs) → <b>Create</b>.</li>
                   <li>Hộp thoại hiện <b>Client ID</b> — bấm Copy (dạng <code>....apps.googleusercontent.com</code>).</li>
                   <li>Trên VPS, thêm vào <code>.env</code>: <code>GOOGLE_OAUTH_CLIENT_ID=&lt;client id vừa copy&gt;</code> → <code>pm2 restart seoshark</code>.</li>
-                  <li>Tải lại trang này → nút <b>"Đăng nhập bằng Google"</b> hiện ra → bấm, chọn Gmail có GSC.</li>
-                  <li><b>Nếu gặp màn "Google chưa xác minh ứng dụng này"</b> (do app đang ở chế độ thử nghiệm): bấm <b>Nâng cao / Advanced</b> → <b>"Đi tới SeoShark (không an toàn)"</b> → <b>Cho phép/Allow</b>. (An toàn vì đây là app của chính bạn.)</li>
-                  <li>Xong! Chọn property → vào Onpage phân tích URL sẽ có số liệu thật.</li>
+                  <li>Xong phần cấu hình! Từ giờ <b>mỗi người dùng</b> chỉ cần: tải trang → ⚙️ → bấm <b>"Đăng nhập bằng Google"</b> → chọn Gmail có GSC của HỌ (không cần đụng VPS).</li>
+                  <li><b>Khi gặp màn "Google chưa xác minh ứng dụng này"</b>: bấm <b>Nâng cao / Advanced</b> → <b>"Đi tới SeoShark (không an toàn) / Go to SeoShark (unsafe)"</b> → <b>Cho phép/Allow</b>. (Bình thường với app chưa nộp xác minh; an toàn vì chỉ xin quyền ĐỌC Search Console.)</li>
+                  <li>Chọn property → vào Onpage phân tích URL → bấm "AI đánh giá Onpage" để có số liệu + phân tích thật.</li>
                 </ol>
               </details>
               <div id="gscMsg" class="muted" style="font-size:.82rem;margin-top:6px"></div>
