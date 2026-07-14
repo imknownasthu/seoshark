@@ -1099,21 +1099,33 @@ app.post("/api/keywords/pillar/classify", requireAuth, async (req, res) => {
     const known = (Array.isArray(knownTopics) ? knownTopics : []).map((t) => String(t || "").trim()).filter(Boolean).slice(0, 200);
     const tr = !!needTranslate;
 
+    const allHaveTopic = raw.every((k) => k.topic);
+    const noAiItems = (note) => res.json({ items: raw.map((k) => ({ keyword: k.keyword, topic: k.topic || "Khác", vi: "" })), aiUsed: false, aiError: note || "" });
+
     // Khong can AI: da co topic het VA khong can dich
-    if (raw.every((k) => k.topic) && !tr) {
-      return res.json({ items: raw.map((k) => ({ keyword: k.keyword, topic: k.topic, vi: "" })), aiUsed: false });
-    }
+    if (allHaveTopic && !tr) return noAiItems("");
+
     const eng = (engine || "local").toLowerCase();
-    if (eng !== "gemini" && eng !== "claude") return res.status(400).json({ error: "Cần bật engine Gemini/Claude để AI phân nhóm topic (hoặc tự nhập cột topic cho mọi từ khóa)." });
-    const { system, user, schema } = buildPillarClassifyPrompt(raw, { knownTopics: known, needTranslate: tr });
-    const d = await aiJson(eng, { system, user, schema, maxTokens: 16384, model, apiKey });
-    const map = {};
-    (d.items || []).forEach((it) => { if (it && it.keyword) map[_norm(it.keyword)] = { topic: String(it.topic || "").trim(), vi: String(it.vi || "").trim() }; });
-    const items = raw.map((k) => {
-      const m = map[_norm(k.keyword)] || {};
-      return { keyword: k.keyword, topic: k.topic || m.topic || "Khác", vi: tr ? (m.vi || "") : "" };
-    });
-    res.json({ items, aiUsed: true });
+    // Chua bat AI: neu da co topic het -> van tra nhom (bo qua dich); else bat buoc AI
+    if (eng !== "gemini" && eng !== "claude") {
+      if (allHaveTopic) return noAiItems("Chưa bật AI nên bỏ qua bản dịch VI.");
+      return res.status(400).json({ error: "Cần bật engine Gemini/Claude để AI phân nhóm topic (hoặc tự nhập cột topic cho mọi từ khóa)." });
+    }
+    // Co AI -> thu; neu AI loi (vd Gemini bi chan) ma da co topic het -> van tra nhom, bao aiError
+    try {
+      const { system, user, schema } = buildPillarClassifyPrompt(raw, { knownTopics: known, needTranslate: tr });
+      const d = await aiJson(eng, { system, user, schema, maxTokens: 16384, model, apiKey });
+      const map = {};
+      (d.items || []).forEach((it) => { if (it && it.keyword) map[_norm(it.keyword)] = { topic: String(it.topic || "").trim(), vi: String(it.vi || "").trim() }; });
+      const items = raw.map((k) => {
+        const m = map[_norm(k.keyword)] || {};
+        return { keyword: k.keyword, topic: k.topic || m.topic || "Khác", vi: tr ? (m.vi || "") : "" };
+      });
+      res.json({ items, aiUsed: true });
+    } catch (e) {
+      if (allHaveTopic) return noAiItems("AI lỗi (" + (e.message || "?") + ") → giữ nhóm theo topic có sẵn, bỏ qua dịch.");
+      res.status(500).json({ error: e.message || "Lỗi server" });
+    }
   } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
 });
 
@@ -1123,53 +1135,84 @@ app.post("/api/keywords/pillar/suggest", requireAuth, async (req, res) => {
     const { topics, allHave, gl, hl, engine, model, apiKey, bingKey, minPerTopic, needTranslate } = req.body || {};
     const region = { gl: gl || "vn", hl: hl || "vi" };
     const eng = (engine || "local").toLowerCase();
-    if (eng !== "gemini" && eng !== "claude") return res.status(400).json({ error: "Cần bật engine Gemini/Claude để gợi ý từ khóa bổ sung." });
     const inTopics = (Array.isArray(topics) ? topics : [])
       .map((t) => ({ topic: String(t.topic || "").trim(), have: (Array.isArray(t.have) ? t.have : []).map((k) => String(k || "").trim()).filter(Boolean) }))
       .filter((t) => t.topic).slice(0, 6); // toi da 6 topic/lo
     if (!inTopics.length) return res.status(400).json({ error: "Chưa có topic để gợi ý." });
-    const min = Math.max(10, Math.min(40, Number(minPerTopic) || 20));
+    const min = Math.max(10, Math.min(40, Number(minPerTopic) || 30));
     const tr = !!needTranslate;
 
-    // Ung vien tu Google Autocomplete cho tung topic (loai trung voi tu da co)
+    // Ung vien tu Google Autocomplete cho tung topic - day la truy van CO THAT.
+    // Seed = topic + nhieu tu da co (da dang goc) de lay nhieu goi y ma KHONG bung A-Z (tranh Google rate-limit).
     const topicsInput = [];
     for (const t of inTopics) {
       let candidates = [];
-      try { candidates = await expandSeeds([t.topic, ...t.have.slice(0, 3)], { ...region, deep: false }); } catch {}
+      try { candidates = await expandSeeds([t.topic, ...t.have.slice(0, 8)], { ...region, deep: false }); } catch {}
       const haveSet = new Set(t.have.map(_norm));
-      candidates = candidates.filter((c) => !haveSet.has(_norm(c))).slice(0, 60);
+      candidates = candidates.filter((c) => !haveSet.has(_norm(c)) && c.length >= 3);
       topicsInput.push({ topic: t.topic, have: t.have, candidates });
     }
 
-    const { system, user, schema } = buildPillarSuggestPrompt(topicsInput, { minPerTopic: min, needTranslate: tr });
-    const d = await aiJson(eng, { system, user, schema, maxTokens: 16384, model, apiKey });
+    // AI (neu bat) CHON LOC + da dang hoa tu ung vien that; loi/thieu -> fallback lay thang autocomplete
+    let aiTopics = null, aiError = "";
+    if (eng === "gemini" || eng === "claude") {
+      try {
+        const { system, user, schema } = buildPillarSuggestPrompt(
+          topicsInput.map((t) => ({ ...t, candidates: t.candidates.slice(0, 120) })),
+          { minPerTopic: min, needTranslate: tr }
+        );
+        const d = await aiJson(eng, { system, user, schema, maxTokens: 16384, model, apiKey });
+        aiTopics = Array.isArray(d.topics) ? d.topics : [];
+      } catch (e) { aiError = e.message || "AI lỗi"; }
+    } else {
+      aiError = "Chưa bật AI — lấy trực tiếp gợi ý Google Autocomplete.";
+    }
 
-    // Loai trung voi TOAN BO tu khoa nguoi dung (allHave) + trong noi bo
+    // Loc trung voi TOAN BO tu khoa nguoi dung (allHave) + trong noi bo (theo NGU NGHIA).
+    // QUAN TRONG: khi so trung trong 1 topic, BO token cua chinh TOPIC (vd "nieng rang") vi moi tu deu
+    // chua no -> neu khong bo se coi tat ca la trung roi loc sach ve 0.
     const haveGlobal = new Set((Array.isArray(allHave) ? allHave : []).map(_norm));
     inTopics.forEach((t) => t.have.forEach((k) => haveGlobal.add(_norm(k))));
-    // Tap "tu noi dung" cua moi tu da co -> loc trung NGU NGHIA (khong chi trung nguyen chu)
     const haveTokenSets = [...haveGlobal].map(_contentTokens).filter((s) => s.size);
+    const minus = (set, rm) => new Set([...set].filter((x) => !rm.has(x)));
     const usedSug = new Set();
-    const usedSugSets = []; // token-set cac goi y da nhan -> chong trung y giua cac goi y
+    const usedSugSets = []; // luu token DA BO topic-stem
+    const acceptFor = (clean, topicTok) => {
+      const key = _norm(clean);
+      if (!clean || haveGlobal.has(key) || usedSug.has(key)) return false; // trung nguyen van -> loai
+      const tok = minus(_contentTokens(clean), topicTok);
+      if (tok.size) { // con token phan biet (ngoai ten topic) -> moi kiem tra trung ngu nghia
+        const haveD = haveTokenSets.map((h) => minus(h, topicTok)).filter((s) => s.size);
+        if (haveD.some((h) => _tooSimilar(tok, h)) || usedSugSets.some((s) => _tooSimilar(tok, s))) return false;
+      }
+      usedSug.add(key); usedSugSets.push(tok); return true;
+    };
     const out = [];
-    (d.topics || []).forEach((t) => {
-      const topic = String(t.topic || "").trim();
-      if (!topic) return;
-      const kws = [];
-      (t.keywords || []).forEach((kw) => {
-        const clean = String(kw && kw.keyword != null ? kw.keyword : kw).trim();
-        const vi = String((kw && kw.vi) || "").trim();
-        const key = _norm(clean);
-        if (!clean || haveGlobal.has(key) || usedSug.has(key)) return;
-        const tok = _contentTokens(clean);
-        // Bo neu giong ngu nghia voi 1 tu NGUOI DUNG DA CO, hoac voi 1 goi y da nhan
-        if (haveTokenSets.some((h) => _tooSimilar(tok, h)) || usedSugSets.some((s) => _tooSimilar(tok, s))) return;
-        usedSug.add(key);
-        usedSugSets.push(tok);
-        kws.push({ keyword: clean, vi });
+    if (aiTopics) {
+      aiTopics.forEach((t) => {
+        const topic = String(t.topic || "").trim();
+        if (!topic) return;
+        const topicTok = _contentTokens(topic);
+        const kws = [];
+        (t.keywords || []).forEach((kw) => {
+          const clean = String(kw && kw.keyword != null ? kw.keyword : kw).trim();
+          const vi = String((kw && kw.vi) || "").trim();
+          if (acceptFor(clean, topicTok)) kws.push({ keyword: clean, vi });
+        });
+        if (kws.length) out.push({ topic, keywords: kws });
       });
-      if (kws.length) out.push({ topic, keywords: kws });
-    });
+    } else {
+      // FALLBACK khong-AI: lay thang tu Google Autocomplete (that), loc trung ngu nghia, <= min moi topic
+      topicsInput.forEach((t) => {
+        const topicTok = _contentTokens(t.topic);
+        const kws = [];
+        for (const c of t.candidates) {
+          if (kws.length >= Math.max(min, 15)) break;
+          if (acceptFor(c, topicTok)) kws.push({ keyword: c, vi: "" });
+        }
+        if (kws.length) out.push({ topic: t.topic, keywords: kws });
+      });
+    }
 
     const allKw = out.flatMap((t) => t.keywords.map((k) => k.keyword));
     const bKey = (bingKey || process.env.BING_API_KEY || "").trim();
@@ -1185,7 +1228,7 @@ app.post("/api/keywords/pillar/suggest", requireAuth, async (req, res) => {
         return { keyword: k.keyword, vi: k.vi, trend: Number.isFinite(trd) ? trd : null, volume: Number.isFinite(vo) ? vo : null };
       }),
     }));
-    res.json({ topics: suggestions, count: allKw.length, trendUsed: trendMap.size > 0, bingUsed: bingMap.size > 0 });
+    res.json({ topics: suggestions, count: allKw.length, trendUsed: trendMap.size > 0, bingUsed: bingMap.size > 0, aiUsed: !!aiTopics, aiError: aiTopics ? "" : aiError });
   } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
 });
 

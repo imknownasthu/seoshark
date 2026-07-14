@@ -2689,16 +2689,17 @@ $("#opClearSkill").addEventListener("click", () => {
     const { uniq, dups, samples } = dedupInput(raw);
     isEnglish = ($("#plHl").value === "en");
     const engine = $("#engine").value, model = $("#model").value, apiKey = $("#apiKey").value.trim();
-    const needAI = uniq.some((k) => !k.topic) || isEnglish;
+    // Chỉ BẮT BUỘC AI khi có từ khóa CHƯA có topic (cần AI gom nhóm). Dịch VI là tùy chọn (AI lỗi vẫn chạy, bỏ qua dịch).
+    const needAI = uniq.some((k) => !k.topic);
     if (needAI && engine !== "gemini" && engine !== "claude")
-      return setMsg("#plMsg", "err", "❌ Cần bật engine Gemini/Claude ở ⚙️ để AI phân nhóm/dịch (hoặc tự nhập cột topic & chọn tiếng Việt).");
+      return setMsg("#plMsg", "err", "❌ Có từ khóa chưa gán topic — cần bật Gemini/Claude ở ⚙️ để AI phân nhóm (hoặc tự nhập cột topic cho mọi từ khóa).");
     const dupNote = dups > 0 ? ` (đã loại ${dups} từ trùng: ${samples.map(esc).join(", ")}${dups > samples.length ? "..." : ""})` : "";
 
     busy(analyzeBtn, true, "Đang phân nhóm...");
     $("#plStatsCard").classList.add("hidden"); $("#plSuggestCard").classList.add("hidden");
     // Lô nhỏ hơn khi phải dịch VI (output dài gấp đôi, dễ bị cắt) — an toàn & nhanh hơn mỗi call
     const batches = chunk(uniq, isEnglish ? 70 : 120);
-    statsRows = []; const knownTopics = new Set();
+    statsRows = []; const knownTopics = new Set(); let aiErr = "";
     try {
       let done = 0;
       const setProg = () => setMsg("#plMsg", "info", `<span class="spinner" style="border-top-color:transparent"></span>Đang phân nhóm ${batches.length > 1 ? `(${done}/${batches.length} lô)` : ""} (${uniq.length} từ khóa)${dupNote}...`);
@@ -2706,6 +2707,7 @@ $("#opClearSkill").addEventListener("click", () => {
         const r = await _fetch("/api/keywords/pillar/classify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ keywords: batches[i], knownTopics: [...knownTopics], needTranslate: isEnglish, engine, model, apiKey }) });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || "Lỗi phân nhóm");
+        if (d.aiError && !aiErr) aiErr = d.aiError;
         (d.items || []).forEach((it) => { const topic = it.topic || "Khác"; statsRows.push({ keyword: it.keyword, topic, vi: it.vi || "" }); knownTopics.add(topic); });
         done++; setProg();
       };
@@ -2723,7 +2725,8 @@ $("#opClearSkill").addEventListener("click", () => {
       populateTopicFilter("#plStatsTopicFilter", topics.map((t) => t.topic));
       renderStats();
       $("#plStatsCard").classList.remove("hidden");
-      setMsg("#plMsg", "info", `✓ Đã phân ${statsRows.length} từ khóa thành ${topics.length} topic${isEnglish ? " (kèm bản dịch VI)" : ""}${dupNote}.`);
+      const viNote = isEnglish ? (aiErr ? "" : " (kèm bản dịch VI)") : "";
+      setMsg("#plMsg", aiErr ? "warn" : "info", `✓ Đã phân ${statsRows.length} từ khóa thành ${topics.length} topic${viNote}${dupNote}.${aiErr ? " ⚠️ " + esc(aiErr) : ""}`);
     } catch (err) { setMsg("#plMsg", "err", "❌ " + err.message); }
     finally { busy(analyzeBtn, false); }
   });
@@ -2769,7 +2772,6 @@ $("#opClearSkill").addEventListener("click", () => {
   $("#plSuggest").addEventListener("click", async () => {
     if (!statsRows.length) return setMsg("#plSuggestMsg", "err", "❌ Chưa có bảng phân nhóm.");
     const engine = $("#engine").value, model = $("#model").value, apiKey = $("#apiKey").value.trim();
-    if (engine !== "gemini" && engine !== "claude") return setMsg("#plSuggestMsg", "err", "❌ Cần bật engine Gemini/Claude ở ⚙️ để gợi ý.");
     const gl = $("#plGl").value, hl = $("#plHl").value, bingKey = $("#plBingKey").value.trim();
     const allHave = statsRows.map((r) => r.keyword);
     const byTopic = {}; statsRows.forEach((r) => { (byTopic[r.topic] = byTopic[r.topic] || []).push(r.keyword); });
@@ -2778,14 +2780,15 @@ $("#opClearSkill").addEventListener("click", () => {
 
     const btn = $("#plSuggest"); busy(btn, true, "Đang gợi ý...");
     $("#plSuggestCard").classList.add("hidden"); $("#plOutlinePanel").classList.add("hidden");
-    suggestData = []; const usedGlobal = new Set(); let anyTrend = false, anyBing = false;
+    suggestData = []; const usedGlobal = new Set(); let anyTrend = false, anyBing = false, sugAiErr = "";
     try {
       for (let i = 0; i < batches.length; i++) {
-        setMsg("#plSuggestMsg", "info", `<span class="spinner" style="border-top-color:transparent"></span>AI đang gợi ý & lấy volume ${batches.length > 1 ? `(lô ${i + 1}/${batches.length})` : ""}...`);
+        setMsg("#plSuggestMsg", "info", `<span class="spinner" style="border-top-color:transparent"></span>Đang gợi ý từ Google Autocomplete ${batches.length > 1 ? `(lô ${i + 1}/${batches.length})` : ""}...`);
         const r = await _fetch("/api/keywords/pillar/suggest", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topics: batches[i], allHave, gl, hl, engine, model, apiKey, bingKey, minPerTopic: 30, needTranslate: isEnglish }) });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || "Lỗi gợi ý");
         anyTrend = anyTrend || d.trendUsed; anyBing = anyBing || d.bingUsed;
+        if (d.aiError && !sugAiErr) sugAiErr = d.aiError;
         (d.topics || []).forEach((t) => {
           const kws = (t.keywords || []).filter((k) => { const key = normKw(k.keyword); if (usedGlobal.has(key)) return false; usedGlobal.add(key); return true; });
           if (kws.length) suggestData.push({ topic: t.topic, keywords: kws });
@@ -2799,7 +2802,7 @@ $("#opClearSkill").addEventListener("click", () => {
       const notes = [];
       if (anyBing) notes.push("có số lượt/tháng (Bing)");
       if (anyTrend) notes.push("có mức quan tâm (Trends)");
-      setMsg("#plSuggestMsg", "info", `✓ Gợi ý ${total} từ khóa mới cho ${suggestData.length} topic${notes.length ? " — " + notes.join("; ") : ""}.`);
+      setMsg("#plSuggestMsg", sugAiErr ? "warn" : "info", `✓ Gợi ý ${total} từ khóa (từ Google Autocomplete thật) cho ${suggestData.length} topic${notes.length ? " — " + notes.join("; ") : ""}.${sugAiErr ? " ⚠️ AI không dùng được (" + esc(sugAiErr) + ") → dùng trực tiếp gợi ý Google." : ""}`);
       $("#plSuggestCard").scrollIntoView({ block: "start", behavior: "smooth" });
     } catch (err) { setMsg("#plSuggestMsg", "err", "❌ " + err.message); }
     finally { busy(btn, false); }

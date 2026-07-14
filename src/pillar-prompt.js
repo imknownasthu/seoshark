@@ -78,14 +78,14 @@ export function buildClassifyPrompt(keywords, { knownTopics = [], needTranslate 
 // topics: [{ topic, have:[kw...], candidates:[kw...] }]; opts: { minPerTopic, needTranslate }
 export function buildSuggestPrompt(topics, { minPerTopic = 30, needTranslate = false } = {}) {
   const system =
-    "Bạn là chuyên gia nghiên cứu từ khóa SEO, đa lĩnh vực. Với MỖI topic, đề xuất ÍT NHẤT " + minPerTopic + " từ khóa MỚI " +
-    "để BAO PHỦ toàn diện thị trường/chủ đề đó (long-tail, các sub-intent, biến thể có nhu cầu tìm kiếm thật).\n" +
+    "Bạn là chuyên gia nghiên cứu từ khóa SEO. Nhiệm vụ CHÍNH: từ danh sách 'GỢI Ý AUTOCOMPLETE' (là truy vấn CÓ THẬT của Google) — hãy CHỌN LỌC, LÀM SẠCH và SẮP các từ khóa TỐT NHẤT, ĐA DẠNG NHẤT cho mỗi topic (ÍT NHẤT " + minPerTopic + " từ nếu đủ ứng viên).\n" +
+    "TƯ DUY: đây là từ khóa THẬT có người tìm — KHÔNG được 'chế' từ khóa bằng cách lấy TÊN TOPIC/chuyên mục rồi ghép thêm chữ. Chỉ khi ứng viên autocomplete chưa đủ, mới được bổ sung THÊM một ít biến thể long-tail mà bạn CHẮC CHẮN có người tìm (nhu cầu thật), tuyệt đối không bịa cụm gượng ép.\n" +
     "QUY TẮC BẮT BUỘC:\n" +
-    "1. TUYỆT ĐỐI KHÔNG trùng và KHÔNG đồng nghĩa / cùng ý với các từ khóa NGƯỜI DÙNG ĐÃ CÓ. Cấm DIỄN ĐẠT LẠI (paraphrase) một từ đã có bằng cách đổi trật tự, thêm/bớt từ hỏi, đổi từ nối. " +
-    "PHÉP THỬ: nếu bỏ các từ hỏi/từ nối (bị, có, không, gây, làm, tại sao, là, được, bao nhiêu...) mà phần từ nội dung CÒN LẠI trùng phần lớn với một từ đã có → ĐÓ LÀ TRÙNG, LOẠI BỎ. " +
-    "Ví dụ CẤM: đã có 'làm răng sứ bị hôi miệng' → KHÔNG gợi 'răng sứ có gây hôi miệng không' (cùng {răng sứ, hôi miệng}); đã có 'bọc răng sứ bị đen nướu' → KHÔNG gợi 'tại sao răng sứ bị đen viền nướu' (cùng {răng sứ, đen nướu}); đã có 'giá niềng răng' → KHÔNG gợi 'chi phí niềng răng', 'niềng răng bao nhiêu tiền'.\n" +
-    "2. Mỗi từ gợi ý phải khai thác một NHU CẦU / KHÍA CẠNH THỰC SỰ KHÁC: khía cạnh mới (nguyên nhân, cách xử lý, phòng ngừa, chi phí, địa điểm, đối tượng, thời gian, so sánh, biến chứng, vật liệu, thương hiệu, review...), hoặc thêm bổ ngữ cụ thể (địa danh, độ tuổi, tình trạng, loại...) — KHÔNG chỉ đảo chữ. Các từ gợi ý cũng KHÔNG trùng ý lẫn nhau.\n" +
-    "3. Ưu tiên từ khóa CÓ NHU CẦU TÌM KIẾM THẬT. Danh sách 'gợi ý autocomplete' là truy vấn có thật của Google — hãy tận dụng, chọn lọc và bổ sung.\n" +
+    "1. TUYỆT ĐỐI KHÔNG trùng và KHÔNG đồng nghĩa / cùng ý với các từ khóa NGƯỜI DÙNG ĐÃ CÓ. Cấm DIỄN ĐẠT LẠI (đổi trật tự, thêm/bớt từ hỏi, đổi từ nối). " +
+    "PHÉP THỬ: bỏ các từ hỏi/từ nối (bị, có, không, gây, làm, tại sao, là, được, bao nhiêu...) mà phần nội dung còn lại trùng phần lớn với một từ đã có → LOẠI. " +
+    "Ví dụ CẤM: đã có 'giá niềng răng' → KHÔNG gợi 'chi phí niềng răng', 'niềng răng bao nhiêu tiền'.\n" +
+    "2. CẤM 'ghép cơ học' kiểu lấy tên topic + 1 tính từ/bổ ngữ chung chung (vd topic 'Niềng răng' → cấm chế 'niềng răng tốt', 'niềng răng đẹp', 'niềng răng uy tín' nếu không phải truy vấn thật). Mỗi từ phải là một TRUY VẤN TỰ NHIÊN như người thật gõ.\n" +
+    "3. ĐA DẠNG INTENT: phủ nhiều nhu cầu KHÁC nhau (nguyên nhân, cách xử lý, phòng ngừa, chi phí, địa điểm, đối tượng, thời gian, so sánh, biến chứng, vật liệu, thương hiệu, review, quy trình...). Các từ gợi ý KHÔNG trùng ý lẫn nhau.\n" +
     "4. Từ khóa gợi ý viết CÙNG ngôn ngữ với từ khóa đã có của topic đó.\n" +
     (needTranslate
       ? "5. Mỗi từ khóa trả object {keyword, vi} với 'vi' = bản dịch tiếng Việt (nếu từ khóa tiếng Anh); nếu tiếng Việt để 'vi' rỗng.\n"
@@ -93,9 +93,9 @@ export function buildSuggestPrompt(topics, { minPerTopic = 30, needTranslate = f
     "Trả JSON {topics:[{topic, keywords:[{keyword" + (needTranslate ? ", vi" : "") + "}]}]} — mỗi topic ÍT NHẤT " + minPerTopic + " từ, dùng ĐÚNG tên topic đã cho.";
   const blocks = topics.map((t) => {
     const have = (t.have || []).slice(0, 50).map((k) => "  • " + k).join("\n");
-    const cand = (t.candidates || []).slice(0, 60).map((k) => "  - " + k).join("\n");
-    return `### TOPIC: ${t.topic}\nTỪ KHÓA ĐÃ CÓ (KHÔNG gợi lại, kể cả đồng nghĩa):\n${have || "  (không có)"}\nGỢI Ý AUTOCOMPLETE (tham khảo, có thật):\n${cand || "  (không có)"}`;
+    const cand = (t.candidates || []).slice(0, 120).map((k) => "  - " + k).join("\n");
+    return `### TOPIC: ${t.topic}\nTỪ KHÓA ĐÃ CÓ (KHÔNG gợi lại, kể cả đồng nghĩa):\n${have || "  (không có)"}\nGỢI Ý AUTOCOMPLETE — TRUY VẤN CÓ THẬT, hãy ưu tiên chọn/làm sạch từ đây:\n${cand || "  (không có)"}`;
   }).join("\n\n");
-  const user = `Gợi ý từ khóa MỚI cho từng topic (mỗi topic ≥ ${minPerTopic} từ):\n\n${blocks}`;
+  const user = `Từ các GỢI Ý AUTOCOMPLETE thật ở dưới, chọn lọc & đa dạng hóa ÍT NHẤT ${minPerTopic} từ khóa/topic (KHÔNG chế từ bằng cách ghép vào tên topic):\n\n${blocks}`;
   return { system, user, schema: SUGGEST_SCHEMA };
 }
