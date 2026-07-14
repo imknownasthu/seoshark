@@ -220,9 +220,12 @@ YEU CAU:
 4. Sap xep khuyen nghi tu Cao den Thap. Ngan gon, chinh xac, khong chung chung.`;
 }
 
-export function buildOptimizePrompt({ target, mainKeyword, subKeywords, selected, bench, extra, optimizeMode, knowledge, skill }) {
+export function buildOptimizePrompt({ target, mainKeyword, subKeywords, selected, bench, extra, optimizeMode, knowledge, skill, outline }) {
   const minWords = bench && bench.wordCount ? Math.max(bench.wordCount, target.wordCount || 0) : (target.wordCount || 800);
   const modeLine = `CHE DO TOI UU: Viet lai TOAN BO bai chuan SEO + ap dung cac tieu chi da chon, lam noi dung tot hon, day du va sau hon.`;
+  const outlineBlock = (Array.isArray(outline) && outline.length)
+    ? `\n=== BO CUC HEADING BAT BUOC (outline da duoc toi ua & duyet - PHAI BAM DUNG, dung dung thu tu & cap bac; KHONG tu them/bot muc) ===\n${outline.map((o) => `${"#".repeat(Math.min(4, Math.max(1, o.level)))} ${o.text}`).join("\n")}\n`
+    : "";
   return `TU KHOA CHINH: ${mainKeyword}
 TU KHOA PHU: ${(subKeywords || []).join(", ") || "(khong co)"}
 ${bench ? `Doi thu trung binh ~${bench.wordCount} tu, ${bench.headingCount} heading.` : ""}
@@ -231,7 +234,7 @@ DO DAI YEU CAU: bai MOI phai co IT NHAT ${minWords} tu (bang hoac NHIEU HON trun
 ${modeLine}
 
 TIEU CHI CAN TOI UU (nguoi dung chon): ${(selected && selected.length ? selected.join("; ") : "Tat ca tieu chi On-page quan trong")}
-${personaBlock(knowledge, skill)}${extra && extra.trim() ? `\nTHONG TIN/SO LIEU/YEU CAU BO SUNG TU NGUOI DUNG (BAT BUOC dua vao bai mot cach tu nhien, chinh xac, dung su that nay):\n"""\n${extra.trim()}\n"""\n` : ""}
+${personaBlock(knowledge, skill)}${outlineBlock}${extra && extra.trim() ? `\nTHONG TIN/SO LIEU/YEU CAU BO SUNG TU NGUOI DUNG (BAT BUOC dua vao bai mot cach tu nhien, chinh xac, dung su that nay):\n"""\n${extra.trim()}\n"""\n` : ""}
 NOI DUNG GOC (Title: ${target.titleTag || "(trong)"} | Meta: ${target.metaDescription || "(trong)"}):
 """
 ${target.contentMarkdown || target.contentText || "(khong doc duoc noi dung)"}
@@ -293,6 +296,87 @@ YEU CAU (RAT QUAN TRONG):
   • note: ghi chu ngan (vi sao/luu y).
 - Quy uoc "after" theo tung tieu chi: Title -> 1 title 50-60 ky tu tu khoa o dau; Meta -> 1 meta 140-160 ky tu co CTA; Heading/Cau truc -> dan y H1/H2/H3 nhieu dong bao phu du sub-topic; cac tieu chi khac -> noi dung/giai phap cu the ap dung duoc ngay.
 - KHONG bia so lieu. Tra ve DUNG schema {items:[{criterion, before, after, note}]}.`;
+}
+
+// ====== TOI UU CAU TRUC HEADING (GIU / SUA / XOA / THEM) - nhu chuyen gia SEO ======
+export const HEADING_SCHEMA = {
+  type: "object",
+  properties: {
+    intent: { type: "string", description: "Search intent chinh cua tu khoa + cac sub-intent BAT BUOC phai phu (dua vao heading doi thu TOP + truy van that)." },
+    items: {
+      type: "array",
+      description: "Quyet dinh cho TUNG heading: giu / sua / xoa / them. PHAI xu ly HET cac heading hien co (khong bo sot).",
+      items: {
+        type: "object",
+        properties: {
+          action: { type: "string", description: 'BAT BUOC 1 trong: "keep" (giu nguyen) | "rewrite" (viet lai) | "remove" (xoa/gop) | "add" (them moi).' },
+          level: { type: "integer", description: "Cap heading (1,2,3,4) sau khi toi uu." },
+          current: { type: "string", description: "Heading HIEN TAI (de trong neu action=add)." },
+          suggested: { type: "string", description: "Heading MOI da toi uu (de trong neu action=keep hoac remove)." },
+          position: { type: "string", description: "Voi action=add: vi tri chen (vd 'sau H2: Chi phi...'). Voi cac action khac de trong." },
+          reason: { type: "string", description: "Ly do NGAN, CU THE. Voi remove: neu ro vi sao lac de / trung lap / lam LOANG noi dung / qua mong / mang tinh quang cao. Voi rewrite: neu ro loi (mo ho, sao rong, nhoi tu khoa, sai cap bac, khong tra loi thang...)." },
+          impact: { type: "string", description: 'Muc anh huong SEO: "Cao" | "Trung binh" | "Thap".' },
+        },
+        required: ["action", "reason"],
+      },
+    },
+    finalOutline: {
+      type: "array",
+      description: "OUTLINE CUOI CUNG sau khi ap dung het (da bo heading xoa, da thay heading sua, da chen heading them). Thu tu logic theo hanh trinh nguoi doc.",
+      items: {
+        type: "object",
+        properties: {
+          level: { type: "integer" },
+          text: { type: "string" },
+          status: { type: "string", description: '"keep" | "rewrite" | "add" - de danh dau nguon goc.' },
+        },
+        required: ["level", "text"],
+      },
+    },
+    summary: { type: "string", description: "Tom tat: giu bao nhieu, sua bao nhieu, xoa bao nhieu, them bao nhieu + nhan xet chinh." },
+  },
+  required: ["items", "finalOutline"],
+};
+
+// gscQueries (tuy chon): [{query, clicks, impressions, ctr, position}] - truy van THAT de biet nhu cau nguoi doc
+export function buildHeadingPrompt({ target, competitors, bench, mainKeyword, subKeywords, knowledge, skill, gscQueries }) {
+  const cur = (target.headings || []).map((h, i) => `  ${i + 1}. H${h.level}: ${h.text}`).join("\n");
+  const comp = (competitors || []).filter((c) => c && c.ok).map((c, i) => {
+    const hs = (c.headings || []).slice(0, 20).map((h) => `     H${h.level}: ${h.text}`).join("\n");
+    return `  Doi thu #${i + 1} (${c.host || c.url}) - ${c.wordCount || "?"} tu:\n${hs || "     (khong lay duoc)"}`;
+  }).join("\n\n");
+  const gq = (gscQueries || []).slice(0, 20).map((q) => `  - "${q.query}": ${q.impressions || 0} impr, ${q.clicks || 0} clicks, vi tri ${q.position != null ? Number(q.position).toFixed(1) : "?"}`).join("\n");
+
+  return `TU KHOA CHINH: ${mainKeyword}
+TU KHOA PHU: ${(subKeywords || []).join(", ") || "(khong co)"}
+${bench ? `Trung binh doi thu: ${bench.wordCount} tu, ${bench.headingCount} heading.` : ""}
+${personaBlock(knowledge, skill)}
+=== OUTLINE HIEN TAI CUA BAI (chi trong vung noi dung chinh) ===
+${cur || "  (bai chua co heading nao)"}
+
+=== OUTLINE CUA DOI THU TOP SERP ===
+${comp || "  (khong co)"}
+${gq ? `\n=== TRUY VAN THAT NGUOI DUNG DANG TIM (Google Search Console) ===\n${gq}\n` : ""}
+NHIEM VU: TOI UU TOAN DIEN CAU TRUC HEADING nhu mot chuyen gia SEO Onpage + SEO Content (ap dung phuong phap onpage-competitor-analysis va nguyen tac SEO content DA LINH VUC — tu nhan dien linh vuc cua bai, KHONG ap cung 1 nganh).
+
+QUY TRINH BAT BUOC:
+BUOC 1 — Xac dinh SEARCH INTENT cua "${mainKeyword}" + liet ke cac SUB-INTENT bat buoc phai phu (bam heading doi thu TOP${gq ? " + truy van that GSC" : ""}).
+BUOC 2 — SOI TUNG HEADING HIEN CO (phai xu ly HET, khong bo sot), gan DUNG 1 action:
+  • "keep": phuc vu dung intent, dien dat tot, doi thu cung co hoac la the manh rieng.
+  • "rewrite": DUNG chu de nhung DIEN DAT KEM -> viet lai. Cac loi can bat: mo ho/chung chung; sao rong; NHOI TU KHOA; sai cap bac (H3 le loi, H2 dang le la H3); dang cau hoi nhung khong tra loi thang; qua dai/qua ngan; khong chua tu khoa/bien the khi can.
+  • "remove": KHONG phuc vu intent -> XOA hoac GOP. Bat cac truong hop: LAC DE; TRUNG LAP y voi heading khac; noi dung QUA MONG khong dang 1 muc rieng; mang tinh QUANG CAO/ban hang lam LOANG noi dung; muc phu tro vun vat lam loang trong tam. PHAI neu ro ly do lam loang.
+BUOC 3 — THEM heading con THIEU (content gap so voi doi thu + sub-intent chua phu${gq ? " + nhu cau tu truy van GSC" : ""}), ghi ro vi tri chen.
+BUOC 4 — Dung finalOutline: outline CUOI sau khi ap dung het (bo cai xoa, thay cai sua, chen cai them), thu tu LOGIC theo hanh trinh nguoi doc (nhan dien van de -> hieu -> giai phap -> chi phi/luu y -> hanh dong).
+
+NGUYEN TAC (moi linh vuc):
+- Dung 1 H1 chua tu khoa chinh. Phan cap logic: H3 phai thuoc 1 H2; cha co 0 hoac >=2 con (khong de con don le).
+- KHONG nhoi tu khoa vao moi heading — dung bien the/LSI tu nhien.
+- Heading dang cau hoi: noi dung ngay duoi tra loi THANG (chuan Google AI Overview).
+- Uu tien muc CO NHU CAU TIM KIEM THAT; cat bo muc lan man/quang cao.
+- E-E-A-T: voi linh vuc YMYL (y te/tai chinh/phap ly) can co muc the hien kinh nghiem/chuyen mon/dan nguon.
+- Giong tu nhien nhu chuyen gia nguoi Viet viet, KHONG sao rong, KHONG dau vet AI.
+${skill && skill.trim() ? "- TUAN THU tuyet doi SKILL cua nguoi dung o tren (giong van, cau truc, quy tac).\n" : ""}${knowledge && knowledge.trim() ? "- Van dung KIEN THUC WEBSITE de dat muc the hien the manh rieng (non-commodity), khong bia.\n" : ""}
+KHONG bia so lieu. Tra ve DUNG schema (items co du keep/rewrite/remove/add + finalOutline).`;
 }
 
 // ====== AI DANH GIA ONPAGE dua tren SO LIEU GSC THAT + DOI THU (bao cao tong hop) ======

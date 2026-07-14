@@ -30,8 +30,8 @@ import {
   gscSaConfigured, gscServiceAccountEmail, gscSaAccessToken,
 } from "./src/gsc.js";
 import {
-  ONPAGE_SYSTEM, RECOMMEND_SCHEMA, OPTIMIZE_SCHEMA, SUGGEST_SCHEMA, CRITERIA_SCHEMA, EVALUATE_SCHEMA,
-  buildRecommendPrompt, buildOptimizePrompt, buildSuggestPrompt, buildCriteriaPrompt, buildEvaluatePrompt, mechanicalRecommendations,
+  ONPAGE_SYSTEM, RECOMMEND_SCHEMA, OPTIMIZE_SCHEMA, SUGGEST_SCHEMA, CRITERIA_SCHEMA, EVALUATE_SCHEMA, HEADING_SCHEMA,
+  buildRecommendPrompt, buildOptimizePrompt, buildSuggestPrompt, buildCriteriaPrompt, buildEvaluatePrompt, buildHeadingPrompt, mechanicalRecommendations,
 } from "./src/onpage-prompt.js";
 import * as auth from "./src/auth.js";
 import { sendVerifyEmail, sendOwnerNotify, sendResetCodeEmail, sendPasswordEmail, mailMode } from "./src/mailer.js";
@@ -690,7 +690,7 @@ function _countOccur(text, phrase) {
 
 app.post("/api/onpage/optimize", requireAuth, async (req, res) => {
   try {
-    const { id, selected, extra, optimizeMode, engine, model, apiKey, knowledge, skill } = req.body || {};
+    const { id, selected, extra, optimizeMode, engine, model, apiKey, knowledge, skill, outline } = req.body || {};
     const session = sessions.get(id);
     if (!session || session.type !== "onpage") {
       return res.status(400).json({ error: "Phiên hết hạn. Hãy phân tích On-page lại." });
@@ -698,6 +698,10 @@ app.post("/api/onpage/optimize", requireAuth, async (req, res) => {
     const { target, mainKeyword, subKeywords, bench } = session;
     const know = String(knowledge || "").slice(0, 200000);
     const skl = String(skill || "").slice(0, 100000);
+    // Outline da duoc toi uu & duyet (tu /api/onpage/headings) -> bat bai viet lai bam dung
+    const outl = (Array.isArray(outline) ? outline : [])
+      .map((o) => ({ level: Math.min(4, Math.max(1, Number(o.level) || 2)), text: String(o.text || "").trim() }))
+      .filter((o) => o.text).slice(0, 60);
 
     // CHE DO CRITERIA: chi tra TRUOC/SAU cho dung cac tieu chi da tick (khong viet lai ca bai)
     if (optimizeMode === "criteria") {
@@ -722,7 +726,7 @@ app.post("/api/onpage/optimize", requireAuth, async (req, res) => {
       const { data, engineUsed } = await onpageAI({
         engine, key: apiKey, model,
         system: ONPAGE_SYSTEM,
-        user: buildOptimizePrompt({ target, mainKeyword, subKeywords, selected, bench, extra, optimizeMode, knowledge: know, skill: skl }),
+        user: buildOptimizePrompt({ target, mainKeyword, subKeywords, selected, bench, extra, optimizeMode, knowledge: know, skill: skl, outline: outl }),
         schema: OPTIMIZE_SCHEMA, maxTokens: 8192,
       });
       result = { ...data, engineUsed };
@@ -755,6 +759,44 @@ app.post("/api/onpage/optimize", requireAuth, async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
+// --- POST /api/onpage/headings : toi uu cau truc heading (GIU/SUA/XOA/THEM) + outline cuoi ---
+app.post("/api/onpage/headings", requireAuth, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const session = sessions.get(body.id);
+    if (!session || session.type !== "onpage") return res.status(400).json({ error: "Phiên hết hạn. Hãy phân tích On-page lại." });
+    const { target, competitors, bench, mainKeyword, subKeywords } = session;
+    const { engine, model, apiKey } = body;
+    if (engine !== "gemini" && engine !== "claude") return res.status(400).json({ error: "Cần bật engine Gemini/Claude ở ⚙️ để tối ưu heading." });
+    const knowledge = String(body.knowledge || "").slice(0, 200000);
+    const skill = String(body.skill || "").slice(0, 100000);
+    const gscQueries = Array.isArray(body.gscQueries) ? body.gscQueries.slice(0, 20) : [];
+
+    const { data, engineUsed } = await onpageAI({
+      engine, key: apiKey, model,
+      system: ONPAGE_SYSTEM,
+      user: buildHeadingPrompt({ target, competitors, bench, mainKeyword, subKeywords, knowledge, skill, gscQueries }),
+      schema: HEADING_SCHEMA, maxTokens: 12288,
+    });
+    const items = (Array.isArray(data.items) ? data.items : []).map((it) => ({
+      action: String(it.action || "").toLowerCase(),
+      level: Number(it.level) || 2,
+      current: String(it.current || "").trim(),
+      suggested: String(it.suggested || "").trim(),
+      position: String(it.position || "").trim(),
+      reason: String(it.reason || "").trim(),
+      impact: String(it.impact || "").trim(),
+    })).filter((it) => ["keep", "rewrite", "remove", "add"].includes(it.action));
+    const finalOutline = (Array.isArray(data.finalOutline) ? data.finalOutline : [])
+      .map((o) => ({ level: Math.min(4, Math.max(1, Number(o.level) || 2)), text: String(o.text || "").trim(), status: String(o.status || "").toLowerCase() }))
+      .filter((o) => o.text);
+    res.json({ intent: data.intent || "", items, finalOutline, summary: data.summary || "", engineUsed, currentHeadings: target.headings || [] });
+  } catch (e) {
+    if (e.message === "local") return res.status(400).json({ error: "Cần engine Gemini/Claude." });
+    res.status(400).json({ error: "AI lỗi: " + (e.message || "?") });
   }
 });
 

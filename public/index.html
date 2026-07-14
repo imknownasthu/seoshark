@@ -602,6 +602,19 @@
           <p class="muted" style="margin:0 0 10px">Tick tiêu chí muốn tối ưu (mục yếu đã tự tick). Bấm tên tiêu chí để <b>mở/đóng chi tiết</b> của bạn &amp; từng đối thủ.</p>
           <div id="opCompareTable" style="overflow:auto"></div>
 
+          <!-- Tối ưu cấu trúc Heading: giữ / sửa / xóa / thêm -->
+          <div id="opHeadBox" style="margin-top:16px;padding:14px;border:1px solid var(--line);border-radius:12px;background:#FBFCFE">
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <div style="flex:1;min-width:240px">
+                <b style="font-size:13px">Tối ưu cấu trúc Heading (outline)</b>
+                <div class="muted" style="font-size:.83rem;margin-top:2px">Soi <b>từng heading</b> hiện có → <b>Giữ / Sửa lại / Xóa</b> (lạc đề, trùng lặp, làm loãng nội dung) → <b>Thêm</b> mục còn thiếu, rồi dựng <b>outline cuối</b>.</div>
+              </div>
+              <button class="ghost small" id="btnOpHeadings" type="button">Phân tích &amp; tối ưu heading</button>
+            </div>
+            <div id="opHeadMsg" style="margin-top:8px"></div>
+            <div id="opHeadResult" style="margin-top:10px"></div>
+          </div>
+
           <details style="margin-top:16px" id="opExtraBox">
             <summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--brand-dark)">Thông tin / số liệu / yêu cầu bổ sung (tùy chọn — giúp AI viết đúng &amp; sâu hơn)</summary>
             <textarea id="opExtra" rows="4" style="margin-top:8px" placeholder="VD: Phòng khám 10 năm kinh nghiệm; giá bọc răng sứ từ 2 triệu/răng; bảo hành 15 năm; cần thêm phần FAQ; nhấn mạnh bác sĩ chuyên môn cao..."></textarea>

@@ -1122,6 +1122,7 @@ if ($("#opGscBtn")) $("#opGscBtn").addEventListener("click", async () => {
       `<div class="muted" style="font-size:.8rem;margin-bottom:4px">Property: ${esc(d.siteUrl || "")} · ${d.days} ngày · Top truy vấn (bấm tiêu đề cột để sắp xếp):</div>` +
       `<div id="opGscTbl"></div>`;
     mountGscTable($("#opGscTbl"), d.queries);
+    _opGscQueries = d.queries || [];
   } catch (e) { $("#opGscMsg").innerHTML = `<span style="color:#c0392b">❌ ${esc(e.message)}</span>`; }
   finally { busy(btn, false); }
 });
@@ -1163,7 +1164,76 @@ function renderOpEvaluate(d) {
   if (d.actions && d.actions.length) html += `<h3 style="margin:12px 0 6px">✅ Việc cần làm (ưu tiên)</h3>` + d.actions.map((a) => `<div class="rec-item"><div class="rec-body"><label>${pill(a.priority)} <b>${esc(a.action)}</b></label>${a.why ? `<div class="muted">💡 ${esc(a.why)}</div>` : ""}</div></div>`).join("");
   if (g.queries && g.queries.length) html += `<h3 style="margin:12px 0 6px">Bảng truy vấn GSC <span class="muted" style="font-weight:400;font-size:.85rem">(bấm tiêu đề cột để sắp xếp)</span></h3><div id="opGscEvalTbl"></div>`;
   $("#opGscEvalResult").innerHTML = html;
-  if (g.queries && g.queries.length) mountGscTable($("#opGscEvalTbl"), g.queries);
+  if (g.queries && g.queries.length) { mountGscTable($("#opGscEvalTbl"), g.queries); _opGscQueries = g.queries; }
+}
+
+/* ---------- Tối ưu cấu trúc Heading: GIỮ / SỬA / XÓA / THÊM ---------- */
+let _opGscQueries = [];   // truy vấn GSC gần nhất (nếu có) → AI biết nhu cầu thật
+let opHeadOutline = [];   // outline cuối sau tối ưu
+if ($("#btnOpHeadings")) $("#btnOpHeadings").addEventListener("click", async () => {
+  const msg = $("#opHeadMsg"); msg.innerHTML = "";
+  if (!opSession.id) { msg.innerHTML = alertHtml("err", "Hãy phân tích On-page trước."); return; }
+  const engine = $("#engine").value;
+  if (engine !== "gemini" && engine !== "claude") { msg.innerHTML = alertHtml("err", "Cần bật engine Gemini/Claude ở ⚙️."); return; }
+  const btn = $("#btnOpHeadings"); busy(btn, true, "AI đang soi từng heading...");
+  $("#opHeadResult").innerHTML = "";
+  try {
+    const r = await fetch("/api/onpage/headings", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: opSession.id, engine, model: $("#model").value || undefined, apiKey: $("#apiKey").value.trim() || undefined,
+        knowledge: opResolveKnowledge() || undefined, skill: opResolveSkill() || undefined,
+        gscQueries: (_opGscQueries || []).slice(0, 20),
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "Lỗi tối ưu heading");
+    renderOpHeadings(d);
+  } catch (e) { msg.innerHTML = alertHtml("err", "❌ " + e.message); }
+  finally { busy(btn, false); }
+});
+function renderOpHeadings(d) {
+  opHeadOutline = d.finalOutline || [];
+  const items = d.items || [];
+  const by = (a) => items.filter((x) => x.action === a);
+  const badge = { keep: '<span class="badge ok">GIỮ</span>', rewrite: '<span class="badge sapo">SỬA</span>', remove: '<span class="badge ket">XÓA</span>', add: '<span class="badge ok">THÊM</span>' };
+  const imp = (i) => (i ? `<span class="muted" style="font-size:.78rem"> · Ảnh hưởng: ${esc(i)}</span>` : "");
+  const row = (it) => {
+    const head = it.action === "add"
+      ? `<b style="color:#2e9e6b">+ H${it.level}: ${esc(it.suggested || "")}</b>${it.position ? `<span class="muted"> (chèn ${esc(it.position)})</span>` : ""}`
+      : it.action === "rewrite"
+        ? `<div class="muted"><s>H${it.level}: ${esc(it.current)}</s></div><b style="color:var(--brand-dark)">→ H${it.level}: ${esc(it.suggested || "")}</b>`
+        : it.action === "remove"
+          ? `<s style="color:#c0392b">H${it.level}: ${esc(it.current)}</s>`
+          : `<b>H${it.level}: ${esc(it.current)}</b>`;
+    return `<div class="opd" style="margin-bottom:6px">${badge[it.action] || ""}${imp(it.impact)}<div style="margin-top:3px">${head}</div><div class="muted" style="margin-top:3px">💡 ${esc(it.reason || "")}</div></div>`;
+  };
+  const sec = (title, arr, color) => (arr.length ? `<h4 style="margin:12px 0 6px;color:${color}">${title} (${arr.length})</h4>${arr.map(row).join("")}` : "");
+  let html = "";
+  if (d.summary) html += alertHtml("info", esc(d.summary));
+  if (d.intent) html += `<div class="opd" style="margin-bottom:8px"><b>Search intent:</b> ${esc(d.intent)}</div>`;
+  html += sec("🗑️ Nên XÓA / GỘP (lạc đề · trùng lặp · làm loãng nội dung)", by("remove"), "#c0392b");
+  html += sec("✏️ Nên SỬA LẠI (diễn đạt kém / sai cấp bậc / nhồi từ khóa)", by("rewrite"), "var(--brand-dark)");
+  html += sec("➕ Nên THÊM (content gap so với đối thủ)", by("add"), "#2e9e6b");
+  html += sec("✅ GIỮ NGUYÊN", by("keep"), "var(--muted)");
+  if (opHeadOutline.length) {
+    const tree = opHeadOutline.map((o) => {
+      const tag = { add: '<span class="badge ok" style="font-size:.65rem">mới</span>', rewrite: '<span class="badge sapo" style="font-size:.65rem">sửa</span>' }[o.status] || "";
+      return `<div style="padding:3px 0;padding-left:${(o.level - 1) * 20}px"><span class="muted" style="font-size:.72rem;border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-right:6px">H${o.level}</span>${esc(o.text)} ${tag}</div>`;
+    }).join("");
+    html += `<h4 style="margin:14px 0 6px">📄 Outline CUỐI sau tối ưu</h4>
+      <div style="padding:10px;border:1px solid var(--line);border-radius:10px;background:#fff">${tree}</div>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:8px">
+        <button class="ghost small" id="opHeadCopy" type="button">Copy outline (Markdown)</button>
+        <label style="display:flex;gap:6px;align-items:center;font-weight:600;font-size:13px;cursor:pointer"><input type="checkbox" id="opHeadUse" checked style="width:16px;height:16px;accent-color:var(--c-blue)"> Dùng outline này khi "Tối ưu toàn bộ bài"</label>
+      </div>`;
+  }
+  $("#opHeadResult").innerHTML = html;
+  const cp = $("#opHeadCopy");
+  if (cp) cp.addEventListener("click", () => {
+    const md = opHeadOutline.map((o) => "#".repeat(o.level) + " " + o.text).join("\n");
+    navigator.clipboard.writeText(md).then(() => toast("Đã copy outline!")).catch(() => toast("Không copy được."));
+  });
 }
 
 function opNorm(s) { return (s || "").toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/đ/g, "d"); }
@@ -1331,7 +1401,13 @@ $("#btnOpOptimize").addEventListener("click", async () => {
     optimizeMode: mode,
     engine: $("#engine").value, apiKey: $("#apiKey").value.trim() || undefined, model: $("#model").value || undefined,
   };
-  if (mode === "full") { payload.knowledge = opResolveKnowledge() || undefined; payload.skill = opResolveSkill() || undefined; }
+  if (mode === "full") {
+    payload.knowledge = opResolveKnowledge() || undefined;
+    payload.skill = opResolveSkill() || undefined;
+    // Nếu đã tối ưu heading và người dùng chọn dùng outline đó -> bắt bài viết lại bám đúng
+    const useOutline = $("#opHeadUse") && $("#opHeadUse").checked;
+    if (useOutline && opHeadOutline && opHeadOutline.length) payload.outline = opHeadOutline;
+  }
 
   const btn = $("#btnOpOptimize");
   busy(btn, true, mode === "criteria" ? "AI đang tối ưu các tiêu chí đã tick..." : "AI đang viết lại bài chuẩn SEO...");
