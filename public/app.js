@@ -2459,7 +2459,7 @@ $("#opClearSkill").addEventListener("click", () => {
     try {
       for (let i = 0; i < batches.length; i++) {
         setMsg("#plSuggestMsg", "info", `<span class="spinner" style="border-top-color:transparent"></span>AI đang gợi ý & lấy volume ${batches.length > 1 ? `(lô ${i + 1}/${batches.length})` : ""}...`);
-        const r = await _fetch("/api/keywords/pillar/suggest", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topics: batches[i], allHave, gl, hl, engine, model, apiKey, bingKey, minPerTopic: 20, needTranslate: isEnglish }) });
+        const r = await _fetch("/api/keywords/pillar/suggest", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ topics: batches[i], allHave, gl, hl, engine, model, apiKey, bingKey, minPerTopic: 30, needTranslate: isEnglish }) });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || "Lỗi gợi ý");
         anyTrend = anyTrend || d.trendUsed; anyBing = anyBing || d.bingUsed;

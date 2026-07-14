@@ -76,14 +76,15 @@ export function buildClassifyPrompt(keywords, { knownTopics = [], needTranslate 
 }
 
 // topics: [{ topic, have:[kw...], candidates:[kw...] }]; opts: { minPerTopic, needTranslate }
-export function buildSuggestPrompt(topics, { minPerTopic = 20, needTranslate = false } = {}) {
+export function buildSuggestPrompt(topics, { minPerTopic = 30, needTranslate = false } = {}) {
   const system =
     "Bạn là chuyên gia nghiên cứu từ khóa SEO, đa lĩnh vực. Với MỖI topic, đề xuất ÍT NHẤT " + minPerTopic + " từ khóa MỚI " +
     "để BAO PHỦ toàn diện thị trường/chủ đề đó (long-tail, các sub-intent, biến thể có nhu cầu tìm kiếm thật).\n" +
     "QUY TẮC BẮT BUỘC:\n" +
-    "1. TUYỆT ĐỐI KHÔNG trùng và KHÔNG đồng nghĩa / cùng ý với các từ khóa NGƯỜI DÙNG ĐÃ CÓ trong topic. " +
-    "Ví dụ đã có 'giá niềng răng' thì KHÔNG được gợi ý 'chi phí niềng răng', 'niềng răng bao nhiêu tiền', 'niềng răng giá bao nhiêu'.\n" +
-    "2. Các từ gợi ý cũng KHÔNG trùng ý lẫn nhau — mỗi từ khai thác một góc/nhu cầu KHÁC nhau.\n" +
+    "1. TUYỆT ĐỐI KHÔNG trùng và KHÔNG đồng nghĩa / cùng ý với các từ khóa NGƯỜI DÙNG ĐÃ CÓ. Cấm DIỄN ĐẠT LẠI (paraphrase) một từ đã có bằng cách đổi trật tự, thêm/bớt từ hỏi, đổi từ nối. " +
+    "PHÉP THỬ: nếu bỏ các từ hỏi/từ nối (bị, có, không, gây, làm, tại sao, là, được, bao nhiêu...) mà phần từ nội dung CÒN LẠI trùng phần lớn với một từ đã có → ĐÓ LÀ TRÙNG, LOẠI BỎ. " +
+    "Ví dụ CẤM: đã có 'làm răng sứ bị hôi miệng' → KHÔNG gợi 'răng sứ có gây hôi miệng không' (cùng {răng sứ, hôi miệng}); đã có 'bọc răng sứ bị đen nướu' → KHÔNG gợi 'tại sao răng sứ bị đen viền nướu' (cùng {răng sứ, đen nướu}); đã có 'giá niềng răng' → KHÔNG gợi 'chi phí niềng răng', 'niềng răng bao nhiêu tiền'.\n" +
+    "2. Mỗi từ gợi ý phải khai thác một NHU CẦU / KHÍA CẠNH THỰC SỰ KHÁC: khía cạnh mới (nguyên nhân, cách xử lý, phòng ngừa, chi phí, địa điểm, đối tượng, thời gian, so sánh, biến chứng, vật liệu, thương hiệu, review...), hoặc thêm bổ ngữ cụ thể (địa danh, độ tuổi, tình trạng, loại...) — KHÔNG chỉ đảo chữ. Các từ gợi ý cũng KHÔNG trùng ý lẫn nhau.\n" +
     "3. Ưu tiên từ khóa CÓ NHU CẦU TÌM KIẾM THẬT. Danh sách 'gợi ý autocomplete' là truy vấn có thật của Google — hãy tận dụng, chọn lọc và bổ sung.\n" +
     "4. Từ khóa gợi ý viết CÙNG ngôn ngữ với từ khóa đã có của topic đó.\n" +
     (needTranslate

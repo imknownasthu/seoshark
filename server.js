@@ -1017,6 +1017,37 @@ app.post("/api/keywords/research", requireAuth, async (req, res) => {
 
 // ===================== PILLAR TOPIC =====================
 const _norm = (s) => String(s || "").toLowerCase().normalize("NFC").replace(/\s+/g, " ").trim();
+
+// Loc trung NGU NGHIA (khong chi trung y nguyen chu): tach "tu noi dung" (bo stopword/tu hoi) roi
+// do do trung lap Jaccard. Vi du "lam rang su bi hoi mieng" ~ "rang su co gay hoi mieng khong".
+// LUU Y: kiem tra stopword tren tu CO DAU (de "den"=stopword "den"/"den" KHONG nuot "den"=mau den).
+const _VI_STOP = new Set([
+  "bị", "có", "không", "được", "gây", "làm", "là", "tại", "sao", "như", "thế", "nào", "bao", "nhiêu",
+  "khi", "và", "của", "cho", "với", "ở", "trong", "ra", "vào", "đi", "thì", "mà", "hay", "hoặc",
+  "các", "những", "một", "cái", "về", "do", "vì", "nên", "cần", "muốn", "gì", "ai", "đâu", "mỗi",
+  "này", "kia", "ấy", "bởi", "từ", "đến", "theo", "hơn", "rất", "quá", "cũng", "vẫn", "sẽ", "đang",
+  "loại", "kiểu", "dùng", "khi", "nếu", "để", "bằng", "sau", "trước", "khác",
+  "the", "is", "are", "do", "does", "how", "what", "why", "when", "which", "to", "of", "for", "a", "an",
+  "and", "or", "in", "on", "with", "your", "you", "my", "vs", "can", "should",
+]);
+const _stripDia = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "d");
+function _contentTokens(kw) {
+  const low = String(kw || "").toLowerCase().normalize("NFC");
+  const out = new Set();
+  for (const t of low.replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(Boolean)) {
+    if (_VI_STOP.has(t)) continue;            // bo stopword (tren tu CO DAU)
+    const bare = _stripDia(t);                // so sanh o dang khong dau (miệng ~ mieng)
+    if (bare.length > 1) out.add(bare);
+  }
+  return out;
+}
+// true neu 2 tu qua giong nhau ve noi dung (Jaccard inter/union >= nguong)
+function _tooSimilar(aSet, bSet, thr = 0.58) {
+  if (!aSet.size || !bSet.size) return false;
+  let inter = 0;
+  for (const t of aSet) if (bSet.has(t)) inter++;
+  return inter / (aSet.size + bSet.size - inter) >= thr;
+}
 // Goi AI JSON (Gemini co fallback model / Claude); nem loi that neu that bai
 async function aiJson(eng, { system, user, schema, maxTokens, model, apiKey }) {
   if (eng === "gemini") {
@@ -1090,7 +1121,10 @@ app.post("/api/keywords/pillar/suggest", requireAuth, async (req, res) => {
     // Loai trung voi TOAN BO tu khoa nguoi dung (allHave) + trong noi bo
     const haveGlobal = new Set((Array.isArray(allHave) ? allHave : []).map(_norm));
     inTopics.forEach((t) => t.have.forEach((k) => haveGlobal.add(_norm(k))));
+    // Tap "tu noi dung" cua moi tu da co -> loc trung NGU NGHIA (khong chi trung nguyen chu)
+    const haveTokenSets = [...haveGlobal].map(_contentTokens).filter((s) => s.size);
     const usedSug = new Set();
+    const usedSugSets = []; // token-set cac goi y da nhan -> chong trung y giua cac goi y
     const out = [];
     (d.topics || []).forEach((t) => {
       const topic = String(t.topic || "").trim();
@@ -1101,7 +1135,11 @@ app.post("/api/keywords/pillar/suggest", requireAuth, async (req, res) => {
         const vi = String((kw && kw.vi) || "").trim();
         const key = _norm(clean);
         if (!clean || haveGlobal.has(key) || usedSug.has(key)) return;
+        const tok = _contentTokens(clean);
+        // Bo neu giong ngu nghia voi 1 tu NGUOI DUNG DA CO, hoac voi 1 goi y da nhan
+        if (haveTokenSets.some((h) => _tooSimilar(tok, h)) || usedSugSets.some((s) => _tooSimilar(tok, s))) return;
         usedSug.add(key);
+        usedSugSets.push(tok);
         kws.push({ keyword: clean, vi });
       });
       if (kws.length) out.push({ topic, keywords: kws });
