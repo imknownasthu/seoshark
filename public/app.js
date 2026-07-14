@@ -2373,15 +2373,25 @@ $("#opClearSkill").addEventListener("click", () => {
 
     busy(analyzeBtn, true, "Đang phân nhóm...");
     $("#plStatsCard").classList.add("hidden"); $("#plSuggestCard").classList.add("hidden");
-    const batches = chunk(uniq, 120);
+    // Lô nhỏ hơn khi phải dịch VI (output dài gấp đôi, dễ bị cắt) — an toàn & nhanh hơn mỗi call
+    const batches = chunk(uniq, isEnglish ? 70 : 120);
     statsRows = []; const knownTopics = new Set();
     try {
-      for (let i = 0; i < batches.length; i++) {
-        setMsg("#plMsg", "info", `<span class="spinner" style="border-top-color:transparent"></span>Đang phân nhóm ${batches.length > 1 ? `lô ${i + 1}/${batches.length}` : ""} (${uniq.length} từ khóa)${dupNote}...`);
+      let done = 0;
+      const setProg = () => setMsg("#plMsg", "info", `<span class="spinner" style="border-top-color:transparent"></span>Đang phân nhóm ${batches.length > 1 ? `(${done}/${batches.length} lô)` : ""} (${uniq.length} từ khóa)${dupNote}...`);
+      const runBatch = async (i) => {
         const r = await _fetch("/api/keywords/pillar/classify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ keywords: batches[i], knownTopics: [...knownTopics], needTranslate: isEnglish, engine, model, apiKey }) });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || "Lỗi phân nhóm");
         (d.items || []).forEach((it) => { const topic = it.topic || "Khác"; statsRows.push({ keyword: it.keyword, topic, vi: it.vi || "" }); knownTopics.add(topic); });
+        done++; setProg();
+      };
+      setProg();
+      // Lô đầu chạy trước để lập bộ topic gốc; các lô sau chạy song song (tối đa 3) cho nhanh
+      if (batches.length) await runBatch(0);
+      const CONC = 3, rest = batches.map((_, i) => i).slice(1);
+      for (let i = 0; i < rest.length; i += CONC) {
+        await Promise.all(rest.slice(i, i + CONC).map((idx) => runBatch(idx)));
       }
       const tMap = {}; statsRows.forEach((r) => { tMap[r.topic] = (tMap[r.topic] || 0) + 1; });
       const topics = Object.entries(tMap).map(([topic, count]) => ({ topic, count })).sort((a, b) => b.count - a.count);
@@ -2631,14 +2641,22 @@ $("#opClearSkill").addEventListener("click", () => {
     busy(analyzeBtn, true, "Đang phân loại...");
     $("#pcClassifyCard").classList.add("hidden"); $("#pcResultCard").classList.add("hidden");
     classifyRows = []; const knownTopics = new Set();
-    const batches = chunk(rows, 120);
+    const batches = chunk(rows, isEng ? 70 : 120);
     try {
-      for (let i = 0; i < batches.length; i++) {
-        setMsg("#pcMsg", "info", `<span class="spinner" style="border-top-color:transparent"></span>Đang phân loại ${batches.length > 1 ? `lô ${i + 1}/${batches.length}` : ""} (${rows.length} từ, ${convCount} chuyển đổi${dups ? `, đã loại ${dups} trùng` : ""})...`);
+      let done = 0;
+      const setProg = () => setMsg("#pcMsg", "info", `<span class="spinner" style="border-top-color:transparent"></span>Đang phân loại ${batches.length > 1 ? `(${done}/${batches.length} lô)` : ""} (${rows.length} từ, ${convCount} chuyển đổi${dups ? `, đã loại ${dups} trùng` : ""})...`);
+      const runBatch = async (i) => {
         const r = await _fetch("/api/internal/pillar/classify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows: batches[i], knownTopics: [...knownTopics], needTranslate: isEng, engine, model, apiKey }) });
         const d = await r.json();
         if (!r.ok) throw new Error(d.error || "Lỗi phân loại");
         (d.items || []).forEach((it) => { classifyRows.push(it); knownTopics.add(it.topic); });
+        done++; setProg();
+      };
+      setProg();
+      if (batches.length) await runBatch(0);
+      const CONC = 3, rest = batches.map((_, i) => i).slice(1);
+      for (let i = 0; i < rest.length; i += CONC) {
+        await Promise.all(rest.slice(i, i + CONC).map((idx) => runBatch(idx)));
       }
       populate("#pcCatFilter", [...new Set(classifyRows.map((r) => r.category))]);
       $("#pcKwCount").textContent = classifyRows.length;

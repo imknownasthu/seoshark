@@ -1049,7 +1049,7 @@ app.post("/api/keywords/pillar/classify", requireAuth, async (req, res) => {
     const eng = (engine || "local").toLowerCase();
     if (eng !== "gemini" && eng !== "claude") return res.status(400).json({ error: "Cần bật engine Gemini/Claude để AI phân nhóm topic (hoặc tự nhập cột topic cho mọi từ khóa)." });
     const { system, user, schema } = buildPillarClassifyPrompt(raw, { knownTopics: known, needTranslate: tr });
-    const d = await aiJson(eng, { system, user, schema, maxTokens: 8192, model, apiKey });
+    const d = await aiJson(eng, { system, user, schema, maxTokens: 16384, model, apiKey });
     const map = {};
     (d.items || []).forEach((it) => { if (it && it.keyword) map[_norm(it.keyword)] = { topic: String(it.topic || "").trim(), vi: String(it.vi || "").trim() }; });
     const items = raw.map((k) => {
@@ -1085,7 +1085,7 @@ app.post("/api/keywords/pillar/suggest", requireAuth, async (req, res) => {
     }
 
     const { system, user, schema } = buildPillarSuggestPrompt(topicsInput, { minPerTopic: min, needTranslate: tr });
-    const d = await aiJson(eng, { system, user, schema, maxTokens: 8192, model, apiKey });
+    const d = await aiJson(eng, { system, user, schema, maxTokens: 16384, model, apiKey });
 
     // Loai trung voi TOAN BO tu khoa nguoi dung (allHave) + trong noi bo
     const haveGlobal = new Set((Array.isArray(allHave) ? allHave : []).map(_norm));
@@ -1139,7 +1139,7 @@ app.post("/api/internal/pillar/classify", requireAuth, async (req, res) => {
     const known = (Array.isArray(knownTopics) ? knownTopics : []).map((t) => String(t || "").trim()).filter(Boolean).slice(0, 200);
     const tr = !!needTranslate;
     const { system, user, schema } = buildPcClassifyPrompt(list, { knownTopics: known, needTranslate: tr });
-    const d = await aiJson(eng, { system, user, schema, maxTokens: 8192, model, apiKey });
+    const d = await aiJson(eng, { system, user, schema, maxTokens: 16384, model, apiKey });
     const map = {};
     (d.items || []).forEach((it) => { if (it && it.keyword) map[_norm(it.keyword)] = it; });
     const items = list.map((r) => {
@@ -1164,7 +1164,7 @@ app.post("/api/internal/pillar/tier", requireAuth, async (req, res) => {
     const eng = (engine || "local").toLowerCase();
     if (eng !== "gemini" && eng !== "claude") return res.status(400).json({ error: "Cần bật engine Gemini/Claude để phân bậc." });
     const { system, user, schema } = buildPcTierPrompt(list, { category: String(category || "").trim() });
-    const d = await aiJson(eng, { system, user, schema, maxTokens: 8192, model, apiKey });
+    const d = await aiJson(eng, { system, user, schema, maxTokens: 16384, model, apiKey });
     const roleName = { 1: "Dịch vụ", 2: "Chuyển đổi", 3: "SEO", 4: "Tin tức", 5: "Bổ trợ" };
     const map = {};
     (d.items || []).forEach((it) => { if (it && it.keyword) map[_norm(it.keyword)] = it; });

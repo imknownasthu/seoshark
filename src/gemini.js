@@ -38,6 +38,44 @@ export async function geminiPing(apiKey) {
   return true;
 }
 
+// "Va" JSON bi cat cut (do dung gioi han output): dong lai cac object/array con dang mo
+// sau phan tu HOAN CHINH cuoi cung, de van lay duoc ket qua mot phan thay vi crash ca lo.
+export function closeTruncatedJson(text) {
+  let inStr = false, esc = false, lastClose = -1;
+  const st = [];
+  const snapshots = {};
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === "\\") esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === "{") st.push("}");
+    else if (c === "[") st.push("]");
+    else if (c === "}" || c === "]") {
+      st.pop();
+      if (c === "}") { lastClose = i; snapshots[i] = st.slice(); } // moc: 1 object vua dong tron ven
+    }
+  }
+  if (lastClose < 0) return null;
+  const closers = (snapshots[lastClose] || []).slice().reverse().join("");
+  return text.slice(0, lastClose + 1) + closers;
+}
+
+// Parse JSON, tu dong va neu bi cat cut
+function parseJsonResilient(text, finishReason) {
+  try { return JSON.parse(text); } catch (e) {
+    const repaired = closeTruncatedJson(text);
+    if (repaired) { try { return JSON.parse(repaired); } catch {} }
+    if (finishReason === "MAX_TOKENS")
+      throw new Error("Gemini bi cat do vuot gioi han do dai (thu giam so tu moi lo).");
+    throw e;
+  }
+}
+
 // Chuyen JSON Schema (type chu thuong) -> Gemini schema (type CHU HOA)
 function toGeminiSchema(s) {
   if (!s || typeof s !== "object") return s;
@@ -85,9 +123,10 @@ export async function geminiJson({ apiKey, model, system, user, schema, maxToken
   } finally {
     clearTimeout(timer);
   }
-  const text = data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join("") || "";
-  if (!text) throw new Error(`Gemini khong tra ve noi dung (${data?.candidates?.[0]?.finishReason || "?"}).`);
-  return JSON.parse(text);
+  const cand = data?.candidates?.[0];
+  const text = cand?.content?.parts?.map((p) => p.text).join("") || "";
+  if (!text) throw new Error(`Gemini khong tra ve noi dung (${cand?.finishReason || "?"}).`);
+  return parseJsonResilient(text, cand?.finishReason);
 }
 
 export async function optimizeWithGemini({ apiKey, model, article, mode, count, keywords, targets }) {
