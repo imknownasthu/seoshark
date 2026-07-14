@@ -27,6 +27,7 @@ import { buildPcClassifyPrompt, buildPcTierPrompt } from "./src/pillar-content-p
 import * as store from "./src/store.js";
 import {
   gscConfigured, gscAuthUrl, gscExchangeCode, gscAccessToken, gscListSites, gscQuery, gscPickSiteForUrl, gscTotals,
+  gscSaConfigured, gscServiceAccountEmail, gscSaAccessToken,
 } from "./src/gsc.js";
 import {
   ONPAGE_SYSTEM, RECOMMEND_SCHEMA, OPTIMIZE_SCHEMA, SUGGEST_SCHEMA, CRITERIA_SCHEMA,
@@ -1375,10 +1376,24 @@ async function _gscAccess(owner) {
   return { accessToken: at, siteUrl: tok.siteUrl || "" };
 }
 
-// Cau hinh cho client-side Sign in with Google (GIS token client): chi can Client ID (public).
+// Cau hinh GSC cho client. Uu tien Service Account (khong can dang nhap); else GIS Client ID.
 app.get("/api/gsc/config", requireAuth, (req, res) => {
-  res.json({ clientId: (process.env.GOOGLE_OAUTH_CLIENT_ID || "").trim() });
+  res.json({
+    mode: gscSaConfigured() ? "sa" : (process.env.GOOGLE_OAUTH_CLIENT_ID ? "oauth" : "none"),
+    saConfigured: gscSaConfigured(),
+    saEmail: gscServiceAccountEmail(),
+    clientId: (process.env.GOOGLE_OAUTH_CLIENT_ID || "").trim(),
+  });
 });
+
+// Token GSC: uu tien Service Account (server-side); else access_token client (GIS); else refresh_token da luu
+async function _gscToken(body, owner) {
+  if (gscSaConfigured()) return await gscSaAccessToken();
+  const at = String((body || {}).accessToken || "").trim();
+  if (at) return at;
+  const acc = await _gscAccess(owner);
+  return acc.accessToken;
+}
 
 app.get("/api/gsc/status", requireAuth, async (req, res) => {
   try {
@@ -1419,15 +1434,13 @@ app.get("/api/gsc/callback", requireAuth, async (req, res) => {
   }
 });
 
-// Nhan access_token tu client (GIS Sign in with Google) hoac fallback refresh_token da luu
+// Liet ke property. Uu tien Service Account; else access_token client (GIS); else refresh_token luu
 app.post("/api/gsc/sites", requireAuth, async (req, res) => {
   try {
     const owner = (req.user?.email || "guest").toLowerCase();
-    let accessToken = String((req.body || {}).accessToken || "").trim();
-    let siteUrl = "";
-    if (!accessToken) ({ accessToken, siteUrl } = await _gscAccess(owner));
+    const accessToken = await _gscToken(req.body, owner);
     const sites = await gscListSites(accessToken);
-    res.json({ sites, siteUrl });
+    res.json({ sites });
   } catch (e) { res.status(400).json({ error: e.message || "Lỗi GSC" }); }
 });
 
@@ -1455,15 +1468,14 @@ app.post("/api/gsc/metrics", requireAuth, async (req, res) => {
     const body = req.body || {};
     const url = String(body.url || "").trim();
     const days = Number(body.days) || 28;
-    // Uu tien access_token client (GIS); else refresh_token da luu
-    let accessToken = String(body.accessToken || "").trim();
+    // Uu tien Service Account; else access_token client (GIS); else refresh_token da luu
+    const accessToken = await _gscToken(body, owner);
     let siteUrl = String(body.siteUrl || "").trim();
-    if (!accessToken) { const acc = await _gscAccess(owner); accessToken = acc.accessToken; if (!siteUrl) siteUrl = acc.siteUrl; }
     if (!siteUrl) {
       const sites = await gscListSites(accessToken);
       siteUrl = gscPickSiteForUrl(sites, url);
     }
-    if (!siteUrl) return res.status(400).json({ error: "Chưa chọn site GSC (property). Hãy chọn property ở ⚙️." });
+    if (!siteUrl) return res.status(400).json({ error: "Chưa có property GSC. Kiểm tra đã thêm email Service Account vào Search Console chưa (Settings → Users)." });
     const [totalRows, queryRows] = await Promise.all([
       gscQuery(accessToken, siteUrl, { url, days, dimensions: [], rowLimit: 1 }),
       gscQuery(accessToken, siteUrl, { url, days, dimensions: ["query"], rowLimit: 25 }),

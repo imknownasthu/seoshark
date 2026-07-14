@@ -1,14 +1,52 @@
 // src/gsc.js
-// Ket noi Google Search Console (OAuth 2.0) - doc so lieu THAT (clicks/impressions/CTR/vi tri + top queries).
-// MIEN PHI. Gated theo env: can GOOGLE_OAUTH_CLIENT_ID + GOOGLE_OAUTH_CLIENT_SECRET (tao o Google Cloud Console).
-// Scope chi-doc: webmasters.readonly. Redirect URI phai khop cai dat trong Google Cloud (mac dinh <BASE>/api/gsc/callback).
+// Ket noi Google Search Console - doc so lieu THAT (clicks/impressions/CTR/vi tri + top queries).
+// MIEN PHI. Scope chi-doc: webmasters.readonly.
+// CACH CHINH (khuyen nghi): SERVICE ACCOUNT - server tu lay token bang JWT, nguoi dung chi can
+//   them email service account vao GSC (Settings -> Users). Env: GOOGLE_SERVICE_ACCOUNT_JSON (dan ca JSON)
+//   hoac GOOGLE_SERVICE_ACCOUNT_FILE (duong dan file .json).
+// CACH CU (fallback): OAuth client / GIS token client (GOOGLE_OAUTH_CLIENT_ID).
+
+import fs from "node:fs";
+import crypto from "node:crypto";
 
 const SCOPE = "https://www.googleapis.com/auth/webmasters.readonly";
 const AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
 const API = "https://www.googleapis.com/webmasters/v3";
 
-// Da cau hinh OAuth chua?
+// ===== SERVICE ACCOUNT (cach chinh) =====
+function readServiceAccount() {
+  const inline = (process.env.GOOGLE_SERVICE_ACCOUNT_JSON || "").trim();
+  const file = (process.env.GOOGLE_SERVICE_ACCOUNT_FILE || process.env.GOOGLE_APPLICATION_CREDENTIALS || "").trim();
+  let raw = "";
+  if (inline) raw = inline;
+  else if (file) { try { raw = fs.readFileSync(file, "utf8"); } catch { return null; } }
+  if (!raw) return null;
+  try { const j = JSON.parse(raw); if (j && j.client_email && j.private_key) return j; } catch {}
+  return null;
+}
+export function gscSaConfigured() { return !!readServiceAccount(); }
+export function gscServiceAccountEmail() { const sa = readServiceAccount(); return sa ? sa.client_email : ""; }
+
+let _saCache = { token: "", exp: 0 };
+// Lay access_token cua service account: ky JWT RS256 roi doi lay token (server-to-server, khong can user OAuth)
+export async function gscSaAccessToken() {
+  if (_saCache.token && Date.now() < _saCache.exp - 60000) return _saCache.token;
+  const sa = readServiceAccount();
+  if (!sa) throw new Error("Chưa cấu hình Service Account (GOOGLE_SERVICE_ACCOUNT_JSON/FILE).");
+  const now = Math.floor(Date.now() / 1000);
+  const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
+  const unsigned = `${b64({ alg: "RS256", typ: "JWT" })}.${b64({ iss: sa.client_email, scope: SCOPE, aud: TOKEN_ENDPOINT, iat: now, exp: now + 3600 })}`;
+  const sig = crypto.createSign("RSA-SHA256").update(unsigned).sign(sa.private_key).toString("base64url");
+  const body = new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion: `${unsigned}.${sig}` });
+  const r = await fetch(TOKEN_ENDPOINT, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error_description || d.error || `HTTP ${r.status}`);
+  _saCache = { token: d.access_token, exp: Date.now() + (Number(d.expires_in || 3600) * 1000) };
+  return d.access_token;
+}
+
+// Da cau hinh OAuth (GIS/OAuth client) chua?
 export function gscConfigured() {
   return !!((process.env.GOOGLE_OAUTH_CLIENT_ID || "").trim() && (process.env.GOOGLE_OAUTH_CLIENT_SECRET || "").trim());
 }
