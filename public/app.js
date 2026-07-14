@@ -2516,24 +2516,50 @@ $("#opClearSkill").addEventListener("click", () => {
     } catch { setMsg("#plSetMsg", "err", "Lỗi xóa."); }
   });
 
-  // Bước 3: lưu (thêm) từ khóa gợi ý vào bộ đã upload/đã lưu — không cần tải Excel mới
-  $("#plSuggestSave").addEventListener("click", async () => {
-    const rows = (suggestData || []).flatMap((t) => (t.keywords || []).map((k) => ({ keyword: k.keyword, topic: t.topic, vi: k.vi || "" })));
-    if (!rows.length) return setMsg("#plSuggestMsg", "err", "❌ Chưa có từ khóa gợi ý để lưu.");
-    const targetId = $("#plSetSelect").value || plLoadedSetId || "";
+  // Bước 3: thêm từ khóa gợi ý vào bộ đã nạp — CHỌN TỪNG TỪ (nút Lưu mỗi dòng) hoặc lưu tất cả đang hiển thị.
+  const plSavedKeys = new Set(); // các từ đã lưu trong phiên (để đánh dấu ✓)
+  // Xác định bộ đích: ưu tiên bộ đang chọn/đã nạp; nếu chưa có thì hỏi tạo bộ mới (1 lần).
+  async function plResolveTarget(msgSel) {
+    let targetId = $("#plSetSelect").value || plLoadedSetId || "";
     let name = "";
     if (!targetId) {
-      name = prompt("Chưa chọn bộ nào. Nhập tên bộ MỚI để lưu các từ khóa gợi ý:", plLoadedSetName || ("Bộ từ khóa " + new Date().toLocaleDateString("vi-VN")));
-      if (name === null) return;
+      name = prompt("Chưa có bộ từ khóa đích. Nhập tên bộ MỚI để lưu vào:", plLoadedSetName || ("Bộ từ khóa " + new Date().toLocaleDateString("vi-VN")));
+      if (name === null) return null;
     }
+    return { targetId, name: (name || "").trim() };
+  }
+  async function plAppendRows(rows, target) {
+    const r = await _fetch("/api/keywords/sets/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: target.targetId, name: target.name, keywords: rows, append: true }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error || "Lưu thất bại");
+    plLoadedSetId = d.id; plLoadedSetName = d.name;
+    await loadPlSets(); $("#plSetSelect").value = d.id;
+    rows.forEach((x) => plSavedKeys.add(normKw(x.keyword)));
+    return d;
+  }
+  // Lưu 1 từ khóa (nút ＋ Lưu ở từng dòng)
+  async function plSaveOneKw(btn) {
+    const row = { keyword: btn.dataset.kw, topic: btn.dataset.topic || "", vi: btn.dataset.vi || "" };
+    const target = await plResolveTarget("#plSuggestMsg");
+    if (!target) return;
+    btn.disabled = true; btn.textContent = "...";
+    try {
+      const d = await plAppendRows([row], target);
+      renderSuggest(); // cập nhật đánh dấu ✓
+      setMsg("#plSuggestMsg", "info", `✓ Đã thêm "${esc(row.keyword)}" vào bộ "${esc(d.name)}" (tổng ${d.count}).`);
+    } catch (e) { btn.disabled = false; btn.textContent = "＋ Lưu"; setMsg("#plSuggestMsg", "err", "❌ " + e.message); }
+  }
+  // Lưu TẤT CẢ từ khóa đang hiển thị (theo bộ lọc hiện tại)
+  $("#plSuggestSave").addEventListener("click", async () => {
+    const rows = suggestFiltered().map((r) => ({ keyword: r.keyword, topic: r.topic, vi: r.vi || "" }));
+    if (!rows.length) return setMsg("#plSuggestMsg", "err", "❌ Chưa có từ khóa để lưu.");
+    const target = await plResolveTarget("#plSuggestMsg");
+    if (!target) return;
     const btn = $("#plSuggestSave"); busy(btn, true, "Đang lưu...");
     try {
-      const r = await _fetch("/api/keywords/sets/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: targetId, name: (name || "").trim(), keywords: rows, append: true }) });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || "Lưu thất bại");
-      plLoadedSetId = d.id; plLoadedSetName = d.name;
-      await loadPlSets(); $("#plSetSelect").value = d.id;
-      setMsg("#plSuggestMsg", "info", `✓ Đã thêm từ khóa gợi ý vào bộ "${esc(d.name)}" — tổng ${d.count} từ khóa.`);
+      const d = await plAppendRows(rows, target);
+      renderSuggest();
+      setMsg("#plSuggestMsg", "info", `✓ Đã thêm ${rows.length} từ khóa đang hiển thị vào bộ "${esc(d.name)}" — tổng ${d.count}.`);
     } catch (e) { setMsg("#plSuggestMsg", "err", "❌ " + e.message); }
     finally { busy(btn, false); }
   });
@@ -2676,13 +2702,20 @@ $("#opClearSkill").addEventListener("click", () => {
   function renderSuggest() {
     const list = suggestFiltered();
     const hasVol = list.some((r) => Number.isFinite(r.volume));
-    const viCol = isEnglish;
+    const viCol = isEnglish || list.some((r) => r.vi);
     $("#plSugShown").textContent = `Hiển thị: ${list.length}`;
-    const head = `<tr><th>#</th><th>Topic</th><th>Từ khóa gợi ý</th>${viCol ? "<th>Bản dịch (VI)</th>" : ""}${hasVol ? "<th>Volume/tháng<br><small class='muted'>Bing</small></th>" : ""}<th style="min-width:100px">Quan tâm<br><small class='muted'>Trends</small></th><th>Outline</th></tr>`;
-    const body = list.map((r, i) => `<tr><td>${i + 1}</td><td><span class="chip" style="padding:2px 9px">${esc(r.topic)}</span></td><td>${esc(r.keyword)}</td>${viCol ? `<td>${esc(r.vi || "")}</td>` : ""}${hasVol ? `<td style="text-align:right">${fmtVol(r.volume)}</td>` : ""}<td>${trendBar(r.trend)}</td><td><button class="ghost small pl-ol-btn" data-kw="${esc(r.keyword)}">Lên outline</button></td></tr>`).join("");
+    const head = `<tr><th>#</th><th>Topic</th><th>Từ khóa gợi ý</th>${viCol ? "<th>Bản dịch (VI)</th>" : ""}${hasVol ? "<th>Volume/tháng<br><small class='muted'>Bing</small></th>" : ""}<th style="min-width:100px">Quan tâm<br><small class='muted'>Trends</small></th><th>Lưu</th><th>Outline</th></tr>`;
+    const body = list.map((r, i) => {
+      const saved = plSavedKeys.has(normKw(r.keyword));
+      const saveBtn = saved
+        ? `<span class="muted" style="font-size:.8rem">✓ Đã lưu</span>`
+        : `<button class="ghost small pl-save-btn" data-kw="${esc(r.keyword)}" data-topic="${esc(r.topic)}" data-vi="${esc(r.vi || "")}">＋ Lưu</button>`;
+      return `<tr><td>${i + 1}</td><td><span class="chip" style="padding:2px 9px">${esc(r.topic)}</span></td><td>${esc(r.keyword)}</td>${viCol ? `<td>${esc(r.vi || "")}</td>` : ""}${hasVol ? `<td style="text-align:right">${fmtVol(r.volume)}</td>` : ""}<td>${trendBar(r.trend)}</td><td>${saveBtn}</td><td><button class="ghost small pl-ol-btn" data-kw="${esc(r.keyword)}">Lên outline</button></td></tr>`;
+    }).join("");
     const scroll = list.length > 20 ? ' style="max-height:640px;overflow:auto"' : ' style="overflow:auto"';
     $("#plSuggestList").innerHTML = `<div${scroll}><table class="cmp"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
     $$("#plSuggestList .pl-ol-btn").forEach((b) => b.addEventListener("click", () => openOutline(b.dataset.kw)));
+    $$("#plSuggestList .pl-save-btn").forEach((b) => b.addEventListener("click", () => plSaveOneKw(b)));
   }
   $("#plSugFilter").addEventListener("input", renderSuggest);
   $("#plSugTopicFilter").addEventListener("change", renderSuggest);

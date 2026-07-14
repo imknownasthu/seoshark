@@ -127,9 +127,12 @@ export async function auditUrl(url) {
   const cdom = new JSDOM(`<body>${contentHtml}</body>`);
   const cbody = cdom.window.document.body;
 
-  // Headings: lay tu toan trang (tru menu/header/footer) de khong bo sot
-  const headings = extractHeadings(doc);
-  const pageH1Count = doc.querySelectorAll("h1").length;
+  // Headings: CHI lay trong vung NOI DUNG CHINH (cbody = Readability/article/main),
+  // khong lay heading o header/nav/sidebar/widget/footer.
+  let headings = extractHeadings(cbody);
+  // Fallback: neu content khong co heading (trang la), lay toan trang tru nav/footer
+  if (!headings.length) headings = extractHeadings(doc);
+  const pageH1Count = cbody.querySelectorAll("h1").length || doc.querySelectorAll("h1").length;
 
   // Anh + alt trong content
   const imgs = [...cbody.querySelectorAll("img")];
