@@ -19,10 +19,10 @@ export function sourceRank(host) {
   return 0;
 }
 const SOURCE_GUIDE =
-  "NGUỒN UY TÍN — ưu tiên theo thứ tự:\n" +
+  "CHỈ ĐƯỢC DÙNG các NGUỒN UY TÍN sau — KHÔNG dùng bất kỳ website nào khác (blog, báo lá cải, trang phòng khám, wiki...):\n" +
   "• Ưu tiên 1 (Việt Nam): Bộ Y tế (moh.gov.vn), Viện RHM TP.HCM (nhthcm.gov.vn), Hội RHM Việt Nam (radi.org.vn), BV RHM Trung ương (benhvienranghammat.vn).\n" +
-  "• Ưu tiên 2 (quốc tế — chỉ khi VN không có dữ liệu phù hợp): WHO, ADA/JADA (ada.org, jada.ada.org, mouthhealthy.org), FDI, EFP (efp.org), ITI (iti.org), PubMed/NCBI (pubmed.ncbi.nlm.nih.gov, ncbi.nlm.nih.gov), Cochrane (cochranelibrary.com), tạp chí chuyên ngành (sciencedirect.com, onlinelibrary.wiley.com, mdpi.com, journals.elsevier.com), Wolters Kluwer.\n" +
-  "Với chủ đề KHÔNG phải nha khoa: chọn nguồn chính thống tương đương (cơ quan nhà nước, hiệp hội chuyên ngành, tạp chí khoa học, báo chính thống).";
+  "• Ưu tiên 2 (quốc tế — dùng khi VN không có dữ liệu): WHO (who.int), ADA/JADA (ada.org, jada.ada.org, mouthhealthy.org), FDI (fdiworlddental.org), EFP (efp.org), ITI (iti.org), PubMed/NCBI (pubmed.ncbi.nlm.nih.gov, ncbi.nlm.nih.gov), Cochrane (cochranelibrary.com), tạp chí chuyên ngành (sciencedirect.com, onlinelibrary.wiley.com, mdpi.com, journals.elsevier.com), Wolters Kluwer (wolterskluwer.com).\n" +
+  "LƯU Ý: các nguồn này có cả bản TIẾNG ANH lẫn TIẾNG VIỆT — cần đọc số liệu cẩn thận, chính xác ở CẢ hai ngôn ngữ. Số liệu phải lấy ĐÚNG từ bài viết trong các nguồn trên; không suy diễn, không lấy từ nơi khác.";
 
 export const FACTCHECK_SYSTEM =
   "Bạn là chuyên gia kiểm chứng dữ liệu (fact-checker) và biên tập nội dung SEO y tế/nha khoa theo chuẩn E-E-A-T và YMYL của Google. " +
@@ -47,7 +47,8 @@ export const CLAIMS_SCHEMA = {
           value: { type: "string", description: "Với verify: số liệu hiện có (vd '95%','2 triệu'). Với add: để trống." },
           need: { type: "string", description: "Loại số liệu cần (vd 'tỷ lệ mắc bệnh nha chu ở người trưởng thành VN', 'tuổi thọ trung bình răng sứ', 'tỷ lệ thành công cấy implant')." },
           risk: { type: "string", enum: ["high", "medium", "low"], description: "Mức rủi ro nếu số liệu sai/thiếu (YMYL: cao nếu ảnh hưởng sức khỏe/tiền/quyết định điều trị)." },
-          query: { type: "string", description: "Truy vấn Google (tiếng Việt) để tìm NGUỒN UY TÍN xác minh/cung cấp số liệu này. Ngắn, đúng trọng tâm." },
+          query: { type: "string", description: "Truy vấn Google TIẾNG VIỆT để tìm số liệu trong nguồn uy tín Việt Nam. Ngắn, đúng trọng tâm (KHÔNG kèm site:)." },
+          queryEn: { type: "string", description: "Truy vấn Google TIẾNG ANH tương ứng để tìm số liệu trong nguồn quốc tế (WHO, ADA, PubMed...). Dùng thuật ngữ y khoa tiếng Anh chuẩn." },
         },
         required: ["mode", "quote", "need", "query"],
       },
@@ -63,7 +64,7 @@ export function buildClaimsPrompt({ content, url, mainKeyword, knowledge }) {
     "(A) mode=\"verify\" — SỐ LIỆU ĐANG CÓ trong bài cần kiểm chứng: tỷ lệ %, giá tiền, thời gian điều trị, tuổi thọ vật liệu, tỷ lệ biến chứng/thành công, thống kê 'theo nghiên cứu…', năm… — nhất là loại KHÔNG có nguồn, có thể LỖI THỜI hoặc NGHI NGỜ SAI.",
     "(B) mode=\"add\" — VỊ TRÍ NÊN CHÈN THÊM số liệu thật để tăng thuyết phục & tính Specific: chỗ đang nói chung chung mà một con số uy tín sẽ mạnh hơn (tỷ lệ mắc bệnh, hiệu quả điều trị, tuổi thọ vật liệu, tỷ lệ biến chứng…). Chỉ đề xuất chèn ở nơi TỰ NHIÊN, liên quan trực tiếp — KHÔNG nhồi số vô tội vạ.",
     "",
-    "Với MỖI mục: trích câu nguyên văn, nêu loại số liệu cần (need), mức rủi ro, và 1 TRUY VẤN GOOGLE tiếng Việt để tìm nguồn uy tín.",
+    "Với MỖI mục: trích câu nguyên văn, nêu loại số liệu cần (need), mức rủi ro, và 2 truy vấn: `query` (TIẾNG VIỆT — cho nguồn VN) + `queryEn` (TIẾNG ANH, thuật ngữ y khoa chuẩn — cho nguồn quốc tế WHO/ADA/PubMed). KHÔNG kèm 'site:' trong truy vấn (hệ thống tự giới hạn nguồn).",
     "Bỏ qua con số không mang tính dữ kiện (số thứ tự bước, SĐT, năm thành lập hiển nhiên…).",
     "Tối đa 10 mục quan trọng nhất (ưu tiên rủi ro cao & vị trí then chốt).",
     "",
@@ -112,7 +113,7 @@ export function buildVerifyPrompt({ claims, mainKeyword }) {
       `Câu trong bài: "${c.quote}"`,
       c.value ? `Số liệu hiện tại: ${c.value}` : "Số liệu hiện tại: (chưa có — cần chèn)",
       `Loại số liệu cần: ${c.need || ""}`,
-      "KẾT QUẢ TÌM KIẾM THẬT (chỉ được trích dẫn URL trong danh sách này; [UY TÍN] = nguồn ưu tiên):",
+      "KẾT QUẢ TỪ NGUỒN UY TÍN (TẤT CẢ đã được lọc chỉ còn nguồn chính thống; có thể là tiếng Anh hoặc tiếng Việt — đọc số liệu thật cẩn thận, chính xác):",
     ];
     const rs = Array.isArray(c.searchResults) ? c.searchResults : [];
     if (!rs.length) {
@@ -132,14 +133,15 @@ export function buildVerifyPrompt({ claims, mainKeyword }) {
     "NHIỆM VỤ: Với mỗi mục, dùng HOÀN TOÀN kết quả tìm kiếm THẬT được cung cấp để chèn/sửa số liệu và gán nguồn.",
     "",
     "QUY TẮC BẮT BUỘC:",
-    "1) Ưu tiên chọn kết quả [UY TÍN] (nguồn Việt Nam trước, quốc tế sau). Chỉ dùng nguồn thường khi không có nguồn uy tín phù hợp.",
-    "2) CHỈ dùng URL có trong danh sách của CHÍNH mục đó. KHÔNG bịa, KHÔNG lấy URL ngoài, KHÔNG sửa URL.",
-    "3) Nếu không nguồn nào đủ tin cậy xác nhận con số → status='unsupported' hoặc 'no_source', để trống sourceUrl, KHÔNG bịa số. Trong advice khuyên bỏ/tự tìm nguồn chính thống.",
-    "4) Diễn đạt số liệu NGẮN GỌN, TỰ NHIÊN, hòa vào câu văn (paraphrase). Attribution ngắn: 'Theo <tổ chức>, …'. Bọc số liệu trong [[ ]].",
+    "1) TẤT CẢ kết quả cung cấp đều là NGUỒN UY TÍN đã được lọc sẵn (Việt Nam ưu tiên trước, quốc tế sau). CHỈ được trích dẫn từ các kết quả này — KHÔNG dùng bất kỳ nguồn/URL nào khác, KHÔNG dùng số liệu nhớ từ dữ liệu huấn luyện.",
+    "2) Nguồn có thể là TIẾNG ANH hoặc TIẾNG VIỆT — đọc con số CHÍNH XÁC (đơn vị, %, khoảng giá trị), rồi diễn đạt lại bằng tiếng Việt tự nhiên. Số phải đúng y như trong snippet nguồn.",
+    "3) CHỈ dùng URL có trong danh sách của CHÍNH mục đó. KHÔNG bịa, KHÔNG lấy URL ngoài, KHÔNG sửa URL.",
+    "4) Nếu KHÔNG nguồn uy tín nào (trong danh sách) xác nhận con số → status='unsupported' hoặc 'no_source', để trống sourceUrl, KHÔNG bịa số, KHÔNG chèn. Trong advice ghi rõ: chưa tìm thấy trong các nguồn uy tín, nên tự kiểm tra thêm.",
+    "5) Diễn đạt số liệu NGẮN GỌN, TỰ NHIÊN, hòa vào câu văn (paraphrase). Attribution ngắn: 'Theo <tổ chức>, …'. Bọc số liệu trong [[ ]].",
     "   • ĐÚNG: \"Theo thống kê của Bộ Y tế, khoảng [[90%]] người trưởng thành Việt Nam mắc ít nhất một bệnh lý răng miệng.\"",
     "   • SAI (quá dài dòng): \"Theo báo cáo chi tiết được công bố bởi Bộ Y tế Việt Nam vào năm 2023 trên trang moh.gov.vn, nghiên cứu chỉ ra rằng tỷ lệ…\"",
-    "5) sourceNote là trích dẫn NGẮN lấy từ snippet nguồn (không tự chế). Tiếng Việt có dấu.",
-    "6) Với mode=add: nếu có nguồn tốt → status='added', chèn số liệu tự nhiên vào câu. Với mode=verify: 'accurate'/'corrected'/'outdated' tùy đối chiếu.",
+    "6) sourceNote là trích dẫn NGẮN lấy từ snippet nguồn (không tự chế); nếu nguồn tiếng Anh có thể để nguyên hoặc dịch ngắn. Tiếng Việt có dấu.",
+    "7) Với mode=add: nếu có nguồn uy tín → status='added', chèn số liệu tự nhiên vào câu. Với mode=verify: 'accurate'/'corrected'/'outdated' tùy đối chiếu snippet.",
     mainKeyword ? `\nBối cảnh từ khóa: ${mainKeyword}` : "",
     "",
     "===== DANH SÁCH MỤC & KẾT QUẢ TÌM KIẾM =====",

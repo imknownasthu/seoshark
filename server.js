@@ -14,7 +14,7 @@ import { optimizeWithClaude, claudeJson, claudePing } from "./src/claude.js";
 import { auditUrl, benchmark } from "./src/onpage.js";
 import { fetchSerp, serpConfigured } from "./src/serp.js";
 import { serperIndex, serperRank, serperWeb, serperCheck } from "./src/serper.js";
-import { FACTCHECK_SYSTEM, CLAIMS_SCHEMA, buildClaimsPrompt, VERIFY_SCHEMA, buildVerifyPrompt, VN_SOURCES, sourceRank } from "./src/factcheck-prompt.js";
+import { FACTCHECK_SYSTEM, CLAIMS_SCHEMA, buildClaimsPrompt, VERIFY_SCHEMA, buildVerifyPrompt, VN_SOURCES, INTL_SOURCES, sourceRank } from "./src/factcheck-prompt.js";
 import { fetchOgMeta } from "./src/sharekit.js";
 import { telegraphPublish, telegramPost } from "./src/autopost.js";
 import { slugify, mdToHtml, pollinationsImage, insertImage, postWordPress, postDevto, postHashnode } from "./src/blog2.js";
@@ -982,6 +982,7 @@ app.post("/api/onpage/factcheck", requireAuth, async (req, res) => {
           need: String(c.need || "").trim(),
           risk: String(c.risk || "medium"),
           query: String(c.query || "").trim(),
+          queryEn: String(c.queryEn || "").trim(),
         }))
         .filter((c) => c.quote && c.query)
         .slice(0, 10);
@@ -993,20 +994,23 @@ app.post("/api/onpage/factcheck", requireAuth, async (req, res) => {
       return res.json({ items: [], claimCount: 0, note: "Không phát hiện số liệu nào cần kiểm chứng trong nội dung." });
     }
 
-    // 3) Tim kiem web THAT cho tung so lieu — 2 luot: chung + loc nguon uy tin VN.
-    //    Gop, khu trung, sap xep NGUON UY TIN len dau (VN > quoc te > khac).
+    // 3) Tim kiem CHI TRONG NGUON UY TIN (whitelist). VN: truy van tieng Viet; quoc te: tieng Anh.
+    //    Loc CUNG chi giu domain trong whitelist, sap VN len dau. KHONG dung ket qua ngoai whitelist.
     const vnFilter = "(" + VN_SOURCES.map((s) => `site:${s}`).join(" OR ") + ")";
+    const intlFilter = "(" + INTL_SOURCES.map((s) => `site:${s}`).join(" OR ") + ")";
     await Promise.all(claims.map(async (c) => {
       try {
-        const [gen, vn] = await Promise.all([
-          serperWeb({ key: serperKey, q: c.query, gl, hl, num: 6 }),
-          serperWeb({ key: serperKey, q: `${c.query} ${vnFilter}`, gl, hl, num: 4 }).catch(() => ({ results: [], extra: [] })),
+        const enQ = c.queryEn || c.query;
+        const [vn, intl] = await Promise.all([
+          serperWeb({ key: serperKey, q: `${c.query} ${vnFilter}`, gl: "vn", hl: "vi", num: 6 }).catch((e) => { if (e.badKey) throw e; if (e.quota) c._quota = true; return { results: [], extra: [] }; }),
+          serperWeb({ key: serperKey, q: `${enQ} ${intlFilter}`, gl: "us", hl: "en", num: 6 }).catch((e) => { if (e.badKey) throw e; if (e.quota) c._quota = true; return { results: [], extra: [] }; }),
         ]);
-        const merged = [...(vn.extra || []), ...(vn.results || []), ...(gen.extra || []), ...(gen.results || [])];
+        const merged = [...(vn.extra || []), ...(vn.results || []), ...(intl.extra || []), ...(intl.results || [])];
         const seen = new Set();
-        const uniq = merged.filter((r) => r && r.url && !seen.has(r.url) && seen.add(r.url));
+        const uniq = merged
+          .filter((r) => r && r.url && sourceRank(r.host) > 0 && !seen.has(r.url) && seen.add(r.url));
         uniq.sort((a, b) => sourceRank(b.host) - sourceRank(a.host));
-        c.searchResults = uniq.slice(0, 7).map((r) => ({ ...r, auth: sourceRank(r.host) > 0 }));
+        c.searchResults = uniq.slice(0, 7).map((r) => ({ ...r, auth: true }));
       } catch (e) {
         c.searchResults = [];
         if (e.quota) c._quota = true;

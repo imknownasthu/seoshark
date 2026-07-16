@@ -1189,7 +1189,7 @@ $$("#onpageTabs .tab").forEach((tab) => {
             ${it.sourceNote ? `<div style="margin-top:4px;font-style:italic">“${esc(it.sourceNote)}”</div>` : ""}
           </div>`;
       } else {
-        src = alertHtml("warn", "⚠ <b>Không tìm được nguồn uy tín xác nhận số liệu này.</b> Nên gỡ bỏ con số hoặc tự tìm nguồn chính thống trước khi đăng.");
+        src = alertHtml("warn", "⚠ <b>Chưa tìm thấy số liệu này trong các nguồn uy tín</b> (Bộ Y tế, Viện/Hội/BV RHM, WHO, ADA, PubMed…). Không nên khẳng định con số nếu chưa có nguồn chính thống; hãy tự kiểm tra thêm.");
         if (it.candidates && it.candidates.length) {
           src += `<details style="margin-top:4px"><summary class="muted" style="cursor:pointer;font-size:.82rem">Xem ${it.candidates.length} kết quả tìm kiếm để tự đối chiếu</summary>
             <ul style="margin:6px 0;padding-left:18px;font-size:.82rem">${it.candidates.map((c) => `<li><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.title)}</a> <span class="muted">(${esc(c.host)})</span>${c.auth ? ` <span class="badge ok" style="font-size:.62rem;padding:1px 6px">Uy tín</span>` : ""}</li>`).join("")}</ul></details>`;
