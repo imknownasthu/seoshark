@@ -1410,6 +1410,26 @@ app.post("/api/keywords/pillar/classify", requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
 });
 
+// Dich MOT LO tu khoa sang tieng Viet (dam bao 100% - vi bat buoc trong schema). Client goi de BU cac tu con thieu.
+app.post("/api/keywords/translate", requireAuth, async (req, res) => {
+  try {
+    const { keywords, engine, model, apiKey } = req.body || {};
+    const list = (Array.isArray(keywords) ? keywords : []).map((k) => String(k || "").trim()).filter(Boolean).slice(0, 150);
+    if (!list.length) return res.json({ items: [] });
+    const eng = (engine || "local").toLowerCase();
+    if (eng !== "gemini" && eng !== "claude") return res.status(400).json({ error: "Cần bật Gemini/Claude để dịch." });
+    const schema = { type: "object", properties: { items: { type: "array", items: { type: "object", properties: { keyword: { type: "string" }, vi: { type: "string" } }, required: ["keyword", "vi"] } } }, required: ["items"] };
+    const system = "Bạn là dịch giả SEO. Dịch MỖI từ khóa sang tiếng Việt TỰ NHIÊN, ngắn gọn, đúng nghĩa (giữ thuật ngữ phổ biến). Bản dịch CÓ DẤU đầy đủ. Trả ĐÚNG số lượng, MỖI từ đều có 'vi' KHÔNG được để trống.";
+    const user = "Dịch sang tiếng Việt các từ khóa sau (trả đúng thứ tự & số lượng):\n" + list.map((k, i) => `${i + 1}. ${k}`).join("\n");
+    const d = await aiJson(eng, { system, user, schema, maxTokens: 16384, model, apiKey });
+    const map = {};
+    (d.items || []).forEach((it) => { if (it && it.keyword) map[_norm(it.keyword)] = String(it.vi || "").trim(); });
+    // Fallback vi trong: neu AI tra dung so luong & thu tu, map theo vi tri cho tu con thieu
+    const arr = Array.isArray(d.items) ? d.items : [];
+    res.json({ items: list.map((k, i) => ({ keyword: k, vi: map[_norm(k)] || (arr[i] && String(arr[i].vi || "").trim()) || "" })) });
+  } catch (e) { res.status(400).json({ error: e.message || "Lỗi dịch" }); }
+});
+
 // Buoc 3: goi y >=20 tu khoa MOI cho 1 LO topic (client chia lo topic), khong trung ngu nghia, co volume + dich VI
 app.post("/api/keywords/pillar/suggest", requireAuth, async (req, res) => {
   try {
@@ -1494,6 +1514,13 @@ app.post("/api/keywords/pillar/suggest", requireAuth, async (req, res) => {
         if (kws.length) out.push({ topic: t.topic, keywords: kws });
       });
     }
+
+    // Gioi han MEM tu khoa dia phuong (vd "... in Turkey", "near me") - toi da 2 moi topic de da dang ngu canh
+    const _localish = (kw) => /\bnear me\b|\b(in|near)\s+[a-zà-ỹ][a-zà-ỹ ]*$/i.test(String(kw || "").trim());
+    out.forEach((t) => {
+      let loc = 0;
+      t.keywords = t.keywords.filter((k) => { if (_localish(k.keyword)) { loc++; return loc <= 2; } return true; });
+    });
 
     const allKw = out.flatMap((t) => t.keywords.map((k) => k.keyword));
     const bKey = (bingKey || process.env.BING_API_KEY || "").trim();

@@ -2898,6 +2898,23 @@ $("#opClearSkill").addEventListener("click", () => {
       for (let i = 0; i < rest.length; i += CONC) {
         await Promise.all(rest.slice(i, i + CONC).map((idx) => runBatch(idx)));
       }
+      // BÙ DỊCH VI cho những từ AI phân nhóm bỏ sót (đảm bảo 100% có bản dịch khi chọn tiếng Anh)
+      if (isEnglish && (engine === "gemini" || engine === "claude")) {
+        const missing = statsRows.filter((r) => !r.vi || !r.vi.trim()).map((r) => r.keyword);
+        if (missing.length) {
+          setMsg("#plMsg", "info", `<span class="spinner" style="border-top-color:transparent"></span>Đang bù bản dịch cho ${missing.length} từ khóa...`);
+          const viMap = {};
+          const tb = chunk(missing, 100);
+          try {
+            for (let i = 0; i < tb.length; i++) {
+              const rt = await _fetch("/api/keywords/translate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ keywords: tb[i], engine, model, apiKey }) });
+              const dt = await rt.json();
+              if (rt.ok) (dt.items || []).forEach((it) => { if (it.keyword) viMap[normKw(it.keyword)] = it.vi || ""; });
+            }
+            statsRows.forEach((r) => { if ((!r.vi || !r.vi.trim()) && viMap[normKw(r.keyword)]) r.vi = viMap[normKw(r.keyword)]; });
+          } catch {}
+        }
+      }
       const tMap = {}; statsRows.forEach((r) => { tMap[r.topic] = (tMap[r.topic] || 0) + 1; });
       const topics = Object.entries(tMap).map(([topic, count]) => ({ topic, count })).sort((a, b) => b.count - a.count);
       $("#plKwCount").textContent = statsRows.length; $("#plTopicCount").textContent = topics.length;

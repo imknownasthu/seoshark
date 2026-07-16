@@ -85,7 +85,8 @@ export function buildSuggestPrompt(topics, { minPerTopic = 30, needTranslate = f
     "PHÉP THỬ: bỏ các từ hỏi/từ nối (bị, có, không, gây, làm, tại sao, là, được, bao nhiêu...) mà phần nội dung còn lại trùng phần lớn với một từ đã có → LOẠI. " +
     "Ví dụ CẤM: đã có 'giá niềng răng' → KHÔNG gợi 'chi phí niềng răng', 'niềng răng bao nhiêu tiền'.\n" +
     "2. CẤM 'ghép cơ học' kiểu lấy tên topic + 1 tính từ/bổ ngữ chung chung (vd topic 'Niềng răng' → cấm chế 'niềng răng tốt', 'niềng răng đẹp', 'niềng răng uy tín' nếu không phải truy vấn thật). Mỗi từ phải là một TRUY VẤN TỰ NHIÊN như người thật gõ.\n" +
-    "3. ĐA DẠNG INTENT: phủ nhiều nhu cầu KHÁC nhau (nguyên nhân, cách xử lý, phòng ngừa, chi phí, địa điểm, đối tượng, thời gian, so sánh, biến chứng, vật liệu, thương hiệu, review, quy trình...). Các từ gợi ý KHÔNG trùng ý lẫn nhau.\n" +
+    "3. ĐA DẠNG INTENT: phủ nhiều nhu cầu KHÁC nhau (nguyên nhân, cách xử lý, phòng ngừa, chi phí, đối tượng, thời gian, so sánh, biến chứng, vật liệu/loại, thương hiệu, review, quy trình, độ bền, an toàn...). Các từ gợi ý KHÔNG trùng ý lẫn nhau.\n" +
+    "3b. HẠN CHẾ TỪ KHÓA ĐỊA PHƯƠNG: KHÔNG nhồi nhiều biến thể theo địa danh kiểu '... in Turkey', '... in Paris', '... in London', '... near me' — TỐI ĐA 1-2 từ dạng địa điểm mỗi topic. Ưu tiên các truy vấn theo NHU CẦU/CHỦ ĐỀ (không gắn địa danh) để đa dạng ngữ cảnh.\n" +
     "4. Từ khóa gợi ý viết CÙNG ngôn ngữ với từ khóa đã có của topic đó.\n" +
     (needTranslate
       ? "5. Mỗi từ khóa trả object {keyword, vi} với 'vi' = bản dịch tiếng Việt (nếu từ khóa tiếng Anh); nếu tiếng Việt để 'vi' rỗng.\n"
