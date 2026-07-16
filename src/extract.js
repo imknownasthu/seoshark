@@ -4,35 +4,88 @@
 
 import { JSDOM } from "jsdom";
 import { Readability } from "@mozilla/readability";
+import http from "node:http";
+import https from "node:https";
+import zlib from "node:zlib";
 
+// UA Chrome "sach" (bo hau to SeoShark - nhieu WAF chan UA la)
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-  "(KHTML, like Gecko) Chrome/124.0 Safari/537.36 SeoShark/0.1";
+  "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+const BROWSER_HEADERS = (ua, referer) => ({
+  "User-Agent": ua || UA,
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+  "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
+  "Accept-Encoding": "gzip, deflate, br",
+  "Upgrade-Insecure-Requests": "1",
+  "Sec-Fetch-Dest": "document",
+  "Sec-Fetch-Mode": "navigate",
+  "Sec-Fetch-Site": referer ? "same-origin" : "none",
+  "Sec-Fetch-User": "?1",
+  "sec-ch-ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+  "sec-ch-ua-mobile": "?0",
+  "sec-ch-ua-platform": '"Windows"',
+  ...(referer ? { Referer: referer } : {}),
+});
+
+// Fallback: module https/http cua Node - chiu duoc chung chi SSL loi, tu giai nen (gzip/deflate/br),
+// tu follow redirect. Dung khi native fetch that bai ("fetch failed" thuong do TLS chain).
+function nodeGet(url, { timeout = 15000, ua, redirects = 6 } = {}) {
+  return new Promise((resolve, reject) => {
+    let u;
+    try { u = new URL(url); } catch { return reject(new Error("URL không hợp lệ")); }
+    const mod = u.protocol === "http:" ? http : https;
+    const req = mod.request(u, {
+      method: "GET",
+      headers: { ...BROWSER_HEADERS(ua, u.origin + "/"), Host: u.host },
+      rejectUnauthorized: false, // chap nhan chung chi loi (chi DOC noi dung cong khai)
+      servername: u.hostname,
+      timeout,
+    }, (res) => {
+      const status = res.statusCode || 0;
+      if (status >= 300 && status < 400 && res.headers.location && redirects > 0) {
+        res.resume();
+        const next = new URL(res.headers.location, u).href;
+        return nodeGet(next, { timeout, ua, redirects: redirects - 1 }).then(resolve, reject);
+      }
+      if (status >= 400) { res.resume(); return reject(new Error(`HTTP ${status}`)); }
+      const enc = String(res.headers["content-encoding"] || "").toLowerCase();
+      let stream = res;
+      try {
+        if (enc.includes("br")) stream = res.pipe(zlib.createBrotliDecompress());
+        else if (enc.includes("gzip")) stream = res.pipe(zlib.createGunzip());
+        else if (enc.includes("deflate")) stream = res.pipe(zlib.createInflate());
+      } catch {}
+      const chunks = []; let size = 0;
+      stream.on("data", (c) => { size += c.length; if (size > 8 * 1024 * 1024) { req.destroy(); reject(new Error("Trang quá lớn (>8MB)")); } else chunks.push(c); });
+      stream.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+      stream.on("error", reject);
+    });
+    req.on("timeout", () => req.destroy(new Error(`Tải URL quá lâu (>${Math.round(timeout / 1000)}s)`)));
+    req.on("error", reject);
+    req.end();
+  });
+}
 
 export async function fetchHtml(url, { timeout = 15000, ua } = {}) {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeout);
+  if (!/^https?:\/\//i.test(url)) throw new Error("URL phải bắt đầu bằng http:// hoặc https://");
+  // 1) Thu native fetch truoc (nhanh, co xac thuc chung chi)
+  let firstErr = "";
   try {
-    const res = await fetch(url, {
-      headers: {
-        "User-Agent": ua || UA,
-        Accept: "text/html,application/xhtml+xml",
-        "Accept-Language": "vi,en;q=0.9",
-      },
-      redirect: "follow",
-      signal: ctrl.signal,
-    });
-    if (!res.ok) {
-      const e = new Error(`Khong tai duoc URL (HTTP ${res.status}) - ${url}`);
-      e.httpStatus = res.status;
-      throw e;
-    }
-    return await res.text();
-  } catch (e) {
-    if (e.name === "AbortError") throw new Error(`Tai URL qua lau (>${Math.round(timeout / 1000)}s) - ${url}`);
-    throw e;
-  } finally {
-    clearTimeout(timer);
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeout);
+    try {
+      const origin = (() => { try { return new URL(url).origin + "/"; } catch { return ""; } })();
+      const res = await fetch(url, { headers: BROWSER_HEADERS(ua, origin), redirect: "follow", signal: ctrl.signal });
+      if (res.ok) return await res.text();
+      firstErr = `HTTP ${res.status}`;
+    } finally { clearTimeout(t); }
+  } catch (e) { firstErr = e.name === "AbortError" ? "timeout" : (e.message || "fetch failed"); }
+  // 2) Fallback qua module https (chiu TLS loi + nen + WAF nhe)
+  try {
+    return await nodeGet(url, { timeout, ua });
+  } catch (e2) {
+    throw new Error(`Không tải được URL (${e2.message || firstErr || "fetch failed"}) — ${url}. Trang có thể chặn bot, dựng bằng JavaScript, hoặc SSL lỗi.`);
   }
 }
 
