@@ -115,6 +115,10 @@
           <svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/><path d="M8 11l2 2 3.5-4"/></svg>
           Check Index &amp; Thứ hạng
         </div>
+        <div class="menu-item" data-section="schema">
+          <svg class="ic" viewBox="0 0 24 24"><path d="M4 7l8-4 8 4-8 4-8-4Z"/><path d="M4 12l8 4 8-4"/><path d="M4 17l8 4 8-4"/></svg>
+          Schema Markup
+        </div>
 
         <div class="menu-label">Sắp ra mắt</div>
         <div class="menu-item disabled" data-section="soon" data-name="Tự động Share Link">
@@ -1352,6 +1356,55 @@
         </div>
       </div>
 
+      <!-- ===== SECTION: SCHEMA MARKUP ===== -->
+      <div class="section page" data-section="schema">
+        <section class="card">
+          <div class="step">BƯỚC 1</div>
+          <h2>Tạo Schema Markup (JSON-LD)</h2>
+          <p class="hint">Nhập URL bài viết → công cụ đọc toàn bộ nội dung → tạo JSON-LD <b>tối ưu, chuẩn Google</b>, dễ copy vào quản trị website. Chạy được <b>cả khi không có AI</b> (loại cấu trúc); bật <b>Gemini/Claude</b> ở ⚙️ để tạo đầy đủ (FAQ/HowTo/Product/Review...).</p>
+          <label>URL bài viết <span style="color:var(--orange)">*</span></label>
+          <input id="scUrl" type="text" placeholder="https://nhakhoashark.vn/bai-viet" />
+          <label style="margin-top:12px">Chọn loại schema muốn tạo <span class="muted" style="font-weight:400">(chọn nhiều loại → gộp chung @graph)</span></label>
+          <div id="scTypeBtns" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px"></div>
+          <label style="margin-top:12px;display:flex;gap:7px;align-items:center;font-weight:600;cursor:pointer"><input type="checkbox" id="scAuto" style="width:17px;height:17px;accent-color:var(--brand)"> Để <b>AI tự nhận diện</b> loại schema phù hợp nhất theo bài (cần Gemini/Claude)</label>
+          <div style="margin-top:14px"><button id="scGenerate">Tạo Schema Markup</button></div>
+          <div id="scMsg" style="margin-top:10px"></div>
+        </section>
+
+        <section class="card hidden" id="scResultCard">
+          <div class="flexbar"><h2 style="margin:0">Kết quả Schema Markup</h2><span class="muted" id="scResMeta"></span></div>
+          <div id="scValidation" style="margin:8px 0"></div>
+          <div class="grid cols-2" style="margin-top:6px;gap:18px;align-items:start">
+            <div>
+              <div class="flexbar"><b style="font-size:13px">Sửa từng trường</b><span class="muted" style="font-size:.8rem">Sửa trực tiếp, code bên phải tự cập nhật</span></div>
+              <div id="scEditor" style="margin-top:8px;max-height:600px;overflow:auto"></div>
+            </div>
+            <div>
+              <div class="flexbar"><b style="font-size:13px">JSON-LD (copy vào website)</b>
+                <div style="display:flex;gap:8px">
+                  <button class="ghost small" id="scRevalidate" type="button">Kiểm tra lại</button>
+                  <button class="ghost small" id="scCopy" type="button">Copy</button>
+                  <a class="ghost small" id="scTest" target="_blank" rel="noopener">Test trên Google ↗</a>
+                </div>
+              </div>
+              <pre class="code" id="scCode" style="margin-top:8px;max-height:600px;overflow:auto;white-space:pre-wrap;font-size:12px"></pre>
+            </div>
+          </div>
+        </section>
+
+        <section class="card hidden" id="scCompCard">
+          <div class="step">BƯỚC 2 (tùy chọn)</div>
+          <h2>Chưa yên tâm? So sánh schema với đối thủ</h2>
+          <p class="hint">Dán URL đối thủ TOP đầu → công cụ đọc schema <b>trong source thật</b> của từng đối thủ → so sánh (schema gap) → đề xuất tiêu chí cải thiện. Tick tiêu chí nào thì <b>chỉ tối ưu tiêu chí đó</b>.</p>
+          <label>URL đối thủ (mỗi dòng 1 URL, tối đa 6)</label>
+          <textarea id="scCompUrls" rows="4" placeholder="https://doithu-1.com/bai-viet&#10;https://doithu-2.com/bai-viet"></textarea>
+          <div style="margin-top:12px"><button id="scCompRun">Phân tích schema đối thủ &amp; so sánh</button></div>
+          <div id="scCompMsg" style="margin-top:10px"></div>
+          <div id="scCompResult" style="margin-top:12px"></div>
+          <div id="scGapResult" style="margin-top:12px"></div>
+        </section>
+      </div>
+
     </main>
   </div>
 
@@ -1359,5 +1412,6 @@
   <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
   <script src="app.js"></script>
+  <script src="schema.js"></script>
 </body>
 </html>
