@@ -26,6 +26,12 @@ import { buildClassifyPrompt as buildPillarClassifyPrompt, buildSuggestPrompt as
 import { buildPcClassifyPrompt, buildPcTierPrompt } from "./src/pillar-content-prompt.js";
 import * as store from "./src/store.js";
 import {
+  SCHEMA_DEFS, MECHANICAL_TYPES, extractPageData, extractLdJson, schemaTypesOf,
+  buildMechanicalNode, validateGraph, wrapGraph,
+} from "./src/schema.js";
+import { SCHEMA_SYSTEM, SCHEMA_GEN_SCHEMA, SCHEMA_GAP_SCHEMA, buildSchemaPrompt, buildGapPrompt } from "./src/schema-prompt.js";
+import { fetchHtml } from "./src/extract.js";
+import {
   gscConfigured, gscAuthUrl, gscExchangeCode, gscAccessToken, gscListSites, gscQuery, gscPickSiteForUrl, gscTotals,
   gscSaConfigured, gscServiceAccountEmail, gscSaAccessToken,
 } from "./src/gsc.js";
@@ -902,6 +908,128 @@ app.post("/api/onpage/evaluate", requireAuth, async (req, res) => {
       return res.status(400).json({ error: "AI lỗi: " + e.message, gsc });
     }
   } catch (e) { res.status(400).json({ error: e.message || "Lỗi GSC/đánh giá" }); }
+});
+
+// ===================== SCHEMA MARKUP (JSON-LD) =====================
+// Rut gon 1 node schema de hien thi/so sanh (type + cac property chinh)
+function _schemaNodeBrief(n) {
+  const ty = n && n["@type"]; const type = Array.isArray(ty) ? ty.join("/") : (ty || "?");
+  const props = Object.keys(n || {}).filter((k) => k !== "@type" && k !== "@context");
+  return { type, props };
+}
+
+// Tao schema cho 1 URL: uu tien AI (doc noi dung), else CO HOC (loai cau truc)
+app.post("/api/schema/analyze", requireAuth, async (req, res) => {
+  try {
+    const { url, types, autoDetect, engine, model, apiKey } = req.body || {};
+    const u = String(url || "").trim();
+    if (!/^https?:\/\//i.test(u)) return res.status(400).json({ error: "Nhập URL bài viết hợp lệ (http/https)." });
+    const wantTypes = (Array.isArray(types) ? types : []).map((t) => String(t).trim()).filter((t) => SCHEMA_DEFS[t]);
+    const auto = !!autoDetect;
+    if (!auto && !wantTypes.length) return res.status(400).json({ error: "Chọn ít nhất 1 loại schema, hoặc bật 'AI tự chọn'." });
+
+    let data;
+    try { data = await extractPageData(u); }
+    catch (e) { return res.status(400).json({ error: "Không đọc được nội dung URL: " + (e.message || "lỗi") }); }
+
+    const eng = (engine || "local").toLowerCase();
+    let nodes = null, aiUsed = false, aiError = "";
+
+    if (eng === "gemini" || eng === "claude") {
+      try {
+        const d = await aiJson(eng, {
+          system: SCHEMA_SYSTEM,
+          user: buildSchemaPrompt({ url: u, data, types: wantTypes, autoDetect: auto }),
+          schema: SCHEMA_GEN_SCHEMA, maxTokens: 8192, model, apiKey,
+        });
+        const parsed = JSON.parse(String(d.jsonld || "").trim());
+        const graph = parsed["@graph"] ? parsed["@graph"] : (Array.isArray(parsed) ? parsed : [parsed]);
+        if (Array.isArray(graph) && graph.length) { nodes = graph; aiUsed = true; }
+      } catch (e) { aiError = e.message || "AI lỗi"; }
+    } else {
+      aiError = "Chưa bật AI — tạo schema cơ học cho các loại cấu trúc.";
+    }
+
+    // Fallback CO HOC (khong AI hoac AI loi): tao cac loai cau truc
+    if (!nodes) {
+      const list = auto
+        ? ["Article", "BreadcrumbList", "Organization", "WebSite", "WebPage", ...(data.faqs && data.faqs.length ? ["FAQPage"] : [])]
+        : wantTypes;
+      nodes = list.map((t) => buildMechanicalNode(t, data)).filter(Boolean);
+      // Cac loai can AI ma khong tao co hoc duoc -> bao
+      const skipped = list.filter((t) => !MECHANICAL_TYPES.has(t) && t !== "FAQPage");
+      if (skipped.length && !aiError) aiError = "Loại cần AI đọc nội dung (chưa tạo được khi tắt AI): " + skipped.join(", ");
+    }
+
+    const jsonld = wrapGraph(nodes, u);
+    const validation = validateGraph(nodes);
+    res.json({ url: u, jsonld, nodes, validation, aiUsed, aiError, extracted: { title: data.title, existingTypes: data.existingTypes } });
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
+});
+
+// Validate lai 1 khoi JSON-LD (sau khi nguoi dung sua)
+app.post("/api/schema/validate", requireAuth, (req, res) => {
+  try {
+    const body = req.body || {};
+    let nodes = body.nodes;
+    if (!nodes && body.jsonld) { const p = typeof body.jsonld === "string" ? JSON.parse(body.jsonld) : body.jsonld; nodes = p["@graph"] || (Array.isArray(p) ? p : [p]); }
+    res.json(validateGraph(nodes || []));
+  } catch (e) { res.status(400).json({ error: "JSON-LD không hợp lệ: " + (e.message || "") }); }
+});
+
+// Doc schema trong SOURCE cua cac URL doi thu (khong hoi hot: parse script ld+json that)
+app.post("/api/schema/competitors", requireAuth, async (req, res) => {
+  try {
+    const urls = (Array.isArray((req.body || {}).urls) ? req.body.urls : []).map((x) => String(x || "").trim()).filter((x) => /^https?:\/\//i.test(x)).slice(0, 6);
+    if (!urls.length) return res.status(400).json({ error: "Dán ít nhất 1 URL đối thủ." });
+    const out = [];
+    for (const url of urls) {
+      try {
+        const html = await fetchHtml(url);
+        const ld = extractLdJson(html);
+        out.push({ url, host: new URL(url).host, types: schemaTypesOf(ld), nodes: ld.map(_schemaNodeBrief), raw: ld });
+      } catch (e) { out.push({ url, host: (() => { try { return new URL(url).host; } catch { return url; } })(), error: e.message || "Không đọc được", types: [], nodes: [] }); }
+    }
+    res.json({ competitors: out });
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
+});
+
+// So sanh schema gap voi doi thu -> tieu chi cai thien (can AI)
+app.post("/api/schema/gap", requireAuth, async (req, res) => {
+  try {
+    const { url, mine, competitors, engine, model, apiKey } = req.body || {};
+    const eng = (engine || "local").toLowerCase();
+    if (eng !== "gemini" && eng !== "claude") return res.status(400).json({ error: "Cần bật engine Gemini/Claude để phân tích schema gap." });
+    const comps = (Array.isArray(competitors) ? competitors : []).map((c) => ({ host: c.host, url: c.url, types: c.types || [], nodes: (c.nodes || []).map((n) => ({ type: n.type, props: n.props })) }));
+    const d = await aiJson(eng, {
+      system: SCHEMA_SYSTEM,
+      user: buildGapPrompt({ url: String(url || ""), mine: mine || {}, competitors: comps }),
+      schema: SCHEMA_GAP_SCHEMA, maxTokens: 6144, model, apiKey,
+    });
+    res.json({ summary: d.summary || "", criteria: Array.isArray(d.criteria) ? d.criteria : [] });
+  } catch (e) { res.status(400).json({ error: "AI lỗi: " + (e.message || "?") }); }
+});
+
+// Toi uu schema theo DUNG cac tieu chi da tick (can AI)
+app.post("/api/schema/optimize", requireAuth, async (req, res) => {
+  try {
+    const { url, current, criteria, engine, model, apiKey } = req.body || {};
+    const eng = (engine || "local").toLowerCase();
+    if (eng !== "gemini" && eng !== "claude") return res.status(400).json({ error: "Cần bật engine Gemini/Claude để tối ưu schema." });
+    const ticked = (Array.isArray(criteria) ? criteria : []).map((c) => `- ${c.title}${c.detail ? ": " + c.detail : ""}`).join("\n");
+    if (!ticked) return res.status(400).json({ error: "Chưa tick tiêu chí nào để tối ưu." });
+    const curStr = typeof current === "string" ? current : JSON.stringify(current || {}, null, 2);
+    const user = `Duoi day la JSON-LD HIEN TAI cua trang ${url}:\n"""\n${curStr}\n"""\n\nHay CAP NHAT JSON-LD nay de dap ung DUNG cac tieu chi cai thien da chon sau (CHI sua/them theo cac tieu chi nay, giu nguyen phan con lai hop le):\n${ticked}\n\nKHONG bia du lieu (rating/gia/ngay/review) neu khong co that — neu tieu chi yeu cau du lieu khong co, hay tao khung dung cau truc va ghi chu trong notes. Tra ve jsonld = chuoi JSON hop le cua ca khoi @graph da cap nhat.`;
+    const d = await aiJson(eng, { system: SCHEMA_SYSTEM, user, schema: SCHEMA_GEN_SCHEMA, maxTokens: 8192, model, apiKey });
+    const parsed = JSON.parse(String(d.jsonld || "").trim());
+    const graph = parsed["@graph"] ? parsed["@graph"] : (Array.isArray(parsed) ? parsed : [parsed]);
+    res.json({ jsonld: wrapGraph(graph, url), nodes: graph, validation: validateGraph(graph), notes: d.notes || "" });
+  } catch (e) { res.status(400).json({ error: "AI lỗi: " + (e.message || "?") }); }
+});
+
+// Danh sach loai schema ho tro (cho UI dung nut)
+app.get("/api/schema/types", requireAuth, (req, res) => {
+  res.json({ types: Object.entries(SCHEMA_DEFS).map(([k, v]) => ({ key: k, label: v.label, mechanical: MECHANICAL_TYPES.has(k) || k === "FAQPage" })) });
 });
 
 // ====== SERP: CHECK INDEX + CHECK THU HANG (Serper.dev) ======
