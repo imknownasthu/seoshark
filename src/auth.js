@@ -171,19 +171,51 @@ export async function login({ email, password }) {
   return { email: u.email, name: u.name };
 }
 
-// --- Session (trong bo nho) ---
+// --- Session: TOKEN KY HMAC (stateless) ---
+// Truoc day session luu trong RAM -> pm2 restart / crash / chay nhieu instance la MAT PHIEN
+// (user bi bat dang nhap lai, mo tab moi bao chua dang nhap). Token ky bang khoa bi mat
+// (SEOSHARK_SECRET hoac data/secret.key - ton tai qua restart) nen KHONG can luu server-side:
+// song qua restart, dung duoc o moi tab / moi tien trinh.
+const b64u = (buf) => Buffer.from(buf).toString("base64url");
+
+function signToken(user) {
+  const payload = JSON.stringify({ e: normEmail(user.email), n: user.name || "", t: Date.now() });
+  const body = b64u(payload);
+  const sig = crypto.createHmac("sha256", getSecretKey()).update(body).digest("base64url");
+  return `v1.${body}.${sig}`;
+}
+function verifyToken(token) {
+  const parts = String(token || "").split(".");
+  if (parts.length !== 3 || parts[0] !== "v1") return null;
+  const body = parts[1], sig = parts[2];
+  const expect = crypto.createHmac("sha256", getSecretKey()).update(body).digest("base64url");
+  const a = Buffer.from(sig), b = Buffer.from(expect);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  let p;
+  try { p = JSON.parse(Buffer.from(body, "base64url").toString("utf8")); } catch { return null; }
+  if (!p || !p.e || !p.t) return null;
+  if (Date.now() - p.t > SESSION_TTL) return null;
+  return { email: p.e, name: p.n || "", issued: p.t };
+}
+
 export function createSession(user) {
-  const token = crypto.randomBytes(32).toString("hex");
-  sessions.set(token, { email: normEmail(user.email), name: user.name || "", created: Date.now() });
-  return token;
+  return signToken(user);
 }
 export function getSession(token) {
   if (!token) return null;
+  const v = verifyToken(token);
+  if (v) return { email: v.email, name: v.name };
+  // Token CU (dang random hex, con trong RAM) - giu tuong thich cho phien dang mo
   const s = sessions.get(token);
   if (!s) return null;
   if (Date.now() - s.created > SESSION_TTL) { sessions.delete(token); return null; }
   return { email: s.email, name: s.name };
 }
+// Tuoi cua token (ms) de gia han cuon chieu; -1 neu khong doc duoc.
+export function sessionAge(token) {
+  const v = verifyToken(token);
+  return v ? Date.now() - v.issued : -1;
+}
 export function destroySession(token) {
-  if (token) sessions.delete(token);
+  if (token) sessions.delete(token); // token ky: dang xuat = xoa cookie phia client
 }

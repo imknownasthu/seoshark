@@ -259,6 +259,11 @@ mark{background:#fff3bf;color:#7a5b00;padding:0 4px;border-radius:4px;font-weigh
 .it-grid9 button{border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer;padding:0}
 .it-grid9 button.on{background:var(--c-blue);border-color:var(--c-blue)}
 .it-note{font-size:.82rem;color:var(--muted)}
+.it-sec{font-family:var(--mono);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
+  color:var(--c-blue);margin:14px 0 2px;padding-bottom:5px;border-bottom:1px solid var(--line)}
+.it-sec:first-child{margin-top:0}
+.it-tag{font-family:var(--mono);font-size:9px;font-weight:600;color:var(--muted);background:#f2f4fb;
+  padding:1px 5px;border-radius:4px;margin-left:4px;text-transform:none;letter-spacing:0}
 @media(max-width:640px){.imgtool-dialog{max-width:100%}}
 
 /* ===== ENGINE 3 CỘT (AI / GSC / Serper) ===== */

@@ -83,9 +83,16 @@ function setSessionCookie(res, token) {
 // Middleware bao ve cac API cua cong cu
 function requireAuth(req, res, next) {
   if (!AUTH_ENABLED) return next();
-  const u = currentUser(req);
+  const token = parseCookies(req)[COOKIE];
+  const u = auth.getSession(token);
   if (!u) return res.status(401).json({ error: "Cần đăng nhập để sử dụng công cụ.", needAuth: true });
   req.user = u;
+  // Gia han CUON CHIEU: user con hoat dong -> cap token moi khi token da qua 1 ngay.
+  // Nho vay nguoi dung dung thuong xuyen se khong bao gio bi bat dang nhap lai.
+  try {
+    const age = auth.sessionAge(token);
+    if (age < 0 || age > 86400000) setSessionCookie(res, auth.createSession(u));
+  } catch { /* khong chan request neu gia han loi */ }
   next();
 }
 
@@ -220,12 +227,18 @@ app.post("/api/engine/check", requireAuth, async (req, res) => {
   }
 });
 
-// Cache phien lam viec trong bo nho (don gian cho cong cu chay local)
+// Cache phien lam viec (ket qua phan tich) trong bo nho.
+// TTL 1 gio truoc day qua ngan: de tab mo lau roi bam "Toi uu" la bao "Phien het han".
 const sessions = new Map();
-const SESSION_TTL = 1000 * 60 * 60; // 1 gio
+const SESSION_TTL = 1000 * 60 * 60 * 24; // 24 gio
+const SESSION_MAX = 300; // chan phinh bo nho: chi giu 300 phien moi nhat
 function gcSessions() {
   const now = Date.now();
   for (const [id, s] of sessions) if (now - s.createdAt > SESSION_TTL) sessions.delete(id);
+  if (sessions.size > SESSION_MAX) {
+    const oldest = [...sessions.entries()].sort((a, b) => a[1].createdAt - b[1].createdAt).slice(0, sessions.size - SESSION_MAX);
+    for (const [id] of oldest) sessions.delete(id);
+  }
 }
 
 const norm = (u) => (u || "").replace(/\/$/, "");
@@ -2173,4 +2186,14 @@ app.post("/api/outline/unique", requireAuth, async (req, res) => {
 const PORT = process.env.PORT || 5173;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`\n  SeoShark dang chay tai: http://localhost:${PORT}\n`);
+});
+
+// ---- ON DINH: khong de 1 loi le lam sap ca tien trinh ----
+// Truoc day 1 promise loi (fetch treo, API ngoai loi...) co the lam process thoat ->
+// PM2 restart -> moi nguoi bi dang xuat & cong cu "dung". Ghi log va chay tiep.
+process.on("unhandledRejection", (err) => {
+  console.error("[unhandledRejection]", (err && err.message) || err);
+});
+process.on("uncaughtException", (err) => {
+  console.error("[uncaughtException]", (err && err.stack) || err);
 });

@@ -16,11 +16,22 @@
   const baseOf = (n) => String(n || "image").replace(/\.[^.]+$/, "");
   const loadImage = (url) => new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url; });
   function slugify(s) { return String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "image"; }
-  function asciiFold(s) { return String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D"); }
+  // Trường EXIF kiểu ASCII chỉ nhận ký tự Latin1 in được (piexif dùng btoa -> ký tự >255 là lỗi).
+  // Bỏ dấu tiếng Việt + quy đổi dấu câu Unicode (— · “ ” …) rồi loại sạch ký tự ngoài ASCII.
+  function asciiFold(s) {
+    return String(s || "")
+      .normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .replace(/đ/g, "d").replace(/Đ/g, "D")
+      .replace(/[—–−]/g, "-").replace(/[·•]/g, "-").replace(/[“”„]/g, '"').replace(/[‘’‚]/g, "'").replace(/…/g, "...")
+      .replace(/©/g, "(c)").replace(/®/g, "(R)").replace(/™/g, "(TM)").replace(/°/g, " do")
+      .replace(/\s+/g, " ")
+      .replace(/[^\x20-\x7E]/g, "").trim();
+  }
   function drawCanvas(img, w, h) { const c = document.createElement("canvas"); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); return c; }
   const toBlob = (canvas, mime, q) => new Promise((res) => canvas.toBlob((b) => res(b), mime, q));
   function download(blob, name) { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
   function dataURLtoBlob(u) { const [h, b] = u.split(","); const mime = (/:(.*?);/.exec(h) || [])[1] || "image/jpeg"; const bin = atob(b); const arr = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i); return new Blob([arr], { type: mime }); }
+  const fileToDataUrl = (file) => new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); });
 
   async function addFiles(list) {
     for (const f of Array.from(list || [])) {
@@ -134,52 +145,74 @@
   // --- Thêm Geotag (EXIF GPS) ---
   function geotagOpts(el) {
     el.innerHTML = `
+      <div class="it-sec">Vị trí (GPS)</div>
       <div class="it-row"><div><label>Vĩ độ (Latitude) *</label><input id="itLat" type="text" placeholder="21.028511"></div>
         <div><label>Kinh độ (Longitude) *</label><input id="itLng" type="text" placeholder="105.804817"></div>
         <div style="flex:0 0 120px"><label>Độ cao (m)</label><input id="itAlt" type="number" placeholder="0"></div></div>
       <p class="it-note">Lấy toạ độ trên Google Maps: bấm chuột phải vào vị trí → toạ độ ở đầu menu. <b>Nên trùng khớp địa chỉ Google Maps của doanh nghiệp.</b></p>
+
+      <div class="it-sec">Thông tin ảnh <span class="it-note" style="font-weight:400">— đúng thuộc tính Windows / EXIF</span></div>
+      <div class="it-row"><div><label>Tiêu đề <span class="it-tag">Title</span></label><input id="itTitle" type="text" placeholder="Niềng răng trong suốt tại Nha khoa Shark"></div>
+        <div><label>Chủ đề <span class="it-tag">Subject</span></label><input id="itSubject" type="text" placeholder="Niềng răng trong suốt"></div></div>
+      <div class="it-row"><div><label>Thẻ / Từ khóa <span class="it-tag">Tags</span></label><input id="itTags" type="text" placeholder="niềng răng, invisalign, hà nội"></div></div>
+      <div class="it-row"><div><label>Mô tả <span class="it-tag">Image Description</span></label><input id="itDesc" type="text" placeholder="Ảnh chụp ca niềng răng trong suốt"></div></div>
+      <div class="it-row"><div><label>Ghi chú <span class="it-tag">Comments</span></label><input id="itComments" type="text" placeholder="Ghi chú thêm (tuỳ chọn)"></div></div>
+      <div class="it-row"><div><label>Tác giả <span class="it-tag">Authors</span></label><input id="itAuthors" type="text" placeholder="Nha khoa Shark"></div>
+        <div><label>Bản quyền <span class="it-tag">Copyright</span></label><input id="itCopy" type="text" placeholder="© Nha khoa Shark"></div>
+        <div style="flex:0 0 140px"><label>Đánh giá <span class="it-tag">Rating</span></label><input id="itRating" type="number" min="0" max="5" step="0.1" placeholder="4.8"></div></div>
+
+      <div class="it-sec">Doanh nghiệp / Local SEO</div>
       <div class="it-row"><div><label>Địa điểm / Địa chỉ</label><input id="itLoc" type="text" placeholder="Nha khoa Shark, 361 Nguyễn Trãi"></div></div>
       <div class="it-row"><div><label>Thành phố</label><input id="itCity" type="text" placeholder="Hà Nội"></div>
         <div><label>Tỉnh / Vùng</label><input id="itProv" type="text" placeholder="Hà Nội"></div>
         <div><label>Quốc gia</label><input id="itCtry" type="text" value="Việt Nam"></div></div>
-      <div class="it-row"><div><label>Mô tả ảnh (caption + từ khóa)</label><input id="itDesc" type="text" placeholder="Niềng răng trong suốt tại Nha khoa Shark Hà Nội"></div></div>
-      <div class="it-row"><div><label>Từ khóa (cách nhau dấu phẩy)</label><input id="itKw" type="text" placeholder="niềng răng, invisalign, hà nội"></div></div>
-      <div class="it-row"><div><label>Số điện thoại</label><input id="itPhone" type="text" placeholder="0123 456 789"></div>
+      <div class="it-row"><div><label>Số điện thoại</label><input id="itPhone" type="text" placeholder="0938 267 574"></div>
         <div><label>Email</label><input id="itEmail" type="text" placeholder="info@nhakhoashark.vn"></div>
-        <div style="flex:0 0 150px"><label>Đánh giá (sao, 0–5)</label><input id="itRating" type="number" min="0" max="5" step="0.1" placeholder="4.8"></div></div>
-      <div class="it-row"><div><label>Tác giả</label><input id="itAuthor" type="text" placeholder="Nha khoa Shark"></div>
-        <div><label>Bản quyền</label><input id="itCopy" type="text" placeholder="© Nha khoa Shark"></div>
-        <div><label>URL</label><input id="itUrl" type="text" placeholder="https://nhakhoashark.vn"></div></div>`;
+        <div><label>Website (URL)</label><input id="itUrl" type="text" placeholder="https://nhakhoashark.vn"></div></div>
+      <p class="it-note">Chuẩn EXIF <b>không có trường riêng cho URL/điện thoại/địa chỉ</b>. Nhóm này được ghi gộp vào <b>Ghi chú (Comments)</b> — nơi duy nhất đọc được rõ ràng. Các trường ở khối trên được ghi <b>đúng 1-1</b>, không trộn lẫn.</p>`;
   }
   function xpBytes(s) { const out = []; for (let i = 0; i < s.length; i++) { const cc = s.charCodeAt(i); out.push(cc & 0xff, (cc >> 8) & 0xff); } out.push(0, 0); return out; }
   async function geotagProc(it) {
     const piexif = window.piexif; if (!piexif) throw new Error("Thiếu thư viện EXIF (piexif)");
     const lat = parseFloat(val("itLat")), lng = parseFloat(val("itLng"));
-    const dataUrl = drawCanvas(it.img, it.w, it.h).toDataURL("image/jpeg", 0.95);
-    const zeroth = {}, gps = {};
+    // EXIF chỉ nhúng được vào JPEG. Ảnh JPEG gốc -> giữ NGUYÊN bytes (không re-encode,
+    // không mất chất lượng, giữ đúng tên file). Ảnh khác -> chuyển sang JPEG.
+    const isJpeg = it.mime === "image/jpeg" || /^jpe?g$/i.test(it.ext);
+    const dataUrl = isJpeg ? await fileToDataUrl(it.file) : drawCanvas(it.img, it.w, it.h).toDataURL("image/jpeg", 0.95);
+
+    const zeroth = {}, exif = {}, gps = {};
+    const title = val("itTitle").trim(), subject = val("itSubject").trim(), tags = val("itTags").trim();
+    const desc = val("itDesc").trim(), comments = val("itComments").trim();
+    const authors = val("itAuthors").trim(), copyr = val("itCopy").trim(), rating = val("itRating").trim();
     const loc = val("itLoc").trim(), city = val("itCity").trim(), prov = val("itProv").trim(), ctry = val("itCtry").trim();
-    const desc = val("itDesc").trim(), kw = val("itKw").trim(), author = val("itAuthor").trim(), copyr = val("itCopy").trim(), url = val("itUrl").trim();
-    const phone = val("itPhone").trim(), email = val("itEmail").trim(), rating = val("itRating").trim();
+    const phone = val("itPhone").trim(), email = val("itEmail").trim(), url = val("itUrl").trim();
+
+    // Nhóm doanh nghiệp (địa chỉ/ĐT/email/website) -> gộp vào Ghi chú (Comments).
+    // EXIF không có tag riêng cho URL — TUYỆT ĐỐI không nhét vào Software (= "Program name").
     const locFull = [loc, city, prov, ctry].filter(Boolean).join(", ");
-    const contact = [phone && `ĐT: ${phone}`, email && `Email: ${email}`, rating && `Đánh giá: ${rating}/5`].filter(Boolean).join(", ");
-    const descFull = [desc, locFull, contact].filter(Boolean).join(" | ");
-    if (descFull) zeroth[piexif.ImageIFD.ImageDescription] = asciiFold(descFull);
-    if (author) zeroth[piexif.ImageIFD.Artist] = asciiFold(author);
+    const biz = [locFull, phone && `ĐT: ${phone}`, email && `Email: ${email}`, url && `Website: ${url}`].filter(Boolean).join(" · ");
+    const commentFull = [comments, biz].filter(Boolean).join(" — ");
+
+    // --- Trường ASCII (EXIF chuẩn) ---
+    if (desc) zeroth[piexif.ImageIFD.ImageDescription] = asciiFold(desc);
+    if (authors) zeroth[piexif.ImageIFD.Artist] = asciiFold(authors);
     if (copyr) zeroth[piexif.ImageIFD.Copyright] = asciiFold(copyr);
-    if (url) zeroth[piexif.ImageIFD.Software] = asciiFold(url);
-    if (desc) zeroth[piexif.ImageIFD.XPTitle] = xpBytes(desc);
-    if (kw) zeroth[piexif.ImageIFD.XPKeywords] = xpBytes(kw);
-    if (locFull || contact) zeroth[piexif.ImageIFD.XPComment] = xpBytes([locFull, contact].filter(Boolean).join(" | "));
-    if (author) zeroth[piexif.ImageIFD.XPAuthor] = xpBytes(author);
-    // Đánh giá sao -> EXIF Rating (0-5) + RatingPercent (Windows đọc được)
+    // --- Trường XP (UCS-2, Windows đọc đúng tiếng Việt có dấu) — map 1-1, không trộn ---
+    const XP_SUBJECT = piexif.ImageIFD.XPSubject || 40095;
+    if (title) zeroth[piexif.ImageIFD.XPTitle] = xpBytes(title);
+    if (subject) zeroth[XP_SUBJECT] = xpBytes(subject);
+    if (tags) zeroth[piexif.ImageIFD.XPKeywords] = xpBytes(tags);
+    if (commentFull) zeroth[piexif.ImageIFD.XPComment] = xpBytes(commentFull);
+    if (authors) zeroth[piexif.ImageIFD.XPAuthor] = xpBytes(authors);
+    // --- Đánh giá sao -> Rating (0-5) + RatingPercent ---
     const rv = parseFloat(rating);
     if (!isNaN(rv) && piexif.ImageIFD.Rating) {
       zeroth[piexif.ImageIFD.Rating] = Math.max(0, Math.min(5, Math.round(rv)));
       if (piexif.ImageIFD.RatingPercent) zeroth[piexif.ImageIFD.RatingPercent] = Math.round(Math.max(0, Math.min(5, rv)) / 5 * 100);
     }
-    // UserComment (ExifIFD) chứa đầy đủ contact để công cụ đọc EXIF khác lấy được
-    const exif = {};
-    if (contact || descFull) { try { exif[piexif.ExifIFD.UserComment] = "ASCII\0\0\0" + asciiFold([desc, locFull, contact].filter(Boolean).join(" | ")); } catch (e) {} }
+    // --- UserComment: để công cụ EXIF khác cũng đọc được ghi chú/liên hệ ---
+    if (commentFull) exif[piexif.ExifIFD.UserComment] = "ASCII\0\0\0" + asciiFold(commentFull);
+    // --- GPS ---
     if (!isNaN(lat) && !isNaN(lng)) {
       gps[piexif.GPSIFD.GPSLatitudeRef] = lat >= 0 ? "N" : "S";
       gps[piexif.GPSIFD.GPSLatitude] = piexif.GPSHelper.degToDmsRational(Math.abs(lat));
@@ -190,7 +223,8 @@
     }
     const exifStr = piexif.dump({ "0th": zeroth, Exif: exif, GPS: gps });
     const blob = dataURLtoBlob(piexif.insert(exifStr, dataUrl));
-    return { name: `${it.base}-geo.jpg`, blob };
+    // Giữ ĐÚNG tên ảnh gốc, không thêm hậu tố. (Ảnh không phải JPEG buộc đổi đuôi .jpg vì EXIF cần JPEG.)
+    return { name: isJpeg ? it.name : `${it.base}.jpg`, blob };
   }
 
   // --- Xóa nền (làm trong suốt) ---
@@ -231,7 +265,7 @@
     format: { title: "Đổi định dạng ảnh", opts: formatOpts, proc: formatProc },
     logo: { title: "Chèn logo / đóng dấu vào ảnh", opts: logoOpts, proc: logoProc, validate: () => (logoImg ? "" : "Hãy chọn logo trước.") },
     rename: { title: "Đổi tên ảnh hàng loạt (chuẩn SEO)", opts: renameOpts, proc: renameProc, validate: () => (slugify(val("itBase")) && val("itBase").trim() ? "" : "Nhập tên gốc (dạng abc-xyz-rty).") },
-    geotag: { title: "Thêm Geotag (EXIF GPS) cho ảnh", opts: geotagOpts, proc: geotagProc, note: "Xuất ảnh JPEG nhúng toạ độ GPS + thông tin địa điểm/tác giả.", validate: () => (isNaN(parseFloat(val("itLat"))) || isNaN(parseFloat(val("itLng"))) ? "Nhập vĩ độ & kinh độ (lấy từ Google Maps)." : "") },
+    geotag: { title: "Thêm Geotag (EXIF GPS) cho ảnh", opts: geotagOpts, proc: geotagProc, note: "Giữ NGUYÊN tên ảnh gốc (không thêm hậu tố). Ảnh JPEG được giữ nguyên chất lượng (chỉ nhúng EXIF, không nén lại); ảnh PNG/WEBP buộc chuyển .jpg vì EXIF chỉ nhúng được vào JPEG.", validate: () => (isNaN(parseFloat(val("itLat"))) || isNaN(parseFloat(val("itLng"))) ? "Nhập vĩ độ & kinh độ (lấy từ Google Maps)." : "") },
     bg: { title: "Xóa nền — làm trong suốt", opts: bgOpts, proc: bgProc },
   };
 
