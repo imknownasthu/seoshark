@@ -16,6 +16,7 @@
   /* backward-compat aliases (mã cũ còn tham chiếu) — "cam" cũ đã reroute sang XANH đồng bộ */
   --brand:var(--c-blue); --brand-dark:#4d69e0; --brand-light:#eef2ff;
   --green:#1eae74; --green-light:#e5f8ef; --red:#e5484d;
+  --amber:#e6961a; --amber-light:#fff4de;
   --orange:#4d69e0; --orange-deep:#3f57c9; --orange-soft:#6C8CFF; --orange-text:#4d69e0;
   --accent:#4d69e0; --coral:var(--c-rose);
   --paper:var(--bg); --text:var(--ink);
@@ -259,6 +260,29 @@ mark{background:#fff3bf;color:#7a5b00;padding:0 4px;border-radius:4px;font-weigh
 .it-grid9 button.on{background:var(--c-blue);border-color:var(--c-blue)}
 .it-note{font-size:.82rem;color:var(--muted)}
 @media(max-width:640px){.imgtool-dialog{max-width:100%}}
+
+/* ===== ENGINE 3 CỘT (AI / GSC / Serper) ===== */
+.engine-cols{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:14px}
+@media(max-width:980px){.engine-cols{grid-template-columns:1fr}}
+.engine-col{border:1px solid var(--line);border-radius:14px;padding:14px;background:#fff;position:relative;overflow:hidden}
+.engine-col::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--eca,var(--c-blue))}
+.engine-col.ec-ai{--eca:#6C8CFF;background:linear-gradient(180deg,#f6f8ff,#fff 60px)}
+.engine-col.ec-gsc{--eca:#1eae74;background:linear-gradient(180deg,#f1fbf6,#fff 60px)}
+.engine-col.ec-serper{--eca:#e6961a;background:linear-gradient(180deg,#fff7e9,#fff 60px)}
+.ec-head{display:flex;align-items:center;gap:8px;font-weight:700;font-size:13.5px;color:var(--ink);margin-bottom:10px;flex-wrap:wrap}
+.ec-ic{display:inline-flex;width:26px;height:26px;border-radius:8px;align-items:center;justify-content:center;color:#fff;background:var(--eca,var(--c-blue));flex:none}
+.ec-ic svg{width:15px;height:15px;stroke:#fff;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round}
+.ec-pill{margin-left:auto;font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap;
+  background:var(--amber-light);color:var(--amber);font-family:var(--mono);letter-spacing:.02em}
+.ec-pill.on{background:var(--green-light);color:var(--green)}
+.engine-col label{font-size:12px}
+.engine-col select,.engine-col input{font-size:13px}
+
+/* ===== PILL TRẠNG THÁI TRÊN HEADER (xanh=kết nối, vàng=chưa) ===== */
+.engine-pill.warn{background:var(--amber-light);border-color:#ffe6b8}
+.engine-pill.warn .dot{background:var(--amber)!important}
+.engine-pill.good{background:var(--green-light);border-color:#c8f0df}
+.engine-pill.good .dot{background:var(--green)!important}
 .step{display:inline-block;font-size:10px;color:var(--c-blue);background:rgba(108,140,255,.12);
   border:1px solid rgba(108,140,255,.28);padding:4px 10px;border-radius:999px;margin-bottom:10px}
 .chips{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0}

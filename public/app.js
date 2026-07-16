@@ -68,15 +68,13 @@ function applyEngine(engine) {
     mw.classList.add("hidden");
   }
 
-  // Engine pill o topbar
-  const pill = {
-    local: ["Local · Sẵn sàng", "var(--c-mint)"],
-    gemini: ["Gemini · Đã kết nối", "var(--c-mint)"],
-    claude: ["Claude · Đã kết nối", "var(--c-mint)"],
-  }[engine] || ["Local · Sẵn sàng", "var(--c-mint)"];
-  const pt = $("#enginePillText"), pd = $("#enginePillDot");
-  if (pt) pt.textContent = pill[0];
-  if (pd) pd.style.background = pill[1];
+  // Pill AI trên header do setConn() cập nhật (xanh nếu kết nối, vàng nếu chưa)
+}
+function setAiPill(connected, label) {
+  const pill = $("#aiPill");
+  if (pill) { pill.classList.toggle("good", connected); pill.classList.toggle("warn", !connected); }
+  const pt = $("#enginePillText"); if (pt) pt.textContent = label;
+  const ec = $("#ecAiState"); if (ec) { ec.textContent = connected ? "Đã kết nối" : "Chưa kết nối"; ec.classList.toggle("on", connected); }
 }
 
 // --- MENU (chuyen muc) ---
@@ -127,8 +125,11 @@ function setConn(state, text) {
     s.textContent = text;
     s.style.color = state === "ok" ? "var(--green)" : state === "fail" ? "var(--red)" : "var(--muted)";
   }
-  const dot = $("#enginePillDot");
-  if (dot) dot.style.background = state === "ok" ? "var(--green)" : state === "fail" ? "var(--red)" : "var(--amber)";
+  const engine = $("#engine").value;
+  const name = engine === "gemini" ? "Gemini" : engine === "claude" ? "Claude" : "Local";
+  const connected = state === "ok";
+  const label = engine === "local" ? "Local · Sẵn sàng" : (connected ? name + " · đã kết nối" : name + " · chưa kết nối");
+  setAiPill(connected, label);
 }
 async function checkEngineConn() {
   const engine = $("#engine").value;
@@ -166,6 +167,40 @@ $("#apiKey").addEventListener("change", (e) => {
 $("#apiKey").addEventListener("input", checkConnDebounced);
 $("#sitemapUrl").addEventListener("change", (e) => localStorage.setItem("seoshark_sitemap", e.target.value.trim()));
 
+/* ---------- SERPER.DEV (trong Engine + pill header) ---------- */
+function serperConnected() { return !!(localStorage.getItem("seoshark_serper_key") || "").trim(); }
+window.serperConnected = serperConnected;
+function updateSerperPill(ok) {
+  const conn = ok !== undefined ? ok : serperConnected();
+  const pill = $("#serperPill"), dot = $("#serperPillDot"), txt = $("#serperPillText"), ec = $("#ecSerperState");
+  if (txt) txt.textContent = conn ? "Serper: đã kết nối" : "Serper: chưa kết nối";
+  if (pill) { pill.classList.toggle("good", conn); pill.classList.toggle("warn", !conn); }
+  if (dot) dot.style.background = conn ? "var(--green)" : "var(--amber)";
+  if (ec) { ec.textContent = conn ? "Đã kết nối" : "Chưa kết nối"; ec.classList.toggle("on", conn); }
+}
+window.updateSerperPill = updateSerperPill;
+(function initSerper() {
+  const key = $("#serperKey"); if (!key) return;
+  key.value = localStorage.getItem("seoshark_serper_key") || "";
+  updateSerperPill();
+  key.addEventListener("change", () => { localStorage.setItem("seoshark_serper_key", key.value.trim()); updateSerperPill(); if ($("#serperStatus")) $("#serperStatus").textContent = ""; });
+  key.addEventListener("input", () => updateSerperPill(!!key.value.trim()));
+  const st = $("#serperStatus"), btn = $("#serperCheckBtn");
+  if (btn) btn.addEventListener("click", async () => {
+    const k = key.value.trim();
+    if (!k) { if (st) { st.textContent = "Chưa nhập key"; st.style.color = "var(--amber)"; } updateSerperPill(false); return; }
+    localStorage.setItem("seoshark_serper_key", k);
+    if (st) { st.textContent = "⏳ Đang kiểm tra..."; st.style.color = "var(--muted)"; }
+    try {
+      const res = await _fetch("/api/serper/check", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ serperKey: k }) });
+      const d = await res.json();
+      if (d.ok) { if (st) { st.textContent = "✓ Đã kết nối" + (d.credits != null ? ` · còn ${d.credits} lượt` : ""); st.style.color = "var(--green)"; } updateSerperPill(true); }
+      else { if (st) { st.textContent = "✗ " + (d.error || "Key không hợp lệ"); st.style.color = "var(--red)"; } updateSerperPill(false); }
+    } catch (e) { if (st) { st.textContent = "✗ " + e.message; st.style.color = "var(--red)"; } }
+  });
+  const p = $("#serperPill"); if (p) p.addEventListener("click", () => { const b = $("#engineBox"); if (b) { b.open = true; b.scrollIntoView({ behavior: "smooth", block: "center" }); } });
+})();
+
 /* ---------- Google Search Console — Service Account (mặc định) + Đăng nhập Google (fallback) ---------- */
 window.GSC = { mode: "", token: "", exp: 0, siteUrl: localStorage.getItem("gsc_site") || "", sites: [], clientId: "", saEmail: "", tokenClient: null };
 window.gscConnected = () => (GSC.mode === "sa" ? (GSC.sites || []).length > 0 : !!(GSC.token && Date.now() < GSC.exp - 60000));
@@ -178,16 +213,21 @@ window.gscConnected = () => (GSC.mode === "sa" ? (GSC.sites || []).length > 0 : 
   const originHint = $("#gscOriginHint"); if (originHint) originHint.textContent = location.origin;
   // Chip GSC trên header: hiện đã kết nối chưa + property nào
   function updateGscPill() {
-    const dot = $("#gscPillDot"), txt = $("#gscPillText");
+    const dot = $("#gscPillDot"), txt = $("#gscPillText"), pill = $("#gscPill"), ec = $("#ecGscState");
     if (!txt) return;
-    if (window.gscConnected && window.gscConnected()) {
+    const conn = !!(window.gscConnected && window.gscConnected());
+    const waiting = GSC.mode === "sa" && GSC.saConfigured !== false;
+    if (conn) {
       const site = (GSC.siteUrl || "").replace(/^sc-domain:/, "").replace(/^https?:\/\//, "").replace(/\/$/, "");
-      txt.textContent = "GSC: " + (site || "đã kết nối"); dot.style.background = "var(--green,#2e9e6b)";
-    } else if (GSC.mode === "sa" && GSC.saConfigured !== false) {
-      txt.textContent = "GSC: chờ thêm email"; dot.style.background = "var(--muted)";
+      txt.textContent = "GSC: " + (site || "đã kết nối");
+    } else if (waiting) {
+      txt.textContent = "GSC: chờ thêm email";
     } else {
-      txt.textContent = "GSC: chưa kết nối"; dot.style.background = "var(--muted)";
+      txt.textContent = "GSC: chưa kết nối";
     }
+    if (pill) { pill.classList.toggle("good", conn); pill.classList.toggle("warn", !conn); }
+    if (dot) dot.style.background = conn ? "var(--green)" : "var(--amber)";
+    if (ec) { ec.textContent = conn ? "Đã kết nối" : (waiting ? "Chờ thêm email" : "Chưa kết nối"); ec.classList.toggle("on", conn); }
   }
   window.updateGscPill = updateGscPill;
   const gscPillEl = $("#gscPill");
@@ -1121,6 +1161,7 @@ $$("#onpageTabs .tab").forEach((tab) => {
     accurate: ["Đã đúng — có nguồn", "ok"],
     corrected: ["Đã sửa số liệu", "sapo"],
     outdated: ["Lỗi thời — cần cập nhật", "sapo"],
+    added: ["Chèn thêm số liệu", "ok"],
     unsupported: ["Chưa có nguồn xác nhận", "ket"],
     no_source: ["Không tìm được nguồn", "ket"],
   };
@@ -1129,7 +1170,7 @@ $$("#onpageTabs .tab").forEach((tab) => {
   function renderFc(data) {
     fcItems = data.items || [];
     const wrap = $("#fcResult");
-    $("#fcResMeta").textContent = `${data.claimCount || 0} số liệu · ${data.engineUsed || ""}`;
+    $("#fcResMeta").textContent = `${data.claimCount || 0} mục · ${data.engineUsed || ""}`;
     if (!fcItems.length) {
       wrap.innerHTML = alertHtml("ok", data.note || "Không phát hiện số liệu nào cần kiểm chứng.");
       $("#fcResultCard").classList.remove("hidden");
@@ -1151,17 +1192,18 @@ $$("#onpageTabs .tab").forEach((tab) => {
         src = alertHtml("warn", "⚠ <b>Không tìm được nguồn uy tín xác nhận số liệu này.</b> Nên gỡ bỏ con số hoặc tự tìm nguồn chính thống trước khi đăng.");
         if (it.candidates && it.candidates.length) {
           src += `<details style="margin-top:4px"><summary class="muted" style="cursor:pointer;font-size:.82rem">Xem ${it.candidates.length} kết quả tìm kiếm để tự đối chiếu</summary>
-            <ul style="margin:6px 0;padding-left:18px;font-size:.82rem">${it.candidates.map((c) => `<li><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.title)}</a> <span class="muted">(${esc(c.host)})</span></li>`).join("")}</ul></details>`;
+            <ul style="margin:6px 0;padding-left:18px;font-size:.82rem">${it.candidates.map((c) => `<li><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.title)}</a> <span class="muted">(${esc(c.host)})</span>${c.auth ? ` <span class="badge ok" style="font-size:.62rem;padding:1px 6px">Uy tín</span>` : ""}</li>`).join("")}</ul></details>`;
         }
       }
+      const modeBadge = it.mode === "add" ? badge("＋ Chèn thêm", "ok") : badge("Kiểm chứng", "ket");
       html += `<div class="card" style="padding:14px;margin-bottom:12px">
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
-            ${badge(st[0], st[1])} ${badge(rk[0], rk[1])}
+            ${modeBadge} ${badge(st[0], st[1])} ${badge(rk[0], rk[1])}
             ${it.confidence ? `<span class="muted" style="font-size:.78rem">độ tin cậy: ${esc(it.confidence)}</span>` : ""}
           </div>
-          <div style="font-size:.83rem;color:var(--muted);margin-bottom:2px">Câu gốc:</div>
+          <div style="font-size:.83rem;color:var(--muted);margin-bottom:2px">${it.mode === "add" ? "Vị trí trong bài:" : "Câu gốc:"}</div>
           <div style="padding:7px 10px;background:#fafbfc;border:1px solid var(--line);border-radius:8px;font-size:.9rem">${esc(it.oldSentence)}</div>
-          <div style="font-size:.83rem;color:var(--muted);margin:8px 0 2px">Đề xuất chèn/chỉnh (số liệu tô vàng):</div>
+          <div style="font-size:.83rem;color:var(--muted);margin:8px 0 2px">${it.mode === "add" ? "Câu sau khi chèn số liệu (tô vàng):" : "Đề xuất chèn/chỉnh (số liệu tô vàng):"}</div>
           <div style="padding:7px 10px;background:#f6fff6;border:1px solid #cdeccd;border-radius:8px;font-size:.9rem">${markHl(it.newSentence)}</div>
           ${it.advice ? `<div class="muted" style="margin-top:6px;font-size:.83rem">💡 ${esc(it.advice)}</div>` : ""}
           ${src}
@@ -1194,7 +1236,7 @@ $$("#onpageTabs .tab").forEach((tab) => {
     const engine = $("#engine").value;
     if (engine !== "gemini" && engine !== "claude") { msg.innerHTML = alertHtml("err", "Cần bật engine Gemini/Claude ở ⚙️."); return; }
     const serperKey = localStorage.getItem("seoshark_serper_key") || "";
-    if (!serperKey) { msg.innerHTML = alertHtml("err", "Cần Serper API key — nhập ở tab 'Check Index & Thứ hạng' (free 2.500 lượt) để tìm nguồn thật."); return; }
+    if (!serperKey) { msg.innerHTML = alertHtml("err", "Cần Serper API key — mở ⚙️ Kết nối & Engine → cột Serper.dev (free 2.500 lượt) để tìm nguồn thật."); return; }
 
     const payload = {
       engine, apiKey: $("#apiKey").value.trim() || undefined, model: $("#model").value || undefined,

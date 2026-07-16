@@ -77,6 +77,13 @@ export async function serperOrganic({ key, keyword, gl, hl, num = 6, excludeHost
   return out;
 }
 
+// Kiem tra 1 key Serper con dung khong (1 truy van nho) -> {ok, credits}.
+// Nem loi {badKey:true}/{quota:true} de UI hien dung trang thai.
+export async function serperCheck({ key }) {
+  const data = await serperSearch({ key, q: "seo", gl: "vn", hl: "vi", num: 1 });
+  return { ok: true, credits: data && data.credits != null ? data.credits : null };
+}
+
 // Tim kiem web THAT cho 1 truy van -> tra ve list {title,url,host,snippet,position}.
 // Dung cho tinh nang "Check du lieu - bo sung nguon uy tin": nguon phai co that.
 export async function serperWeb({ key, q, gl = "vn", hl = "vi", num = 6 }) {

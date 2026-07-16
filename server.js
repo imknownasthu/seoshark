@@ -13,8 +13,8 @@ import { optimizeWithGemini, geminiJson, geminiPing } from "./src/gemini.js";
 import { optimizeWithClaude, claudeJson, claudePing } from "./src/claude.js";
 import { auditUrl, benchmark } from "./src/onpage.js";
 import { fetchSerp, serpConfigured } from "./src/serp.js";
-import { serperIndex, serperRank, serperWeb } from "./src/serper.js";
-import { FACTCHECK_SYSTEM, CLAIMS_SCHEMA, buildClaimsPrompt, VERIFY_SCHEMA, buildVerifyPrompt } from "./src/factcheck-prompt.js";
+import { serperIndex, serperRank, serperWeb, serperCheck } from "./src/serper.js";
+import { FACTCHECK_SYSTEM, CLAIMS_SCHEMA, buildClaimsPrompt, VERIFY_SCHEMA, buildVerifyPrompt, VN_SOURCES, sourceRank } from "./src/factcheck-prompt.js";
 import { fetchOgMeta } from "./src/sharekit.js";
 import { telegraphPublish, telegramPost } from "./src/autopost.js";
 import { slugify, mdToHtml, pollinationsImage, insertImage, postWordPress, postDevto, postHashnode } from "./src/blog2.js";
@@ -917,6 +917,20 @@ app.post("/api/onpage/evaluate", requireAuth, async (req, res) => {
   } catch (e) { res.status(400).json({ error: e.message || "Lỗi GSC/đánh giá" }); }
 });
 
+// --- POST /api/serper/check : kiem tra key Serper con dung khong ---
+app.post("/api/serper/check", requireAuth, async (req, res) => {
+  try {
+    const key = String((req.body || {}).serperKey || "").trim();
+    if (!key) return res.json({ ok: false, error: "Chưa nhập key" });
+    const r = await serperCheck({ key });
+    res.json({ ok: true, credits: r.credits });
+  } catch (e) {
+    if (e.badKey) return res.json({ ok: false, error: "Key không hợp lệ" });
+    if (e.quota) return res.json({ ok: false, error: "Hết lượt free (key vẫn đúng)" });
+    res.json({ ok: false, error: e.message || "Lỗi kiểm tra" });
+  }
+});
+
 // --- POST /api/onpage/factcheck : Check du lieu -> bo sung nguon uy tin THAT (Serper) ---
 app.post("/api/onpage/factcheck", requireAuth, async (req, res) => {
   try {
@@ -927,7 +941,7 @@ app.post("/api/onpage/factcheck", requireAuth, async (req, res) => {
     }
     const serperKey = String(body.serperKey || process.env.SERPER_API_KEY || "").trim();
     if (!serperKey) {
-      return res.status(400).json({ error: "Cần Serper API key để tìm nguồn THẬT. Vào tab 'Check Index & Thứ hạng' để nhập key Serper (free 2.500 lượt)." });
+      return res.status(400).json({ error: "Cần Serper API key để tìm nguồn THẬT. Mở ⚙️ Kết nối & Engine → cột Serper.dev để nhập key (free 2.500 lượt)." });
     }
     const gl = String(body.gl || "vn"), hl = String(body.hl || "vi");
 
@@ -962,15 +976,15 @@ app.post("/api/onpage/factcheck", requireAuth, async (req, res) => {
       });
       claims = (Array.isArray(data.claims) ? data.claims : [])
         .map((c) => ({
+          mode: c.mode === "add" ? "add" : "verify",
           quote: String(c.quote || "").trim(),
           value: String(c.value || "").trim(),
-          type: String(c.type || "other"),
+          need: String(c.need || "").trim(),
           risk: String(c.risk || "medium"),
-          why: String(c.why || "").trim(),
           query: String(c.query || "").trim(),
         }))
         .filter((c) => c.quote && c.query)
-        .slice(0, 12);
+        .slice(0, 10);
     } catch (e) {
       if (e.message === "local") return res.status(400).json({ error: "Cần engine Gemini/Claude." });
       return res.status(400).json({ error: "AI lỗi khi phân tích số liệu: " + (e.message || "?") });
@@ -979,11 +993,20 @@ app.post("/api/onpage/factcheck", requireAuth, async (req, res) => {
       return res.json({ items: [], claimCount: 0, note: "Không phát hiện số liệu nào cần kiểm chứng trong nội dung." });
     }
 
-    // 3) Tim kiem web THAT cho tung so lieu (song song, bo qua loi tung cai)
+    // 3) Tim kiem web THAT cho tung so lieu — 2 luot: chung + loc nguon uy tin VN.
+    //    Gop, khu trung, sap xep NGUON UY TIN len dau (VN > quoc te > khac).
+    const vnFilter = "(" + VN_SOURCES.map((s) => `site:${s}`).join(" OR ") + ")";
     await Promise.all(claims.map(async (c) => {
       try {
-        const { results, extra } = await serperWeb({ key: serperKey, q: c.query, gl, hl, num: 6 });
-        c.searchResults = [...(extra || []), ...(results || [])].slice(0, 6);
+        const [gen, vn] = await Promise.all([
+          serperWeb({ key: serperKey, q: c.query, gl, hl, num: 6 }),
+          serperWeb({ key: serperKey, q: `${c.query} ${vnFilter}`, gl, hl, num: 4 }).catch(() => ({ results: [], extra: [] })),
+        ]);
+        const merged = [...(vn.extra || []), ...(vn.results || []), ...(gen.extra || []), ...(gen.results || [])];
+        const seen = new Set();
+        const uniq = merged.filter((r) => r && r.url && !seen.has(r.url) && seen.add(r.url));
+        uniq.sort((a, b) => sourceRank(b.host) - sourceRank(a.host));
+        c.searchResults = uniq.slice(0, 7).map((r) => ({ ...r, auth: sourceRank(r.host) > 0 }));
       } catch (e) {
         c.searchResults = [];
         if (e.quota) c._quota = true;
@@ -1023,7 +1046,8 @@ app.post("/api/onpage/factcheck", requireAuth, async (req, res) => {
           advice: String(it.advice || "").trim(),
           risk: claim.risk || "medium",
           value: claim.value || "",
-          candidates: (claim.searchResults || []).map((r) => ({ title: r.title, url: r.url, host: r.host, date: r.date })).slice(0, 5),
+          mode: claim.mode || "verify",
+          candidates: (claim.searchResults || []).map((r) => ({ title: r.title, url: r.url, host: r.host, date: r.date, auth: !!r.auth })).slice(0, 5),
         };
       }).filter((it) => it.quote && it.newSentence);
     } catch (e) {

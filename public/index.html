@@ -150,8 +150,9 @@
           <h2 id="sectionTitle">Bảng điều khiển</h2>
         </div>
         <div class="right">
-          <span class="engine-pill"><span class="dot" id="enginePillDot"></span><span id="enginePillText">Local</span></span>
-          <span class="engine-pill" id="gscPill" title="Google Search Console" style="cursor:pointer"><span class="dot" id="gscPillDot" style="background:var(--muted)"></span><span id="gscPillText">GSC: chưa kết nối</span></span>
+          <span class="engine-pill" id="aiPill" title="AI xử lý nội dung" style="cursor:pointer"><span class="dot" id="enginePillDot"></span><span id="enginePillText">Local</span></span>
+          <span class="engine-pill" id="gscPill" title="Google Search Console" style="cursor:pointer"><span class="dot" id="gscPillDot" style="background:var(--amber)"></span><span id="gscPillText">GSC: chưa kết nối</span></span>
+          <span class="engine-pill" id="serperPill" title="Serper.dev — SERP thật" style="cursor:pointer"><span class="dot" id="serperPillDot" style="background:var(--amber)"></span><span id="serperPillText">Serper: chưa kết nối</span></span>
           <span class="user-chip" id="userChip" style="display:none">
             <span class="uava" id="userAvatar">U</span>
             <span id="userEmail"></span>
@@ -180,35 +181,39 @@
       <div class="page" style="padding-top:18px;padding-bottom:0">
         <section class="card" id="engineCard" style="margin-bottom:0">
           <details id="engineBox">
-            <summary style="cursor:pointer;font-weight:700;font-size:14px">Engine xử lý (kết nối 1 lần — dùng cho TẤT CẢ tính năng)</summary>
-            <div class="grid cols-2" style="margin-top:12px">
-              <div>
+            <summary style="cursor:pointer;font-weight:700;font-size:14px">Kết nối &amp; Engine <span class="muted" style="font-weight:400">(cấu hình 1 lần — dùng cho TẤT CẢ tính năng)</span></summary>
+            <div class="engine-cols">
+
+              <!-- ===== CỘT 1: AI ===== -->
+              <div class="engine-col ec-ai">
+                <div class="ec-head"><span class="ec-ic"><svg viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="3"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg></span> AI xử lý nội dung <span class="ec-pill" id="ecAiState">—</span></div>
                 <label>Engine</label>
                 <select id="engine">
                   <option value="local">Local — Miễn phí, offline, không cần key</option>
                   <option value="gemini">Gemini — Free key (Google AI Studio)</option>
                   <option value="claude">Claude — Cần key trả phí (Anthropic)</option>
                 </select>
-                <p class="muted" id="engineHint"></p>
+                <p class="muted" id="engineHint" style="font-size:.82rem"></p>
+                <div id="modelWrap" style="margin-top:8px">
+                  <label>Model</label>
+                  <select id="model"></select>
+                </div>
+                <div id="keyWrap" class="hidden" style="margin-top:8px">
+                  <label id="keyLabel">API Key</label>
+                  <input id="apiKey" type="password" placeholder="" />
+                  <p class="muted" id="keyHelp" style="font-size:.8rem"></p>
+                </div>
+                <div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  <button class="ghost small" id="engineCheckBtn" type="button">Kiểm tra kết nối</button>
+                  <span id="engineStatus" style="font-size:12.5px;font-weight:600"></span>
+                </div>
               </div>
-              <div id="modelWrap">
-                <label>Model</label>
-                <select id="model"></select>
-              </div>
-            </div>
-            <div id="keyWrap" class="hidden" style="margin-top:4px">
-              <label id="keyLabel">API Key</label>
-              <input id="apiKey" type="password" placeholder="" />
-              <p class="muted" id="keyHelp"></p>
-            </div>
-            <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-              <button class="ghost small" id="engineCheckBtn" type="button">Kiểm tra kết nối</button>
-              <span id="engineStatus" style="font-size:13px;font-weight:600"></span>
-            </div>
 
-            <div id="gscBox" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
-              <label style="font-weight:700;font-size:13px;color:var(--ink)">Google Search Console <span class="muted" style="font-weight:400">— số liệu thật</span></label>
-              <p class="muted" style="margin:4px 0 8px;font-size:.85rem">Đọc <b>clicks · impressions · CTR · vị trí</b> + top truy vấn thật cho URL khi đánh giá Onpage.</p>
+              <!-- ===== CỘT 2: GSC ===== -->
+              <div class="engine-col ec-gsc">
+                <div class="ec-head"><span class="ec-ic"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/><path d="M8 11l2 2 3.5-4"/></svg></span> Google Search Console <span class="ec-pill" id="ecGscState">—</span></div>
+                <p class="muted" style="margin:0 0 8px;font-size:.82rem">Số liệu thật <b>clicks · impressions · CTR · vị trí</b> + top truy vấn cho URL khi đánh giá Onpage.</p>
+                <div id="gscBox">
               <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
                 <span id="gscState" class="muted" style="font-size:13px">Đang kiểm tra...</span>
                 <select id="gscSiteSelect" class="hidden" style="max-width:320px"></select>
@@ -258,7 +263,23 @@
                 </ol>
               </details>
               <div id="gscMsg" class="muted" style="font-size:.82rem;margin-top:6px"></div>
-            </div>
+                </div><!-- /#gscBox -->
+              </div><!-- /cột GSC -->
+
+              <!-- ===== CỘT 3: SERPER.DEV ===== -->
+              <div class="engine-col ec-serper">
+                <div class="ec-head"><span class="ec-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 2.5 15 0 18M12 3c-2.5 2.5-2.5 15 0 18"/></svg></span> Serper.dev <span class="ec-pill" id="ecSerperState">—</span></div>
+                <p class="muted" style="margin:0 0 8px;font-size:.82rem">SERP Google <b>THẬT</b> cho: Check Index, phân tích đối thủ Onpage &amp; Check dữ liệu (tìm nguồn). Free <b>2.500 lượt</b>, hết tự dừng — không trừ tiền.</p>
+                <label>Serper API Key</label>
+                <input id="serperKey" type="password" placeholder="dán key từ serper.dev" />
+                <div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  <button class="ghost small" id="serperCheckBtn" type="button">Kiểm tra</button>
+                  <span id="serperStatus" style="font-size:12.5px;font-weight:600"></span>
+                </div>
+                <p class="muted" style="font-size:.8rem;margin-top:8px">Lấy key: <a href="https://serper.dev" target="_blank" rel="noopener">serper.dev</a> → đăng ký → Dashboard → API Key → copy.</p>
+              </div>
+
+            </div><!-- /.engine-cols -->
           </details>
         </section>
       </div>
@@ -775,10 +796,8 @@
       <!-- ===== SECTION: CHECK INDEX & THU HANG ===== -->
       <div class="section page" data-section="serp">
         <section class="card">
-          <h2>Kết nối Serper.dev</h2>
-          <p class="hint">Công cụ lấy SERP Google thật qua <a href="https://serper.dev" target="_blank" rel="noopener">serper.dev</a> — đăng ký <b>FREE 2.500 lượt</b>, vào Dashboard → API Key → copy. Hết lượt free, công cụ sẽ <b>tự dừng</b> (không trừ tiền).</p>
-          <label>Serper API Key</label>
-          <input id="serperKey" type="password" placeholder="dán API key từ serper.dev" />
+          <h2>Cài đặt tìm kiếm SERP</h2>
+          <p class="hint">Serper.dev giờ được cấu hình chung ở <b>⚙️ Kết nối &amp; Engine → cột Serper.dev</b> (dùng cho mọi tính năng). Ở đây chỉ chọn quốc gia/ngôn ngữ tìm kiếm.</p>
           <div class="grid cols-2" style="margin-top:12px">
             <div>
               <label>Quốc gia (Google)</label>
