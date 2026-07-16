@@ -45,7 +45,13 @@ import { sendVerifyEmail, sendOwnerNotify, sendResetCodeEmail, sendPasswordEmail
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 app.use(express.json({ limit: "5mb" }));
-app.use(express.static(path.join(__dirname, "public")));
+// Chong "giao dien cu" do cache: HTML luon lay moi; JS/CSS revalidate qua ETag moi lan (fresh sau deploy)
+app.use(express.static(path.join(__dirname, "public"), {
+  etag: true, lastModified: true,
+  setHeaders: (res, filePath) => {
+    res.setHeader("Cache-Control", /\.html?$/i.test(filePath) ? "no-store" : "no-cache");
+  },
+}));
 const UPLOAD_DIR = path.join(__dirname, "public", "uploads");
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 

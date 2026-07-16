@@ -176,7 +176,23 @@ window.gscConnected = () => (GSC.mode === "sa" ? (GSC.sites || []).length > 0 : 
   const signBtn = $("#gscSignInBtn"), sel = $("#gscSiteSelect"), disc = $("#gscDisconnectBtn");
   const guideOauth = $("#gscSetupGuide"), guideSa = $("#gscSetupGuideSa"), saBox = $("#gscSaConnect");
   const originHint = $("#gscOriginHint"); if (originHint) originHint.textContent = location.origin;
-  const setState = (t, c) => { state.textContent = t; state.style.color = c; };
+  // Chip GSC trên header: hiện đã kết nối chưa + property nào
+  function updateGscPill() {
+    const dot = $("#gscPillDot"), txt = $("#gscPillText");
+    if (!txt) return;
+    if (window.gscConnected && window.gscConnected()) {
+      const site = (GSC.siteUrl || "").replace(/^sc-domain:/, "").replace(/^https?:\/\//, "").replace(/\/$/, "");
+      txt.textContent = "GSC: " + (site || "đã kết nối"); dot.style.background = "var(--green,#2e9e6b)";
+    } else if (GSC.mode === "sa" && GSC.saConfigured !== false) {
+      txt.textContent = "GSC: chờ thêm email"; dot.style.background = "var(--muted)";
+    } else {
+      txt.textContent = "GSC: chưa kết nối"; dot.style.background = "var(--muted)";
+    }
+  }
+  window.updateGscPill = updateGscPill;
+  const gscPillEl = $("#gscPill");
+  if (gscPillEl) gscPillEl.addEventListener("click", () => { const b = $("#engineBox"); if (b) { b.open = true; b.scrollIntoView({ behavior: "smooth", block: "center" }); } });
+  const setState = (t, c) => { state.textContent = t; state.style.color = c; updateGscPill(); };
 
   // Nạp thư viện Google Identity Services (chỉ dùng cho chế độ OAuth fallback)
   let gisReady = null;
@@ -225,7 +241,7 @@ window.gscConnected = () => (GSC.mode === "sa" ? (GSC.sites || []).length > 0 : 
     } catch (e) { gmsg("err", esc(e.message || "Lỗi đăng nhập")); }
   }
   signBtn.addEventListener("click", signIn);
-  sel.addEventListener("change", (e) => { GSC.siteUrl = e.target.value; localStorage.setItem("gsc_site", GSC.siteUrl); gmsg("info", "✓ Đã chọn property."); });
+  sel.addEventListener("change", (e) => { GSC.siteUrl = e.target.value; localStorage.setItem("gsc_site", GSC.siteUrl); gmsg("info", "✓ Đã chọn property."); updateGscPill(); });
   disc.addEventListener("click", () => {
     try { if (GSC.token && window.google) google.accounts.oauth2.revoke(GSC.token, () => {}); } catch {}
     GSC.token = ""; GSC.exp = 0; GSC.sites = []; setState("● Chưa đăng nhập", "var(--muted)");
