@@ -13,7 +13,8 @@ import { optimizeWithGemini, geminiJson, geminiPing } from "./src/gemini.js";
 import { optimizeWithClaude, claudeJson, claudePing } from "./src/claude.js";
 import { auditUrl, benchmark } from "./src/onpage.js";
 import { fetchSerp, serpConfigured } from "./src/serp.js";
-import { serperIndex, serperRank } from "./src/serper.js";
+import { serperIndex, serperRank, serperWeb } from "./src/serper.js";
+import { FACTCHECK_SYSTEM, CLAIMS_SCHEMA, buildClaimsPrompt, VERIFY_SCHEMA, buildVerifyPrompt } from "./src/factcheck-prompt.js";
 import { fetchOgMeta } from "./src/sharekit.js";
 import { telegraphPublish, telegramPost } from "./src/autopost.js";
 import { slugify, mdToHtml, pollinationsImage, insertImage, postWordPress, postDevto, postHashnode } from "./src/blog2.js";
@@ -914,6 +915,130 @@ app.post("/api/onpage/evaluate", requireAuth, async (req, res) => {
       return res.status(400).json({ error: "AI lỗi: " + e.message, gsc });
     }
   } catch (e) { res.status(400).json({ error: e.message || "Lỗi GSC/đánh giá" }); }
+});
+
+// --- POST /api/onpage/factcheck : Check du lieu -> bo sung nguon uy tin THAT (Serper) ---
+app.post("/api/onpage/factcheck", requireAuth, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const { engine, model, apiKey, mainKeyword } = body;
+    if (engine !== "gemini" && engine !== "claude") {
+      return res.status(400).json({ error: "Cần bật engine Gemini/Claude ở ⚙️ để kiểm chứng số liệu (Local không tra soát được)." });
+    }
+    const serperKey = String(body.serperKey || process.env.SERPER_API_KEY || "").trim();
+    if (!serperKey) {
+      return res.status(400).json({ error: "Cần Serper API key để tìm nguồn THẬT. Vào tab 'Check Index & Thứ hạng' để nhập key Serper (free 2.500 lượt)." });
+    }
+    const gl = String(body.gl || "vn"), hl = String(body.hl || "vi");
+
+    // 1) Lay noi dung: uu tien content (tu file Word), else doc tu URL
+    let content = String(body.content || "").trim();
+    let url = String(body.url || "").trim();
+    let title = String(body.title || "").trim();
+    if (!content) {
+      if (!/^https?:\/\//i.test(url)) return res.status(400).json({ error: "Nhập URL hợp lệ hoặc tải nội dung (file Word)." });
+      try {
+        const art = await extractArticle(url);
+        content = art.beforeMarkdown || "";
+        title = title || art.title || "";
+      } catch (e) {
+        return res.status(400).json({ error: "Không đọc được nội dung URL: " + (e.message || "lỗi") });
+      }
+    }
+    content = content.slice(0, 40000);
+    if (content.replace(/\s+/g, "").length < 80) {
+      return res.status(400).json({ error: "Nội dung quá ngắn để kiểm chứng. Hãy nhập URL bài viết hoặc file Word đầy đủ." });
+    }
+    const knowledge = String(body.knowledge || "").slice(0, 20000);
+
+    // 2) GIAI DOAN A: AI liet ke so lieu can kiem chung + truy van tim nguon
+    let claims = [];
+    try {
+      const { data } = await onpageAI({
+        engine, key: apiKey, model,
+        system: FACTCHECK_SYSTEM,
+        user: buildClaimsPrompt({ content, url, mainKeyword, knowledge }),
+        schema: CLAIMS_SCHEMA, maxTokens: 8192,
+      });
+      claims = (Array.isArray(data.claims) ? data.claims : [])
+        .map((c) => ({
+          quote: String(c.quote || "").trim(),
+          value: String(c.value || "").trim(),
+          type: String(c.type || "other"),
+          risk: String(c.risk || "medium"),
+          why: String(c.why || "").trim(),
+          query: String(c.query || "").trim(),
+        }))
+        .filter((c) => c.quote && c.query)
+        .slice(0, 12);
+    } catch (e) {
+      if (e.message === "local") return res.status(400).json({ error: "Cần engine Gemini/Claude." });
+      return res.status(400).json({ error: "AI lỗi khi phân tích số liệu: " + (e.message || "?") });
+    }
+    if (!claims.length) {
+      return res.json({ items: [], claimCount: 0, note: "Không phát hiện số liệu nào cần kiểm chứng trong nội dung." });
+    }
+
+    // 3) Tim kiem web THAT cho tung so lieu (song song, bo qua loi tung cai)
+    await Promise.all(claims.map(async (c) => {
+      try {
+        const { results, extra } = await serperWeb({ key: serperKey, q: c.query, gl, hl, num: 6 });
+        c.searchResults = [...(extra || []), ...(results || [])].slice(0, 6);
+      } catch (e) {
+        c.searchResults = [];
+        if (e.quota) c._quota = true;
+        if (e.badKey) c._badKey = true;
+      }
+    }));
+    if (claims.some((c) => c._badKey)) return res.status(400).json({ error: "Serper API key sai. Kiểm tra lại key ở tab 'Check Index & Thứ hạng'." });
+    const quotaHit = claims.some((c) => c._quota);
+
+    // 4) GIAI DOAN B: AI doi chieu ket qua THAT -> sua so lieu + gan nguon that
+    let items = [];
+    let engineUsed = "";
+    try {
+      const { data, engineUsed: eu } = await onpageAI({
+        engine, key: apiKey, model,
+        system: FACTCHECK_SYSTEM,
+        user: buildVerifyPrompt({ claims, mainKeyword }),
+        schema: VERIFY_SCHEMA, maxTokens: 16384,
+      });
+      engineUsed = eu;
+      const allUrls = new Set();
+      claims.forEach((c) => (c.searchResults || []).forEach((r) => r.url && allUrls.add(r.url)));
+      items = (Array.isArray(data.items) ? data.items : []).map((it) => {
+        let sourceUrl = String(it.sourceUrl || "").trim();
+        // Chong bia URL: chi giu URL co that trong ket qua tim kiem
+        if (sourceUrl && !allUrls.has(sourceUrl)) sourceUrl = "";
+        const claim = claims.find((c) => c.quote === it.quote) || {};
+        return {
+          quote: String(it.quote || "").trim(),
+          status: String(it.status || "").trim(),
+          oldSentence: String(it.oldSentence || it.quote || "").trim(),
+          newSentence: String(it.newSentence || "").trim(),
+          sourceUrl,
+          sourceTitle: sourceUrl ? String(it.sourceTitle || "").trim() : "",
+          sourceNote: String(it.sourceNote || "").trim(),
+          confidence: String(it.confidence || "medium"),
+          advice: String(it.advice || "").trim(),
+          risk: claim.risk || "medium",
+          value: claim.value || "",
+          candidates: (claim.searchResults || []).map((r) => ({ title: r.title, url: r.url, host: r.host, date: r.date })).slice(0, 5),
+        };
+      }).filter((it) => it.quote && it.newSentence);
+    } catch (e) {
+      if (e.message === "local") return res.status(400).json({ error: "Cần engine Gemini/Claude." });
+      return res.status(400).json({ error: "AI lỗi khi kiểm chứng: " + (e.message || "?") });
+    }
+
+    res.json({
+      items, claimCount: claims.length, engineUsed, title,
+      quota: quotaHit,
+      note: quotaHit ? "Hết lượt Serper free cho một số truy vấn — kết quả có thể thiếu nguồn." : "",
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message || String(e) });
+  }
 });
 
 // ===================== SCHEMA MARKUP (JSON-LD) =====================

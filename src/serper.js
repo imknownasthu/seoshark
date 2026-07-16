@@ -77,6 +77,40 @@ export async function serperOrganic({ key, keyword, gl, hl, num = 6, excludeHost
   return out;
 }
 
+// Tim kiem web THAT cho 1 truy van -> tra ve list {title,url,host,snippet,position}.
+// Dung cho tinh nang "Check du lieu - bo sung nguon uy tin": nguon phai co that.
+export async function serperWeb({ key, q, gl = "vn", hl = "vi", num = 6 }) {
+  const data = await serperSearch({ key, q: String(q || "").trim(), gl, hl, num: Math.min(10, num) });
+  const organic = Array.isArray(data.organic) ? data.organic : [];
+  const out = [];
+  const seen = new Set();
+  for (const o of organic) {
+    if (!o.link || seen.has(o.link)) continue;
+    seen.add(o.link);
+    out.push({
+      title: o.title || o.link,
+      url: o.link,
+      host: hostOf(o.link),
+      snippet: String(o.snippet || o.description || "").trim(),
+      date: o.date || "",
+      position: o.position || out.length + 1,
+    });
+    if (out.length >= num) break;
+  }
+  // Kem answerBox / knowledgeGraph neu co (thuong chua so lieu chinh xac)
+  const extra = [];
+  if (data.answerBox && (data.answerBox.snippet || data.answerBox.answer)) {
+    extra.push({
+      title: data.answerBox.title || "Answer box (Google)",
+      url: data.answerBox.link || data.answerBox.url || "",
+      host: hostOf(data.answerBox.link || data.answerBox.url || ""),
+      snippet: String(data.answerBox.snippet || data.answerBox.answer || "").trim(),
+      date: "", position: 0, answerBox: true,
+    });
+  }
+  return { results: out, extra };
+}
+
 // Check thu hang 1 tu khoa cho domain (trong top `num`). Tra rank=null neu ngoai top.
 export async function serperRank({ key, keyword, domain, gl, hl, num = 10 }) {
   const kw = String(keyword || "").trim();

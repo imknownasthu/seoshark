@@ -160,6 +160,22 @@
         </div>
       </div>
 
+      <!-- THANH CÔNG CỤ ẢNH (tiện ích nhanh — luôn hiển thị) -->
+      <div class="page" style="padding-top:14px;padding-bottom:0">
+        <div class="imgtool-bar">
+          <span class="imgtool-lead">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg>
+            Công cụ ảnh
+          </span>
+          <button class="imgtool-btn" data-imgtool="resize" type="button">Đổi kích thước</button>
+          <button class="imgtool-btn" data-imgtool="format" type="button">Đổi định dạng</button>
+          <button class="imgtool-btn" data-imgtool="logo" type="button">Chèn logo</button>
+          <button class="imgtool-btn" data-imgtool="rename" type="button">Đổi tên hàng loạt</button>
+          <button class="imgtool-btn" data-imgtool="geotag" type="button">Thêm Geotag</button>
+          <button class="imgtool-btn" data-imgtool="bg" type="button">Xóa nền</button>
+        </div>
+      </div>
+
       <!-- ENGINE (TOÀN CỤC — kết nối 1 lần, dùng cho mọi tính năng) -->
       <div class="page" style="padding-top:18px;padding-bottom:0">
         <section class="card" id="engineCard" style="margin-bottom:0">
@@ -519,6 +535,14 @@
 
       <!-- ===== SECTION: TỐI ƯU ONPAGE ===== -->
       <div class="section page" data-section="onpage">
+        <!-- SUB-TABS: Tối ưu bài viết / Check dữ liệu -->
+        <div class="tabs subtabs" id="onpageTabs" style="margin-bottom:6px">
+          <div class="tab active" data-onpane="optimize">Tối ưu bài viết</div>
+          <div class="tab" data-onpane="factcheck">Check dữ liệu — bổ sung nguồn uy tín</div>
+        </div>
+
+        <!-- ===== PANE: TỐI ƯU BÀI VIẾT (giữ nguyên) ===== -->
+        <div class="featpane onpane active" data-onpane="optimize">
         <section class="card">
           <h2>1. Phân tích bài viết &amp; đối thủ</h2>
           <p class="hint">Nhập URL của bạn + từ khóa. Công cụ đọc on-page trang của bạn và so sánh với đối thủ top SERP.</p>
@@ -697,6 +721,55 @@
           <div id="opExtras" style="margin-top:18px"></div>
           </div>
         </section>
+        </div><!-- /pane optimize -->
+
+        <!-- ===== PANE: CHECK DỮ LIỆU — BỔ SUNG NGUỒN UY TÍN ===== -->
+        <div class="featpane onpane" data-onpane="factcheck">
+          <section class="card">
+            <h2>1. Nội dung cần rà soát số liệu</h2>
+            <p class="hint">AI rà soát các số liệu (tỷ lệ %, giá, thời gian, thống kê...) trong bài, <b>tìm kiếm web thật (Serper.dev)</b> để đối chiếu, rồi đề xuất số liệu chính xác kèm <b>nguồn thật có URL rõ ràng</b>. Chuẩn E-E-A-T / YMYL y tế — nguồn không bịa.</p>
+
+            <div class="tabs subtabs" id="fcInputTabs" style="margin:6px 0 12px">
+              <div class="tab active" data-fcin="url">Từ URL</div>
+              <div class="tab" data-fcin="word">Tải file Word</div>
+            </div>
+
+            <div id="fcInUrl">
+              <label>URL bài viết *</label>
+              <input id="fcUrl" type="text" placeholder="https://nhakhoashark.vn/bai-viet" />
+            </div>
+            <div id="fcInWord" class="hidden">
+              <label>Tải file Word (.docx) *</label>
+              <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                <label class="ghost small" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px;margin:0">Chọn file Word<input id="fcFile" type="file" accept=".docx" style="display:none" /></label>
+                <span class="muted" id="fcFileMsg" style="font-size:.85rem">Chưa chọn file</span>
+              </div>
+            </div>
+
+            <div style="margin-top:14px">
+              <label>Từ khóa chính <span class="muted" style="font-weight:400">(tùy chọn — giúp AI hiểu bối cảnh)</span></label>
+              <input id="fcKw" type="text" placeholder="vd: niềng răng trong suốt" />
+            </div>
+
+            <div style="margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <button id="btnFcCheck">Kiểm chứng số liệu &amp; tìm nguồn</button>
+              <span class="muted" id="fcMsg" style="font-size:.85rem"></span>
+            </div>
+            <p class="muted" style="margin-top:10px;font-size:.82rem">Cần bật engine <b>Gemini/Claude</b> ở ⚙️ và có <b>Serper API key</b> (nhập ở tab "Check Index &amp; Thứ hạng", free 2.500 lượt) để đảm bảo nguồn trích dẫn là thật.</p>
+          </section>
+
+          <section class="card hidden" id="fcResultCard">
+            <div class="flexbar">
+              <h2 style="margin:0">2. Số liệu &amp; nguồn đề xuất</h2>
+              <span class="muted" id="fcResMeta"></span>
+            </div>
+            <p class="muted" style="margin:6px 0 4px">Chỉ hiển thị các đoạn cần chèn/chỉnh — <span style="background:#fff3bf;padding:1px 5px;border-radius:4px">số liệu tô vàng</span> là con số được trích dẫn từ nguồn. Bạn tự copy chèn vào bài.</p>
+            <div style="margin:8px 0 4px;display:flex;gap:8px;flex-wrap:wrap">
+              <button class="ghost small" id="fcCopyAll" type="button">Copy tất cả (kèm nguồn)</button>
+            </div>
+            <div id="fcResult" style="margin-top:8px"></div>
+          </section>
+        </div><!-- /pane factcheck -->
       </div>
 
       <!-- ===== SECTION: CHECK INDEX & THU HANG ===== -->
@@ -1396,10 +1469,24 @@
     </main>
   </div>
 
+  <!-- MODAL CÔNG CỤ ẢNH -->
+  <div class="imgtool-modal hidden" id="imgtoolModal">
+    <div class="imgtool-dialog">
+      <div class="imgtool-head">
+        <h3 id="imgtoolTitle">Công cụ ảnh</h3>
+        <button class="imgtool-x" id="imgtoolClose" type="button" aria-label="Đóng">✕</button>
+      </div>
+      <div class="imgtool-body" id="imgtoolBody"></div>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/piexifjs@1.0.6/piexif.min.js"></script>
   <script src="app.js"></script>
   <script src="schema.js"></script>
+  <script src="imgtools.js"></script>
 </body>
 </html>

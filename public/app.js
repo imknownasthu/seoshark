@@ -1072,6 +1072,159 @@ $("#btnOpAudit").addEventListener("click", async () => {
   finally { busy(btn, false); }
 });
 
+// ===== ONPAGE SUB-TABS: Tối ưu bài viết / Check dữ liệu =====
+$$("#onpageTabs .tab").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    $$("#onpageTabs .tab").forEach((t) => t.classList.remove("active"));
+    $$(".onpane").forEach((p) => p.classList.remove("active"));
+    tab.classList.add("active");
+    const pane = $(`.onpane[data-onpane="${tab.dataset.onpane}"]`);
+    if (pane) pane.classList.add("active");
+  });
+});
+
+// ===== CHECK DỮ LIỆU — BỔ SUNG NGUỒN UY TÍN =====
+(function () {
+  const fcState = { wordContent: "", wordName: "" };
+  let fcItems = [];
+
+  // Tab nguồn: URL / Word
+  $$("#fcInputTabs .tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      $$("#fcInputTabs .tab").forEach((t) => t.classList.remove("active"));
+      tab.classList.add("active");
+      const m = tab.dataset.fcin;
+      $("#fcInUrl").classList.toggle("hidden", m !== "url");
+      $("#fcInWord").classList.toggle("hidden", m !== "word");
+    });
+  });
+
+  // Đọc file Word (mammoth, client-side)
+  const fcFile = $("#fcFile");
+  if (fcFile) fcFile.addEventListener("change", async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    const msg = $("#fcFileMsg"); msg.textContent = "Đang đọc file...";
+    try {
+      const buf = await f.arrayBuffer();
+      const res = await window.mammoth.extractRawText({ arrayBuffer: buf });
+      fcState.wordContent = (res.value || "").trim();
+      fcState.wordName = f.name;
+      msg.textContent = `${f.name} — ${fcState.wordContent.length.toLocaleString("vi")} ký tự`;
+    } catch (err) { msg.textContent = "Lỗi đọc file: " + err.message; fcState.wordContent = ""; }
+  });
+
+  function markHl(s) { return esc(s).replace(/\[\[(.+?)\]\]/g, '<mark>$1</mark>'); }
+  function stripHl(s) { return String(s || "").replace(/\[\[(.+?)\]\]/g, "$1"); }
+
+  const RISK = { high: ["Rủi ro cao", "sapo"], medium: ["Rủi ro TB", "ket"], low: ["Rủi ro thấp", "ok"] };
+  const STATUS = {
+    accurate: ["Đã đúng — có nguồn", "ok"],
+    corrected: ["Đã sửa số liệu", "sapo"],
+    outdated: ["Lỗi thời — cần cập nhật", "sapo"],
+    unsupported: ["Chưa có nguồn xác nhận", "ket"],
+    no_source: ["Không tìm được nguồn", "ket"],
+  };
+  function badge(label, kind) { return `<span class="badge ${kind}" style="font-size:.72rem">${esc(label)}</span>`; }
+
+  function renderFc(data) {
+    fcItems = data.items || [];
+    const wrap = $("#fcResult");
+    $("#fcResMeta").textContent = `${data.claimCount || 0} số liệu · ${data.engineUsed || ""}`;
+    if (!fcItems.length) {
+      wrap.innerHTML = alertHtml("ok", data.note || "Không phát hiện số liệu nào cần kiểm chứng.");
+      $("#fcResultCard").classList.remove("hidden");
+      return;
+    }
+    let html = "";
+    if (data.quota) html += alertHtml("warn", "⚠ Hết lượt Serper free cho một số truy vấn — vài số liệu có thể thiếu nguồn.");
+    fcItems.forEach((it, i) => {
+      const st = STATUS[it.status] || ["", "ket"];
+      const rk = RISK[it.risk] || RISK.medium;
+      let src = "";
+      if (it.sourceUrl) {
+        src = `<div style="margin-top:8px;padding:9px 11px;background:#f2f7ff;border:1px solid #d8e6ff;border-radius:9px;font-size:.86rem">
+            <div style="font-weight:700;color:#1f5fd0">Nguồn: <a href="${esc(it.sourceUrl)}" target="_blank" rel="noopener">${esc(it.sourceTitle || it.sourceUrl)}</a></div>
+            <div class="muted" style="word-break:break-all;font-size:.8rem">${esc(it.sourceUrl)}</div>
+            ${it.sourceNote ? `<div style="margin-top:4px;font-style:italic">“${esc(it.sourceNote)}”</div>` : ""}
+          </div>`;
+      } else {
+        src = alertHtml("warn", "⚠ <b>Không tìm được nguồn uy tín xác nhận số liệu này.</b> Nên gỡ bỏ con số hoặc tự tìm nguồn chính thống trước khi đăng.");
+        if (it.candidates && it.candidates.length) {
+          src += `<details style="margin-top:4px"><summary class="muted" style="cursor:pointer;font-size:.82rem">Xem ${it.candidates.length} kết quả tìm kiếm để tự đối chiếu</summary>
+            <ul style="margin:6px 0;padding-left:18px;font-size:.82rem">${it.candidates.map((c) => `<li><a href="${esc(c.url)}" target="_blank" rel="noopener">${esc(c.title)}</a> <span class="muted">(${esc(c.host)})</span></li>`).join("")}</ul></details>`;
+        }
+      }
+      html += `<div class="card" style="padding:14px;margin-bottom:12px">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+            ${badge(st[0], st[1])} ${badge(rk[0], rk[1])}
+            ${it.confidence ? `<span class="muted" style="font-size:.78rem">độ tin cậy: ${esc(it.confidence)}</span>` : ""}
+          </div>
+          <div style="font-size:.83rem;color:var(--muted);margin-bottom:2px">Câu gốc:</div>
+          <div style="padding:7px 10px;background:#fafbfc;border:1px solid var(--line);border-radius:8px;font-size:.9rem">${esc(it.oldSentence)}</div>
+          <div style="font-size:.83rem;color:var(--muted);margin:8px 0 2px">Đề xuất chèn/chỉnh (số liệu tô vàng):</div>
+          <div style="padding:7px 10px;background:#f6fff6;border:1px solid #cdeccd;border-radius:8px;font-size:.9rem">${markHl(it.newSentence)}</div>
+          ${it.advice ? `<div class="muted" style="margin-top:6px;font-size:.83rem">💡 ${esc(it.advice)}</div>` : ""}
+          ${src}
+          <div style="margin-top:8px"><button class="ghost small" type="button" onclick="window.__fcCopy(${i})">Copy đoạn này (kèm nguồn)</button></div>
+        </div>`;
+    });
+    wrap.innerHTML = html;
+    $("#fcResultCard").classList.remove("hidden");
+    $("#fcResultCard").scrollIntoView({ behavior: "smooth" });
+  }
+
+  function itemText(it) {
+    let t = stripHl(it.newSentence);
+    if (it.sourceUrl) t += `\nNguồn: ${it.sourceTitle || ""} — ${it.sourceUrl}`;
+    else t += `\n(Chưa có nguồn xác nhận)`;
+    return t;
+  }
+  window.__fcCopy = (i) => {
+    const it = fcItems[i]; if (!it) return;
+    navigator.clipboard.writeText(itemText(it)).then(() => toast("Đã copy đoạn nội dung + nguồn"));
+  };
+  $("#fcCopyAll").addEventListener("click", () => {
+    if (!fcItems.length) return;
+    const all = fcItems.map((it, i) => `${i + 1}. ${itemText(it)}`).join("\n\n");
+    navigator.clipboard.writeText(all).then(() => toast("Đã copy tất cả"));
+  });
+
+  $("#btnFcCheck").addEventListener("click", async () => {
+    const msg = $("#fcMsg"); msg.textContent = "";
+    const engine = $("#engine").value;
+    if (engine !== "gemini" && engine !== "claude") { msg.innerHTML = alertHtml("err", "Cần bật engine Gemini/Claude ở ⚙️."); return; }
+    const serperKey = localStorage.getItem("seoshark_serper_key") || "";
+    if (!serperKey) { msg.innerHTML = alertHtml("err", "Cần Serper API key — nhập ở tab 'Check Index & Thứ hạng' (free 2.500 lượt) để tìm nguồn thật."); return; }
+
+    const payload = {
+      engine, apiKey: $("#apiKey").value.trim() || undefined, model: $("#model").value || undefined,
+      mainKeyword: $("#fcKw").value.trim(), serperKey,
+      gl: localStorage.getItem("seoshark_serp_gl") || "vn", hl: localStorage.getItem("seoshark_serp_hl") || "vi",
+    };
+    const mode = $("#fcInputTabs .tab.active").dataset.fcin;
+    if (mode === "word") {
+      if (!fcState.wordContent) { msg.innerHTML = alertHtml("err", "Hãy chọn file Word (.docx)."); return; }
+      payload.content = fcState.wordContent; payload.title = fcState.wordName;
+    } else {
+      const url = $("#fcUrl").value.trim();
+      if (!/^https?:\/\//i.test(url)) { msg.innerHTML = alertHtml("err", "Nhập URL hợp lệ."); return; }
+      payload.url = url;
+    }
+
+    const btn = $("#btnFcCheck");
+    busy(btn, true, "Đang rà soát số liệu & tìm nguồn thật (20-60s)...");
+    try {
+      const res = await fetch("/api/onpage/factcheck", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Lỗi không xác định");
+      renderFc(data);
+    } catch (e) { msg.innerHTML = alertHtml("err", "❌ " + e.message); }
+    finally { busy(btn, false); }
+  });
+})();
+
 // GSC trong Onpage: hiện box nếu đã kết nối; nút xem số liệu thật cho URL vừa audit
 let _opGscUrl = "";
 function opGscReveal(url) {
