@@ -144,6 +144,9 @@
         <div><label>Quốc gia</label><input id="itCtry" type="text" value="Việt Nam"></div></div>
       <div class="it-row"><div><label>Mô tả ảnh (caption + từ khóa)</label><input id="itDesc" type="text" placeholder="Niềng răng trong suốt tại Nha khoa Shark Hà Nội"></div></div>
       <div class="it-row"><div><label>Từ khóa (cách nhau dấu phẩy)</label><input id="itKw" type="text" placeholder="niềng răng, invisalign, hà nội"></div></div>
+      <div class="it-row"><div><label>Số điện thoại</label><input id="itPhone" type="text" placeholder="0123 456 789"></div>
+        <div><label>Email</label><input id="itEmail" type="text" placeholder="info@nhakhoashark.vn"></div>
+        <div style="flex:0 0 150px"><label>Đánh giá (sao, 0–5)</label><input id="itRating" type="number" min="0" max="5" step="0.1" placeholder="4.8"></div></div>
       <div class="it-row"><div><label>Tác giả</label><input id="itAuthor" type="text" placeholder="Nha khoa Shark"></div>
         <div><label>Bản quyền</label><input id="itCopy" type="text" placeholder="© Nha khoa Shark"></div>
         <div><label>URL</label><input id="itUrl" type="text" placeholder="https://nhakhoashark.vn"></div></div>`;
@@ -156,16 +159,27 @@
     const zeroth = {}, gps = {};
     const loc = val("itLoc").trim(), city = val("itCity").trim(), prov = val("itProv").trim(), ctry = val("itCtry").trim();
     const desc = val("itDesc").trim(), kw = val("itKw").trim(), author = val("itAuthor").trim(), copyr = val("itCopy").trim(), url = val("itUrl").trim();
+    const phone = val("itPhone").trim(), email = val("itEmail").trim(), rating = val("itRating").trim();
     const locFull = [loc, city, prov, ctry].filter(Boolean).join(", ");
-    const descFull = [desc, locFull].filter(Boolean).join(" | ");
+    const contact = [phone && `ĐT: ${phone}`, email && `Email: ${email}`, rating && `Đánh giá: ${rating}/5`].filter(Boolean).join(", ");
+    const descFull = [desc, locFull, contact].filter(Boolean).join(" | ");
     if (descFull) zeroth[piexif.ImageIFD.ImageDescription] = asciiFold(descFull);
     if (author) zeroth[piexif.ImageIFD.Artist] = asciiFold(author);
     if (copyr) zeroth[piexif.ImageIFD.Copyright] = asciiFold(copyr);
     if (url) zeroth[piexif.ImageIFD.Software] = asciiFold(url);
     if (desc) zeroth[piexif.ImageIFD.XPTitle] = xpBytes(desc);
     if (kw) zeroth[piexif.ImageIFD.XPKeywords] = xpBytes(kw);
-    if (locFull) zeroth[piexif.ImageIFD.XPComment] = xpBytes(locFull);
+    if (locFull || contact) zeroth[piexif.ImageIFD.XPComment] = xpBytes([locFull, contact].filter(Boolean).join(" | "));
     if (author) zeroth[piexif.ImageIFD.XPAuthor] = xpBytes(author);
+    // Đánh giá sao -> EXIF Rating (0-5) + RatingPercent (Windows đọc được)
+    const rv = parseFloat(rating);
+    if (!isNaN(rv) && piexif.ImageIFD.Rating) {
+      zeroth[piexif.ImageIFD.Rating] = Math.max(0, Math.min(5, Math.round(rv)));
+      if (piexif.ImageIFD.RatingPercent) zeroth[piexif.ImageIFD.RatingPercent] = Math.round(Math.max(0, Math.min(5, rv)) / 5 * 100);
+    }
+    // UserComment (ExifIFD) chứa đầy đủ contact để công cụ đọc EXIF khác lấy được
+    const exif = {};
+    if (contact || descFull) { try { exif[piexif.ExifIFD.UserComment] = "ASCII\0\0\0" + asciiFold([desc, locFull, contact].filter(Boolean).join(" | ")); } catch (e) {} }
     if (!isNaN(lat) && !isNaN(lng)) {
       gps[piexif.GPSIFD.GPSLatitudeRef] = lat >= 0 ? "N" : "S";
       gps[piexif.GPSIFD.GPSLatitude] = piexif.GPSHelper.degToDmsRational(Math.abs(lat));
@@ -174,7 +188,7 @@
       const alt = parseFloat(val("itAlt"));
       if (!isNaN(alt)) { gps[piexif.GPSIFD.GPSAltitudeRef] = alt < 0 ? 1 : 0; gps[piexif.GPSIFD.GPSAltitude] = [Math.round(Math.abs(alt) * 100), 100]; }
     }
-    const exifStr = piexif.dump({ "0th": zeroth, Exif: {}, GPS: gps });
+    const exifStr = piexif.dump({ "0th": zeroth, Exif: exif, GPS: gps });
     const blob = dataURLtoBlob(piexif.insert(exifStr, dataUrl));
     return { name: `${it.base}-geo.jpg`, blob };
   }
