@@ -27,7 +27,7 @@ import { buildPcClassifyPrompt, buildPcTierPrompt } from "./src/pillar-content-p
 import * as store from "./src/store.js";
 import {
   SCHEMA_DEFS, MECHANICAL_TYPES, extractPageData, extractLdJson, schemaTypesOf,
-  buildMechanicalNode, validateGraph, wrapGraph,
+  buildMechanicalNode, validateGraph, wrapGraph, applyTemplate,
 } from "./src/schema.js";
 import { SCHEMA_SYSTEM, SCHEMA_GEN_SCHEMA, SCHEMA_GAP_SCHEMA, buildSchemaPrompt, buildGapPrompt } from "./src/schema-prompt.js";
 import { fetchHtml } from "./src/extract.js";
@@ -1031,6 +1031,49 @@ app.post("/api/schema/optimize", requireAuth, async (req, res) => {
     const graph = parsed["@graph"] ? parsed["@graph"] : (Array.isArray(parsed) ? parsed : [parsed]);
     res.json({ jsonld: wrapGraph(graph, url), nodes: graph, validation: validateGraph(graph), notes: d.notes || "" });
   } catch (e) { res.status(400).json({ error: "AI lỗi: " + (e.message || "?") }); }
+});
+
+// ===== Mau Schema ca nhan hoa (luu & tai dung cho URL moi) =====
+app.get("/api/schema/templates", requireAuth, async (req, res) => {
+  try {
+    const owner = (req.user?.email || "guest").toLowerCase();
+    const list = await store.listSchemaTemplates(owner);
+    res.json({ templates: list.map((t) => ({ id: t.id, name: t.name, types: schemaTypesOf(t.graph) })) });
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
+});
+app.post("/api/schema/templates/save", requireAuth, async (req, res) => {
+  try {
+    const owner = (req.user?.email || "guest").toLowerCase();
+    const { id, name, graph } = req.body || {};
+    const g = Array.isArray(graph) ? graph : (graph && graph["@graph"]) || [];
+    if (!g.length) return res.status(400).json({ error: "Chưa có schema để lưu làm mẫu." });
+    const rec = { id: id && String(id).trim() ? String(id).trim() : randomUUID(), owner, name: String(name || "").trim() || "Mẫu schema", graph: g };
+    await store.putSchemaTemplate(rec);
+    res.json({ ok: true, id: rec.id, name: rec.name });
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
+});
+app.post("/api/schema/templates/delete", requireAuth, async (req, res) => {
+  try {
+    const owner = (req.user?.email || "guest").toLowerCase();
+    const ok = await store.deleteSchemaTemplate(String((req.body || {}).id || "").trim(), owner);
+    res.json({ ok });
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
+});
+// Ap 1 mau cho URL MOI: doc trang moi + dung cau truc mau, lam moi truong URL-specific
+app.post("/api/schema/apply", requireAuth, async (req, res) => {
+  try {
+    const owner = (req.user?.email || "guest").toLowerCase();
+    const { templateId, url } = req.body || {};
+    const u = String(url || "").trim();
+    if (!/^https?:\/\//i.test(u)) return res.status(400).json({ error: "Nhập URL bài viết hợp lệ." });
+    const tpl = await store.getSchemaTemplate(String(templateId || "").trim(), owner);
+    if (!tpl) return res.status(400).json({ error: "Không tìm thấy mẫu." });
+    let data;
+    try { data = await extractPageData(u); }
+    catch (e) { return res.status(400).json({ error: "Không đọc được nội dung URL: " + (e.message || "lỗi") }); }
+    const nodes = applyTemplate(tpl.graph, data);
+    res.json({ url: u, jsonld: wrapGraph(nodes, u), nodes, validation: validateGraph(nodes), aiUsed: false, aiError: "", templateName: tpl.name });
+  } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
 });
 
 // Danh sach loai schema ho tro (cho UI dung nut)

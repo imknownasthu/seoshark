@@ -20,8 +20,42 @@
       }));
     } catch (e) { /* ignore */ }
   }
-  $$('#menu .menu-item').forEach((mi) => mi.addEventListener("click", () => { if (mi.dataset.section === "schema") loadScTypes(); }));
+  $$('#menu .menu-item').forEach((mi) => mi.addEventListener("click", () => { if (mi.dataset.section === "schema") { loadScTypes(); loadScTemplates(); } }));
   loadScTypes();
+
+  /* ---- Mẫu schema cá nhân hóa (lưu & tái dùng cho URL mới) ---- */
+  async function loadScTemplates() {
+    try {
+      const r = await _fetch("/api/schema/templates"); const d = await r.json();
+      const tpls = d.templates || [];
+      const sel = $("#scTplSelect"); if (!sel) return; const cur = sel.value;
+      sel.innerHTML = `<option value="">— Chọn mẫu —</option>` + tpls.map((t) => `<option value="${esc(t.id)}">${esc(t.name)}${(t.types || []).length ? " (" + (t.types || []).join(", ").slice(0, 40) + ")" : ""}</option>`).join("");
+      if (cur && tpls.some((t) => t.id === cur)) sel.value = cur;
+      $("#scTplBar").classList.toggle("hidden", tpls.length === 0);
+    } catch (e) { /* ignore */ }
+  }
+  loadScTemplates();
+  $("#scApplyTpl").addEventListener("click", async () => {
+    const id = $("#scTplSelect").value; if (!id) return smsg("#scMsg", "err", "❌ Chọn một mẫu đã lưu.");
+    const url = $("#scUrl").value.trim(); if (!/^https?:\/\//i.test(url)) return smsg("#scMsg", "err", "❌ Nhập URL bài viết hợp lệ ở trên.");
+    const btn = $("#scApplyTpl"); busy(btn, true, "Đang áp mẫu cho URL...");
+    smsg("#scMsg", "info", '<span class="spinner" style="border-top-color:transparent"></span>Đang đọc URL & áp cấu trúc mẫu...');
+    try {
+      const r = await _fetch("/api/schema/apply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ templateId: id, url }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || "Lỗi áp mẫu");
+      scData = d.jsonld; scRenderEditor(); scSyncCode(); renderScValidation(d.validation);
+      $("#scResMeta").textContent = `${(d.nodes || []).length} loại · theo mẫu "${d.templateName || ""}"`;
+      $("#scTest").href = "https://search.google.com/test/rich-results?url=" + encodeURIComponent(url);
+      $("#scResultCard").classList.remove("hidden"); $("#scCompCard").classList.remove("hidden");
+      smsg("#scMsg", "info", "✓ Đã tạo schema theo mẫu cho URL mới. Chỉnh nếu cần rồi copy.");
+      $("#scResultCard").scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (e) { smsg("#scMsg", "err", "❌ " + e.message); } finally { busy(btn, false); }
+  });
+  $("#scDelTpl").addEventListener("click", async () => {
+    const id = $("#scTplSelect").value; if (!id) return smsg("#scMsg", "err", "Chọn mẫu để xóa.");
+    if (!confirm("Xóa mẫu schema này?")) return;
+    try { await _fetch("/api/schema/templates/delete", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) }); await loadScTemplates(); toast("Đã xóa mẫu."); } catch (e) { /* ignore */ }
+  });
 
   /* ---- Trình sửa JSON đệ quy (sửa từng vị trí) ---- */
   const scGet = (root, p) => { let o = root; for (const k of p) { if (o == null) return undefined; o = o[k]; } return o; };
@@ -110,6 +144,19 @@
     finally { busy(gen, false); }
   });
   $("#scRevalidate").addEventListener("click", scValidate);
+  $("#scSaveTpl").addEventListener("click", async () => {
+    const graph = (scData && scData["@graph"]) || [];
+    if (!graph.length) return toast("Chưa có schema để lưu.");
+    const defName = "Mẫu " + ((graph[0] || {})["@type"] || "schema");
+    const name = prompt("Tên mẫu schema (để tái dùng cho các bài tương tự):", defName);
+    if (name === null) return;
+    try {
+      const r = await _fetch("/api/schema/templates/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: (name || "").trim(), graph }) });
+      const d = await r.json(); if (!r.ok) throw new Error(d.error || "Lưu lỗi");
+      await loadScTemplates(); const sel = $("#scTplSelect"); if (sel) sel.value = d.id;
+      toast("Đã lưu mẫu! Lần sau chọn mẫu + nhập URL mới để tạo nhanh.");
+    } catch (e) { toast("❌ " + e.message); }
+  });
   $("#scCopy").addEventListener("click", () => {
     const code = '<script type="application/ld+json">\n' + JSON.stringify(scData) + '\n<' + '/script>';
     navigator.clipboard.writeText(code).then(() => toast("Đã copy (kèm thẻ script)!")).catch(() => toast("Không copy được."));

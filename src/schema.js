@@ -204,6 +204,30 @@ export function validateGraph(nodes) {
   return { nodes: results, errorCount: errors, warningCount: warnings, valid: errors === 0 };
 }
 
+// Ap MAU (template) cho URL MOI: giu cau truc + truong TUY CHINH cua mau, nhung LAM MOI cac truong
+// phu thuoc URL/noi dung (headline, url, @id, ngay, anh, breadcrumb, FAQ...) tu du lieu trang moi.
+const URL_SPECIFIC = new Set(["headline", "url", "@id", "datePublished", "dateModified", "image",
+  "mainEntityOfPage", "itemListElement", "primaryImageOfPage", "thumbnailUrl", "uploadDate", "mainEntity"]);
+export function applyTemplate(templateGraph, newData) {
+  const out = [];
+  for (const tnode of (Array.isArray(templateGraph) ? templateGraph : [])) {
+    if (!tnode || typeof tnode !== "object") continue;
+    const ty = tnode["@type"]; const type = Array.isArray(ty) ? ty[0] : ty;
+    const fresh = buildMechanicalNode(type, newData) || {};
+    // Bat dau tu MAU (giu truong tuy chinh: sameAs, telephone, address, description Org...), roi lam moi truong URL-specific
+    const merged = JSON.parse(JSON.stringify(tnode));
+    for (const k of Object.keys(fresh)) {
+      if (URL_SPECIFIC.has(k) || !(k in merged)) merged[k] = fresh[k];
+    }
+    // Neu mau co truong URL-specific ma trang moi khong sinh ra -> xoa de tranh du lieu cu URL cu
+    for (const k of Object.keys(merged)) {
+      if (URL_SPECIFIC.has(k) && !(k in fresh)) delete merged[k];
+    }
+    out.push(merged);
+  }
+  return out;
+}
+
 // Dong goi thanh 1 khoi JSON-LD @graph chuan
 export function wrapGraph(nodes, url) {
   const list = (Array.isArray(nodes) ? nodes : [nodes]).filter(Boolean).map((n) => ({ ...n }));

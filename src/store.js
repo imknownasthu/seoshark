@@ -11,6 +11,7 @@ const DATA_DIR = path.join(__dirname, "..", "data");
 const USERS_FILE = path.join(DATA_DIR, "users.json");
 const KNOW_FILE = path.join(DATA_DIR, "knowledge.json");
 const SKILL_FILE = path.join(DATA_DIR, "skills.json");
+const SCHEMATPL_FILE = path.join(DATA_DIR, "schema_templates.json");
 const KWSET_FILE = path.join(DATA_DIR, "keyword_sets.json");
 const GSC_FILE = path.join(DATA_DIR, "gsc_tokens.json");
 
@@ -19,6 +20,7 @@ let pool = null;
 let jsonUsers = {};
 let jsonKnow = {}; // id -> { id, owner, website, title, content, createdAt }
 let jsonSkill = {}; // id -> { id, owner, title, content, createdAt }
+let jsonSchemaTpl = {}; // id -> { id, owner, name, data(graph json), createdAt }
 let jsonKwset = {}; // id -> { id, owner, name, keywords:[...], createdAt, updatedAt }
 let jsonGsc = {}; // owner -> { owner, refreshToken, siteUrl, updatedAt }
 
@@ -44,6 +46,11 @@ function initJson() {
     jsonSkill = fs.existsSync(SKILL_FILE) ? (JSON.parse(fs.readFileSync(SKILL_FILE, "utf8")) || {}) : {};
   } catch {
     jsonSkill = {};
+  }
+  try {
+    jsonSchemaTpl = fs.existsSync(SCHEMATPL_FILE) ? (JSON.parse(fs.readFileSync(SCHEMATPL_FILE, "utf8")) || {}) : {};
+  } catch {
+    jsonSchemaTpl = {};
   }
   try {
     jsonKwset = fs.existsSync(KWSET_FILE) ? (JSON.parse(fs.readFileSync(KWSET_FILE, "utf8")) || {}) : {};
@@ -108,6 +115,17 @@ export async function initStore() {
         )
       `);
       await pool.query(`CREATE INDEX IF NOT EXISTS skills_owner_idx ON skills(owner)`);
+      // Mau Schema Markup ca nhan hoa (rieng theo tai khoan)
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS schema_templates (
+          id         TEXT PRIMARY KEY,
+          owner      TEXT NOT NULL,
+          name       TEXT,
+          data       TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS schema_templates_owner_idx ON schema_templates(owner)`);
       // Bo tu khoa da luu (rieng theo tai khoan) - de nghien cuu tiep sau nay
       await pool.query(`
         CREATE TABLE IF NOT EXISTS keyword_sets (
@@ -255,6 +273,39 @@ export async function deleteSkill(id, owner) {
     return r.rowCount > 0;
   }
   if (jsonSkill[id] && jsonSkill[id].owner === owner) { delete jsonSkill[id]; saveJsonSkill(); return true; }
+  return false;
+}
+
+// ===== Mau Schema Markup ca nhan hoa (rieng theo tai khoan) =====
+function saveJsonSchemaTpl() { fs.writeFileSync(SCHEMATPL_FILE, JSON.stringify(jsonSchemaTpl, null, 2), "utf8"); }
+const _tplGraph = (v) => { try { const a = typeof v === "string" ? JSON.parse(v) : v; return Array.isArray(a) ? a : []; } catch { return []; } };
+export async function listSchemaTemplates(owner) {
+  if (mode === "pg") {
+    const r = await pool.query("SELECT id, owner, name, data, created_at FROM schema_templates WHERE owner=$1 ORDER BY created_at DESC", [owner]);
+    return r.rows.map((x) => ({ id: x.id, owner: x.owner, name: x.name || "", graph: _tplGraph(x.data), createdAt: x.created_at }));
+  }
+  return Object.values(jsonSchemaTpl).filter((s) => s.owner === owner).map((s) => ({ ...s, graph: _tplGraph(s.data) })).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+export async function getSchemaTemplate(id, owner) {
+  if (mode === "pg") {
+    const r = await pool.query("SELECT id, owner, name, data FROM schema_templates WHERE id=$1 AND owner=$2", [id, owner]);
+    const x = r.rows[0]; return x ? { id: x.id, owner: x.owner, name: x.name || "", graph: _tplGraph(x.data) } : null;
+  }
+  const s = jsonSchemaTpl[id]; return s && s.owner === owner ? { ...s, graph: _tplGraph(s.data) } : null;
+}
+export async function putSchemaTemplate(s) {
+  const data = JSON.stringify(_tplGraph(s.graph));
+  if (mode === "pg") {
+    await pool.query(`INSERT INTO schema_templates (id, owner, name, data) VALUES ($1,$2,$3,$4) ON CONFLICT (id) DO UPDATE SET name=$3, data=$4`, [s.id, s.owner, s.name || "", data]);
+    return;
+  }
+  const prev = jsonSchemaTpl[s.id] || {};
+  jsonSchemaTpl[s.id] = { id: s.id, owner: s.owner, name: s.name || "", data, createdAt: prev.createdAt || new Date().toISOString() };
+  saveJsonSchemaTpl();
+}
+export async function deleteSchemaTemplate(id, owner) {
+  if (mode === "pg") { const r = await pool.query("DELETE FROM schema_templates WHERE id=$1 AND owner=$2", [id, owner]); return r.rowCount > 0; }
+  if (jsonSchemaTpl[id] && jsonSchemaTpl[id].owner === owner) { delete jsonSchemaTpl[id]; saveJsonSchemaTpl(); return true; }
   return false;
 }
 

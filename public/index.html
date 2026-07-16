@@ -1347,6 +1347,13 @@
           <label style="margin-top:12px">Chọn loại schema muốn tạo <span class="muted" style="font-weight:400">(chọn nhiều loại → gộp chung @graph)</span></label>
           <div id="scTypeBtns" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:6px"></div>
           <label style="margin-top:12px;display:flex;gap:7px;align-items:center;font-weight:600;cursor:pointer"><input type="checkbox" id="scAuto" style="width:17px;height:17px;accent-color:var(--brand)"> Để <b>AI tự nhận diện</b> loại schema phù hợp nhất theo bài (cần Gemini/Claude)</label>
+          <div id="scTplBar" class="hidden" style="margin-top:12px;padding:10px 12px;border:1px dashed var(--c-blue);border-radius:10px;background:#f7f9ff">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+              <div style="flex:1;min-width:210px"><label style="font-size:.85rem">Hoặc dùng <b>mẫu schema đã lưu</b> — áp đúng cấu trúc cho URL mới ở trên</label><select id="scTplSelect"><option value="">— Chọn mẫu —</option></select></div>
+              <button class="ghost small" id="scApplyTpl" type="button">Tạo theo mẫu</button>
+              <button class="ghost small" id="scDelTpl" type="button">Xóa mẫu</button>
+            </div>
+          </div>
           <div style="margin-top:14px"><button id="scGenerate">Tạo Schema Markup</button></div>
           <div id="scMsg" style="margin-top:10px"></div>
         </section>
@@ -1362,6 +1369,7 @@
             <div>
               <div class="flexbar"><b style="font-size:13px">JSON-LD (copy vào website)</b>
                 <div style="display:flex;gap:8px">
+                  <button class="ghost small" id="scSaveTpl" type="button">Lưu làm mẫu</button>
                   <button class="ghost small" id="scRevalidate" type="button">Kiểm tra lại</button>
                   <button class="ghost small" id="scCopy" type="button">Copy</button>
                   <a class="ghost small" id="scTest" target="_blank" rel="noopener">Test trên Google ↗</a>
