@@ -748,7 +748,7 @@ app.post("/api/onpage/optimize", requireAuth, async (req, res) => {
           engine, key: apiKey, model,
           system: ONPAGE_SYSTEM,
           user: buildCriteriaPrompt({ target, mainKeyword, subKeywords, selected, bench, extra, knowledge: know, skill: skl }),
-          schema: CRITERIA_SCHEMA, maxTokens: 8192,
+          schema: CRITERIA_SCHEMA, maxTokens: 16384,
         });
         return res.json({ mode: "criteria", items: Array.isArray(data.items) ? data.items : [], mainKeyword, subKeywords, engineUsed });
       } catch (e) {
@@ -765,7 +765,7 @@ app.post("/api/onpage/optimize", requireAuth, async (req, res) => {
         engine, key: apiKey, model,
         system: ONPAGE_SYSTEM,
         user: buildOptimizePrompt({ target, mainKeyword, subKeywords, selected, bench, extra, optimizeMode, knowledge: know, skill: skl, outline: outl }),
-        schema: OPTIMIZE_SCHEMA, maxTokens: 8192,
+        schema: OPTIMIZE_SCHEMA, maxTokens: 32768,
       });
       result = { ...data, engineUsed };
     } catch (e) {
@@ -817,7 +817,7 @@ app.post("/api/onpage/headings", requireAuth, async (req, res) => {
       engine, key: apiKey, model,
       system: ONPAGE_SYSTEM,
       user: buildHeadingPrompt({ target, competitors, bench, mainKeyword, subKeywords, knowledge, skill, gscQueries }),
-      schema: HEADING_SCHEMA, maxTokens: 12288,
+      schema: HEADING_SCHEMA, maxTokens: 24576,
     });
     const items = (Array.isArray(data.items) ? data.items : []).map((it) => ({
       action: String(it.action || "").toLowerCase(),
@@ -900,7 +900,7 @@ app.post("/api/onpage/evaluate", requireAuth, async (req, res) => {
         engine, key: apiKey, model,
         system: ONPAGE_SYSTEM,
         user: buildEvaluatePrompt({ target, competitors, bench, mainKeyword, subKeywords, recommendations, gsc }),
-        schema: EVALUATE_SCHEMA, maxTokens: 8192,
+        schema: EVALUATE_SCHEMA, maxTokens: 16384,
       });
       res.json({ ...data, gsc, engineUsed });
     } catch (e) {
@@ -940,7 +940,7 @@ app.post("/api/schema/analyze", requireAuth, async (req, res) => {
         const d = await aiJson(eng, {
           system: SCHEMA_SYSTEM,
           user: buildSchemaPrompt({ url: u, data, types: wantTypes, autoDetect: auto }),
-          schema: SCHEMA_GEN_SCHEMA, maxTokens: 8192, model, apiKey,
+          schema: SCHEMA_GEN_SCHEMA, maxTokens: 24576, model, apiKey,
         });
         const parsed = JSON.parse(String(d.jsonld || "").trim());
         const graph = parsed["@graph"] ? parsed["@graph"] : (Array.isArray(parsed) ? parsed : [parsed]);
@@ -1020,7 +1020,7 @@ app.post("/api/schema/optimize", requireAuth, async (req, res) => {
     if (!ticked) return res.status(400).json({ error: "Chưa tick tiêu chí nào để tối ưu." });
     const curStr = typeof current === "string" ? current : JSON.stringify(current || {}, null, 2);
     const user = `Duoi day la JSON-LD HIEN TAI cua trang ${url}:\n"""\n${curStr}\n"""\n\nHay CAP NHAT JSON-LD nay de dap ung DUNG cac tieu chi cai thien da chon sau (CHI sua/them theo cac tieu chi nay, giu nguyen phan con lai hop le):\n${ticked}\n\nKHONG bia du lieu (rating/gia/ngay/review) neu khong co that — neu tieu chi yeu cau du lieu khong co, hay tao khung dung cau truc va ghi chu trong notes. Tra ve jsonld = chuoi JSON hop le cua ca khoi @graph da cap nhat.`;
-    const d = await aiJson(eng, { system: SCHEMA_SYSTEM, user, schema: SCHEMA_GEN_SCHEMA, maxTokens: 8192, model, apiKey });
+    const d = await aiJson(eng, { system: SCHEMA_SYSTEM, user, schema: SCHEMA_GEN_SCHEMA, maxTokens: 24576, model, apiKey });
     const parsed = JSON.parse(String(d.jsonld || "").trim());
     const graph = parsed["@graph"] ? parsed["@graph"] : (Array.isArray(parsed) ? parsed : [parsed]);
     res.json({ jsonld: wrapGraph(graph, url), nodes: graph, validation: validateGraph(graph), notes: d.notes || "" });
@@ -1389,7 +1389,7 @@ app.post("/api/keywords/pillar/classify", requireAuth, async (req, res) => {
     // Co AI -> thu; neu AI loi (vd Gemini bi chan) ma da co topic het -> van tra nhom, bao aiError
     try {
       const { system, user, schema } = buildPillarClassifyPrompt(raw, { knownTopics: known, needTranslate: tr });
-      const d = await aiJson(eng, { system, user, schema, maxTokens: 16384, model, apiKey });
+      const d = await aiJson(eng, { system, user, schema, maxTokens: 24576, model, apiKey });
       const map = {};
       (d.items || []).forEach((it) => { if (it && it.keyword) map[_norm(it.keyword)] = { topic: String(it.topic || "").trim(), vi: String(it.vi || "").trim() }; });
       const items = raw.map((k) => {
@@ -1436,7 +1436,7 @@ app.post("/api/keywords/pillar/suggest", requireAuth, async (req, res) => {
           topicsInput.map((t) => ({ ...t, candidates: t.candidates.slice(0, 120) })),
           { minPerTopic: min, needTranslate: tr }
         );
-        const d = await aiJson(eng, { system, user, schema, maxTokens: 16384, model, apiKey });
+        const d = await aiJson(eng, { system, user, schema, maxTokens: 24576, model, apiKey });
         aiTopics = Array.isArray(d.topics) ? d.topics : [];
       } catch (e) { aiError = e.message || "AI lỗi"; }
     } else {
@@ -1521,7 +1521,7 @@ app.post("/api/internal/pillar/classify", requireAuth, async (req, res) => {
     const known = (Array.isArray(knownTopics) ? knownTopics : []).map((t) => String(t || "").trim()).filter(Boolean).slice(0, 200);
     const tr = !!needTranslate;
     const { system, user, schema } = buildPcClassifyPrompt(list, { knownTopics: known, needTranslate: tr });
-    const d = await aiJson(eng, { system, user, schema, maxTokens: 16384, model, apiKey });
+    const d = await aiJson(eng, { system, user, schema, maxTokens: 24576, model, apiKey });
     const map = {};
     (d.items || []).forEach((it) => { if (it && it.keyword) map[_norm(it.keyword)] = it; });
     const items = list.map((r) => {
@@ -1546,7 +1546,7 @@ app.post("/api/internal/pillar/tier", requireAuth, async (req, res) => {
     const eng = (engine || "local").toLowerCase();
     if (eng !== "gemini" && eng !== "claude") return res.status(400).json({ error: "Cần bật engine Gemini/Claude để phân bậc." });
     const { system, user, schema } = buildPcTierPrompt(list, { category: String(category || "").trim() });
-    const d = await aiJson(eng, { system, user, schema, maxTokens: 16384, model, apiKey });
+    const d = await aiJson(eng, { system, user, schema, maxTokens: 24576, model, apiKey });
     const roleName = { 1: "Dịch vụ", 2: "Chuyển đổi", 3: "SEO", 4: "Tin tức", 5: "Bổ trợ" };
     const map = {};
     (d.items || []).forEach((it) => { if (it && it.keyword) map[_norm(it.keyword)] = it; });

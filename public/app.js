@@ -273,6 +273,12 @@ function alertHtml(type, msg) {
 function esc(s) {
   return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
+// Badge ưu tiên: Cao = đỏ nhạt (sapo), Trung bình = xanh (ok), Thấp = xám (ket). Chịu có/không dấu.
+function priorityBadge(p) {
+  const s = String(p || "").toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
+  const cls = s.startsWith("cao") ? "sapo" : s.startsWith("thap") ? "ket" : "ok";
+  return `<span class="badge ${cls}">${esc(p || "TB")}</span>`;
+}
 function busy(btn, on, label) {
   if (on) {
     btn.dataset.label = btn.innerHTML;
@@ -1154,7 +1160,7 @@ function renderOpEvaluate(d) {
   const g = d.gsc || {}; const t = g.totals || {}; const pv = g.prevTotals;
   const arrow = (cur, prev) => { if (prev == null) return ""; const dv = cur - prev; const good = dv >= 0; return ` <span style="color:${good ? "#2e9e6b" : "#c0392b"};font-size:.8rem">(${dv >= 0 ? "+" : ""}${dv} vs kỳ trước)</span>`; };
   const stat = (label, val, extra) => `<div style="flex:1;min-width:120px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#fff"><div class="muted" style="font-size:.72rem;text-transform:uppercase">${label}</div><div style="font-size:1.2rem;font-weight:700;color:var(--ink)">${val}${extra || ""}</div></div>`;
-  const pill = (p) => `<span class="badge ${p === "Cao" ? "sapo" : (p === "Thấp" || p === "Thap") ? "ket" : "ok"}">${esc(p || "TB")}</span>`;
+  const pill = priorityBadge;
   let html = `<div class="alert info" style="margin-bottom:10px"><b>Báo cáo AI đánh giá Onpage</b> — Engine: ${esc(d.engineUsed || "")} · GSC: ${esc(g.rangeLabel || "")} · Property: ${esc(g.siteUrl || "")}</div>`;
   html += `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">${stat("Clicks", t.clicks || 0, arrow(t.clicks || 0, pv && pv.clicks))}${stat("Impressions", t.impressions || 0, arrow(t.impressions || 0, pv && pv.impressions))}${stat("CTR", pct(t.ctr))}${stat("Vị trí TB", pos(t.position))}</div>`;
   if (d.overview) html += `<h3 style="margin:6px 0">Tổng quan</h3><p>${esc(d.overview)}</p>`;
@@ -1309,7 +1315,7 @@ function renderOpResult(d) {
 
   // AI phan tich chi tiet (neu co) -> de rieng ben duoi
   if (d.recommendations && d.recommendations.length) {
-    const pill = (p) => `<span class="badge ${p === "Cao" ? "sapo" : p === "Thap" ? "ket" : "ok"}">${esc(p || "TB")}</span>`;
+    const pill = priorityBadge;
     $("#opRecs").innerHTML = `<details><summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--brand-dark)">💡 Phân tích chi tiết từ AI (${d.recommendations.length} điểm)</summary>` +
       d.recommendations.map((r) => `<div class="rec-item" style="border-style:dashed;margin-top:8px"><div class="rec-body"><label><b>${esc(r.criterion)}</b> ${pill(r.priority)}</label><div class="rec-action">→ ${esc(r.action || "")}</div>${r.why ? `<div class="muted">💡 ${esc(r.why)}</div>` : ""}</div></div>`).join("") +
       `</details>`;

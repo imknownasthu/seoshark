@@ -92,7 +92,7 @@ function toGeminiSchema(s) {
 }
 
 // Goi Gemini tra ve JSON theo schema (dung cho On-page va cac tac vu khac)
-export async function geminiJson({ apiKey, model, system, user, schema, maxTokens = 8192, timeout = 45000 }) {
+export async function geminiJson({ apiKey, model, system, user, schema, maxTokens = 16384, timeout = 60000 }) {
   const mdl = model || "gemini-3.5-flash";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${mdl}:generateContent?key=${encodeURIComponent(apiKey)}`;
   const body = {
@@ -142,7 +142,7 @@ export async function optimizeWithGemini({ apiKey, model, article, mode, count, 
     contents: [{ role: "user", parts: [{ text: userContent }] }],
     generationConfig: {
       temperature: 0.4,
-      maxOutputTokens: 8192,
+      maxOutputTokens: 16384,
       responseMimeType: "application/json",
       responseSchema: RESPONSE_SCHEMA,
     },

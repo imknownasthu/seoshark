@@ -144,7 +144,7 @@
     finally { busy(btn, false); }
   });
   function renderScGap(dg) {
-    const pill = (p) => `<span class="badge ${p === "Cao" ? "sapo" : (p === "Thấp") ? "ket" : "ok"}">${esc(p || "TB")}</span>`;
+    const pill = priorityBadge;
     let h = dg.summary ? alertHtml("info", esc(dg.summary)) : "";
     h += `<h3 style="margin:10px 0 6px">Tiêu chí cải thiện (tick để tối ưu)</h3>`;
     h += (scGapCriteria || []).map((c, i) => `<label class="opd" style="display:block;margin-bottom:6px;cursor:pointer"><input type="checkbox" class="sc-crit" data-i="${i}" style="width:15px;height:15px;accent-color:var(--c-blue);vertical-align:middle"> ${pill(c.priority)} <b>${esc(c.title)}</b>${c.detail ? `<div class="muted" style="margin-top:2px">${esc(c.detail)}</div>` : ""}</label>`).join("");
