@@ -113,6 +113,11 @@ export function buildOutlinePrompt({ mainKw, subKws = [], refOutline = "", knowl
     "6. SỐ LƯỢNG heading do search intent quyết định — bài đơn giản thì ít, phức tạp thì nhiều; không ép con số.\n" +
     "7. Nếu có 'Outline tham khảo', ưu tiên đưa các heading đó vào (nếu hợp lý) và đặt đúng vị trí.\n" +
     "8. Viết cùng NGÔN NGỮ với từ khóa chính. Chỉ trả OUTLINE HEADING, không viết nội dung.\n\n" +
+    "TỐI ƯU GEO / AI OVERVIEW (BẮT BUỘC, mọi lĩnh vực):\n" +
+    "G1. HEADING DẠNG CÂU HỎI THEO CHIẾN LƯỢC: ưu tiên đặt heading là CÂU HỎI đúng cách người dùng/AI thực sự tìm kiếm (bám intent & long-tail), nhất là các mục hay được tra dạng câu hỏi (… là gì, … bao nhiêu tiền, … có tốt/đau/an toàn không, … bao lâu, nên chọn loại nào, quy trình thế nào). Cách tiếp cận này lên AI Overview tốt nhất.\n" +
+    "G2. KHÔNG ép TẤT CẢ heading thành câu hỏi — mục liệt kê, bảng giá, so sánh, quy trình vẫn để cụm danh từ cho tự nhiên. KẾT HỢP hai dạng hợp lý (đây là mức 'kết hợp chiến lược', không phải hỏi mọi mục).\n" +
+    "G3. Có KHỐI FAQ ở gần cuối: 1 H2 'Câu hỏi thường gặp' (hoặc tương đương) + vài H3 là câu hỏi phụ hay gặp chưa được trả lời ở trên.\n" +
+    "G4. Ngầm định mỗi heading câu hỏi sẽ được trả lời THẲNG ở câu đầu khi viết nội dung (không cần ghi vào outline). Ưu tiên mục có góc nhìn/dữ liệu riêng (Unique/Specific) hơn là định nghĩa chung chung.\n\n" +
     "NGOÀI OUTLINE, tạo thêm:\n" +
     "• TITLE SEO (title): 50–60 ký tự (tính cả khoảng trắng), CHỨA TỪ KHÓA CHÍNH và ưu tiên đặt ở ĐẦU, hấp dẫn để click, có thể thêm lợi ích/năm nếu phù hợp; sentence/title tự nhiên, KHÔNG dùng dấu gạch ngang để bổ nghĩa.\n" +
     "• META DESCRIPTION (metaDescription): 140–160 ký tự, CHỨA TỪ KHÓA CHÍNH, nêu lợi ích rõ ràng, có CTA mềm, KHÔNG lặp nguyên văn Title.\n\n" +

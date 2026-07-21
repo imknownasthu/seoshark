@@ -353,6 +353,15 @@ export const HEADING_SCHEMA = {
 };
 
 // gscQueries (tuy chon): [{query, clicks, impressions, ctr, position}] - truy van THAT de biet nhu cau nguoi doc
+// Khoi tieu chi GEO (Generative Engine Optimization / AI Overview) — DA LINH VUC, dung chung.
+export const GEO_RULE = `
+TOI UU GEO / AI OVERVIEW (bat buoc, ap dung MOI linh vuc):
+- HEADING DANG CAU HOI THEO CHIEN LUOC: uu tien dat heading la CAU HOI dung cach nguoi dung/AI thuc su hoi (bam search intent & long-tail), NHAT LA cac muc nguoi ta hay tra cuu dang cau hoi (la gi, bao nhieu tien, co dau khong, bao lau, nen chon loai nao, quy trinh the nao...). KHONG ep TAT CA thanh cau hoi — muc mang tinh liet ke/bang gia/so sanh van de dang cum danh tu cho tu nhien. Ket hop hai dang mot cach hop ly.
+- TRA LOI THANG: ngay duoi heading dang cau hoi, cau/doan dau tien TRA LOI TRUC TIEP y chinh (de AI Overview trich dan), roi moi giai thich sau. Khong lan man mo bai. KHONG ep cau tra loi cung nhac 40 chu neu pha vo mach van.
+- CO KHOI FAQ o cuoi (cac cau hoi phu hay gap, dang H2 "Cau hoi thuong gap" + cac H3 la cau hoi), tra loi ngan gon dung trong tam.
+- UNIQUE / SPECIFIC / AUTHENTIC: outline nen tao cho o cac muc CO GOC NHIN/DU LIEU RIENG (so lieu cu the, kinh nghiem thuc te, so sanh doc quyen) thay vi chi dinh nghia chung chung (tranh "commodity content").
+- FORMAT theo noi dung: muc so sanh/gia -> bang; muc uu diem/luu y/danh sach -> bullet; quy trinh -> danh sach danh so; muc giai thich co che -> doan van. (Format la goi y trong ly do, khong bat buoc ghi vao text heading.)`;
+
 export function buildHeadingPrompt({ target, competitors, bench, mainKeyword, subKeywords, knowledge, skill, gscQueries }) {
   const cur = (target.headings || []).map((h, i) => `  ${i + 1}. H${h.level}: ${h.text}`).join("\n");
   const comp = (competitors || []).filter((c) => c && c.ok).map((c, i) => {
@@ -389,7 +398,9 @@ NGUYEN TAC (moi linh vuc):
 - Uu tien muc CO NHU CAU TIM KIEM THAT; cat bo muc lan man/quang cao.
 - E-E-A-T: voi linh vuc YMYL (y te/tai chinh/phap ly) can co muc the hien kinh nghiem/chuyen mon/dan nguon.
 - Giong tu nhien nhu chuyen gia nguoi Viet viet, KHONG sao rong, KHONG dau vet AI.
-${skill && skill.trim() ? "- TUAN THU tuyet doi SKILL cua nguoi dung o tren (giong van, cau truc, quy tac).\n" : ""}${knowledge && knowledge.trim() ? "- Van dung KIEN THUC WEBSITE de dat muc the hien the manh rieng (non-commodity), khong bia.\n" : ""}
+${skill && skill.trim() ? "- TUAN THU tuyet doi SKILL cua nguoi dung o tren (giong van, cau truc, quy tac).\n" : ""}${knowledge && knowledge.trim() ? "- Van dung KIEN THUC WEBSITE de dat muc the hien the manh rieng (non-commodity), khong bia.\n" : ""}${GEO_RULE}
+
+Khi dat finalOutline: AP DUNG GEO o tren — heading chinh & FAQ uu tien dang cau hoi dung intent, nhung van co muc cum danh tu cho tu nhien.
 KHONG bia so lieu. Tra ve DUNG schema (items co du keep/rewrite/remove/add + finalOutline).${VN_RULE}`;
 }
 

@@ -49,30 +49,58 @@ function hasBreadcrumb(doc, schemaTypes) {
 
 const RICH_TYPES = /Article|NewsArticle|BlogPosting|FAQPage|QAPage|HowTo|Product|Review|AggregateRating|Recipe|VideoObject|Event|BreadcrumbList|Organization|LocalBusiness|Medical|Dentist/i;
 
-// Trich heading tu toan trang nhung loai bo menu/header/footer/sidebar... (chinh xac hon Readability)
-function extractHeadings(doc) {
-  // Chi loai heading nam trong <nav> hoac <footer> (an toan, khong dung class de tranh
-  // bo sot voi cac theme nhu Elementor dung class 'widget' o khap noi).
-  const SKIP_TAG = new Set(["nav", "footer"]);
-  const inNonContent = (el) => {
-    let p = el.parentElement;
-    while (p && p.tagName) {
-      if (SKIP_TAG.has(p.tagName.toLowerCase())) return true;
-      p = p.parentElement;
-    }
-    return false;
-  };
+// Chon vung NOI DUNG CHINH cua bai de doc heading (bao gom ca heading trong accordion/<details>).
+// Doc tu DOM GOC (khong qua Readability) vi Readability HAY BO noi dung accordion/gap-gon -> mat H2.
+const CONTENT_SELECTORS = [
+  "article", "main", "[role='main']",
+  ".entry-content", ".post-content", ".article-content", ".article-body", ".single-content",
+  ".post-body", ".blog-content", ".td-post-content", ".elementor-widget-theme-post-content",
+  ".content-area .content", "#content .content", ".page-content", "#main-content",
+];
+function pickContentRoot(doc) {
+  for (const sel of CONTENT_SELECTORS) {
+    let el;
+    try { el = doc.querySelector(sel); } catch { el = null; }
+    // Chon container co it nhat 1 heading noi dung
+    if (el && el.querySelector("h1,h2,h3,h4")) return el;
+  }
+  return doc.body || doc;
+}
+
+// Cac vung KHONG phai noi dung chinh (loai heading ben trong). Dung class/id PHO BIEN, giu than trong.
+const NONCONTENT_TAG = new Set(["nav", "footer", "header", "aside"]);
+const NONCONTENT_RE = /(^|[\s_\-])(nav|navbar|menu|breadcrumb|sidebar|widget[-_]?area|footer|site[-_]?header|comment|comments|reply|related|relate[d]?[-_]?post|share|social|pagination|pager|toc|table[-_]?of[-_]?contents|cookie|advert|ads?|promo|newsletter|subscribe|author[-_]?box|post[-_]?nav|breadcumb)([\s_\-]|$)/i;
+function inNonContent(el, root) {
+  let p = el.parentElement;
+  while (p && p !== root && p.tagName) {
+    const tag = p.tagName.toLowerCase();
+    if (NONCONTENT_TAG.has(tag)) return true;
+    const idc = ((p.getAttribute && (p.getAttribute("class") || "")) + " " + (p.id || "")).toLowerCase();
+    if (idc && NONCONTENT_RE.test(idc)) return true;
+    p = p.parentElement;
+  }
+  return false;
+}
+
+// Trich heading (h1-h6) trong 1 vung, loai vung phu, BAO GOM ca heading trong <details>/accordion.
+// JSDOM doc duoc noi dung an bang CSS/<details> (mien la server-render, khong phai JS tai dong).
+function extractHeadingsFrom(root) {
   const out = [];
   const seen = new Set();
-  doc.querySelectorAll("h1,h2,h3,h4,h5,h6").forEach((h) => {
+  root.querySelectorAll("h1,h2,h3,h4,h5,h6").forEach((h) => {
     const text = (h.textContent || "").replace(/\s+/g, " ").trim();
-    if (!text || inNonContent(h)) return;
+    if (!text || inNonContent(h, root)) return;
     const key = h.tagName + "|" + text.toLowerCase();
     if (seen.has(key)) return; // bo trung lap
     seen.add(key);
     out.push({ level: Number(h.tagName[1]), text });
   });
   return out;
+}
+
+// API cu: tu chon content-root roi trich (dung cho toan doc).
+function extractHeadings(doc) {
+  return extractHeadingsFrom(pickContentRoot(doc));
 }
 
 // DOM noi dung -> Markdown (giu cau truc heading) de hien thi "truoc khi toi uu"
@@ -127,12 +155,11 @@ export async function auditUrl(url) {
   const cdom = new JSDOM(`<body>${contentHtml}</body>`);
   const cbody = cdom.window.document.body;
 
-  // Headings: CHI lay trong vung NOI DUNG CHINH (cbody = Readability/article/main),
-  // khong lay heading o header/nav/sidebar/widget/footer.
-  let headings = extractHeadings(cbody);
-  // Fallback: neu content khong co heading (trang la), lay toan trang tru nav/footer
-  if (!headings.length) headings = extractHeadings(doc);
-  const pageH1Count = cbody.querySelectorAll("h1").length || doc.querySelectorAll("h1").length;
+  // Headings: doc tu DOM GOC (content root) de bat duoc CA heading trong accordion/<details>
+  // va cac H2 ma Readability hay bo mat. cbody (Readability) chi dung khi doc goc khong ra gi.
+  let headings = extractHeadings(doc);
+  if (!headings.length) headings = extractHeadingsFrom(cbody);
+  const pageH1Count = doc.querySelectorAll("h1").length || cbody.querySelectorAll("h1").length;
 
   // Anh + alt trong content
   const imgs = [...cbody.querySelectorAll("img")];
