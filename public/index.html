@@ -318,16 +318,10 @@
         <div class="featpane active" data-featpane="internal">
           <section class="card">
             <h2>1. Phân tích bài viết</h2>
-            <p class="hint">Nhập URL bài viết cần tối ưu. Công cụ đọc toàn bộ nội dung và nạp URL nội bộ từ sitemap.</p>
-            <div class="grid cols-2">
-              <div>
-                <label>URL bài viết cần tối ưu *</label>
-                <input id="articleUrl" type="text" placeholder="https://nhakhoashark.vn/bai-viet-can-toi-uu" />
-              </div>
-              <div>
-                <label>Sitemap (tùy chọn — để trống sẽ tự dò /sitemap.xml)</label>
-                <input id="sitemapUrl" type="text" placeholder="https://nhakhoashark.vn/sitemap.xml" />
-              </div>
+            <p class="hint">Nhập URL bài viết cần tối ưu. Công cụ đọc toàn bộ nội dung để tìm vị trí chèn link phù hợp.</p>
+            <div>
+              <label>URL bài viết cần tối ưu *</label>
+              <input id="articleUrl" type="text" placeholder="https://vidu.com/bai-viet-can-toi-uu" />
             </div>
             <div style="margin-top:16px"><button id="btnAnalyze">Phân tích bài viết</button></div>
             <div id="analyzeMsg"></div>
@@ -346,26 +340,11 @@
           </section>
 
           <section class="card hidden" id="optionsCard">
-            <h2>2. Chọn phương án tối ưu Internal Link</h2>
-            <p class="hint">Sapo (mở bài) và đoạn kết luôn được bỏ qua. Link được chèn đúng ngữ cảnh, dễ đọc.</p>
-            <div class="options">
-              <div class="opt">
-                <h3>Phương án 1 — Tự động</h3>
-                <p class="d">Công cụ tự chọn vị trí phù hợp nhất và chèn theo số lượng bạn muốn (lấy URL từ sitemap).</p>
-                <label>Số lượng internal link muốn chèn</label>
-                <input id="autoCount" type="number" min="1" max="20" value="3" />
-                <div class="spacer"></div>
-                <div style="margin-top:14px"><button id="btnAuto">Tối ưu tự động</button></div>
-              </div>
-              <div class="opt">
-                <h3>Phương án 2 — Theo từ khóa</h3>
-                <p class="d">Bạn cung cấp từ khóa (và URL đích nếu muốn). Công cụ tìm vị trí phù hợp; chưa có chỗ thì viết thêm ý hợp lý.</p>
-                <div id="kwRows"></div>
-                <button class="ghost small" id="btnAddKw" type="button">+ Thêm từ khóa</button>
-                <div class="spacer"></div>
-                <div style="margin-top:14px"><button id="btnKw">Chèn theo từ khóa</button></div>
-              </div>
-            </div>
+            <h2>2. Chèn Internal Link theo từ khóa</h2>
+            <p class="hint">Nhập <b>từ khóa (anchor)</b> + <b>URL đích</b> cho từng link. Công cụ đọc ngữ cảnh bài để tìm vị trí phù hợp; chưa có chỗ thì viết thêm ý hợp lý. Sapo (mở bài) và đoạn kết luôn được bỏ qua.</p>
+            <div id="kwRows"></div>
+            <button class="ghost small" id="btnAddKw" type="button">+ Thêm từ khóa</button>
+            <div style="margin-top:16px"><button id="btnKw">Chèn Internal Link</button></div>
             <div id="optMsg" style="margin-top:14px"></div>
           </section>
 
@@ -378,7 +357,6 @@
             <div class="tabs subtabs" id="resTabs">
               <div class="tab active" data-tab="table">Bảng đối chiếu</div>
               <div class="tab" data-tab="render">Trước / Sau</div>
-              <div class="tab" data-tab="html">Mã HTML</div>
               <div class="tab" data-tab="md">Markdown</div>
             </div>
             <div class="tabpane active" data-pane="table"><div id="tableWrap"></div></div>
@@ -387,12 +365,6 @@
               <div class="split">
                 <div class="pane"><div class="ph">Bản gốc (TRƯỚC)</div><div class="render" id="renderBefore"></div></div>
                 <div class="pane after"><div class="ph">Đã chèn link (SAU) <button class="ghost small" data-copy="afterHtml">Copy HTML</button></div><div class="render" id="renderAfter"></div></div>
-              </div>
-            </div>
-            <div class="tabpane" data-pane="html">
-              <div class="split">
-                <div class="pane"><div class="ph">HTML — TRƯỚC <button class="ghost small" data-copy="beforeHtml">Copy</button></div><pre class="code" id="codeBeforeHtml"></pre></div>
-                <div class="pane after"><div class="ph">HTML — SAU <button class="ghost small" data-copy="afterHtml">Copy</button></div><pre class="code" id="codeAfterHtml"></pre></div>
               </div>
             </div>
             <div class="tabpane" data-pane="md">
@@ -408,16 +380,10 @@
         <div class="featpane" data-featpane="incoming">
           <section class="card">
             <h2>1. Phân tích bài viết (URL cần tăng link)</h2>
-            <p class="hint">Nhập URL bài bạn muốn các bài khác trỏ về. Công cụ đọc nội dung & từ khóa của bài này, đồng thời nạp sitemap để tìm bài cùng chủ đề.</p>
-            <div class="grid cols-2">
-              <div>
-                <label>URL đích (bài nhận incoming link) *</label>
-                <input id="incTargetUrl" type="text" placeholder="https://nhakhoashark.vn/bai-can-tang-link" />
-              </div>
-              <div>
-                <label>Sitemap (tùy chọn — tự dò /sitemap.xml)</label>
-                <input id="incSitemapUrl" type="text" placeholder="https://nhakhoashark.vn/sitemap.xml" />
-              </div>
+            <p class="hint">Nhập URL bài bạn muốn các bài khác trỏ về. Công cụ đọc nội dung &amp; từ khóa của bài này để làm anchor mặc định.</p>
+            <div>
+              <label>URL đích (bài nhận incoming link) *</label>
+              <input id="incTargetUrl" type="text" placeholder="https://vidu.com/bai-can-tang-link" />
             </div>
             <div style="margin-top:16px"><button id="btnIncAnalyze">Phân tích bài viết</button></div>
             <div id="incAnalyzeMsg"></div>
@@ -432,35 +398,16 @@
           </section>
 
           <section class="card hidden" id="incOptionsCard">
-            <h2>2. Chọn phương án Incoming Link</h2>
-            <p class="hint">Chèn link từ các bài khác trỏ về URL đích. Sapo &amp; kết bài của bài nguồn luôn được bỏ qua.</p>
+            <h2>2. Chèn Incoming Link theo bài nguồn</h2>
+            <p class="hint">Với mỗi <b>bài nguồn</b>, nhập <b>anchor</b> + <b>URL bài nguồn</b>. Công cụ đọc kỹ nội dung bài nguồn để chèn anchor vào đúng vị trí, đúng ngữ nghĩa. Sapo &amp; kết bài của bài nguồn luôn được bỏ qua.</p>
             <div style="margin:0 0 16px">
-              <label>Anchor mặc định (từ khóa muốn trỏ về URL đích)</label>
+              <label>Anchor mặc định (dùng khi 1 dòng để trống anchor)</label>
               <input id="incDefaultAnchor" type="text" />
-              <p class="muted">Dùng khi bạn không nhập anchor riêng. Có thể sửa cho ngắn gọn, đúng từ khóa.</p>
+              <p class="muted">Nên sửa cho ngắn gọn, đúng từ khóa muốn trỏ về URL đích.</p>
             </div>
-            <div class="options">
-              <div class="opt">
-                <h3>Phương án 1 — Tự động</h3>
-                <p class="d">Công cụ tự chọn các bài cùng chủ đề (pillar) từ sitemap và chèn link trỏ về URL đích.</p>
-                <label>Số lượng bài nguồn (tối đa 10)</label>
-                <input id="incAutoCount" type="number" min="1" max="10" value="5" />
-                <div class="spacer"></div>
-                <div style="margin-top:14px"><button id="btnIncAuto">Chèn tự động</button></div>
-              </div>
-              <div class="opt">
-                <h3>Phương án 2 — Theo từ khóa</h3>
-                <p class="d">Bạn cung cấp anchor + URL bài nguồn cụ thể (hoặc bấm gợi ý bên dưới để thêm nhanh).</p>
-                <div id="incKwRows"></div>
-                <button class="ghost small" id="incAddKw" type="button">+ Thêm bài nguồn</button>
-                <details style="margin-top:12px">
-                  <summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--brand-dark)">Gợi ý bài cùng chủ đề (bấm để thêm)</summary>
-                  <div class="preview-blocks" id="incSuggestions" style="max-height:280px;margin-top:8px"></div>
-                </details>
-                <div class="spacer"></div>
-                <div style="margin-top:14px"><button id="btnIncKw">Chèn theo từ khóa</button></div>
-              </div>
-            </div>
+            <div id="incKwRows"></div>
+            <button class="ghost small" id="incAddKw" type="button">+ Thêm bài nguồn</button>
+            <div style="margin-top:16px"><button id="btnIncKw">Chèn Incoming Link</button></div>
             <div id="incOptMsg" style="margin-top:14px"></div>
           </section>
 

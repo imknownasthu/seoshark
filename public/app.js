@@ -105,7 +105,6 @@ $$("#menu .menu-item").forEach((mi) => {
 });
 
 // --- Khoi phuc cau hinh da luu ---
-$("#sitemapUrl").value = localStorage.getItem("seoshark_sitemap") || "";
 $("#engine").value = localStorage.getItem("seoshark_engine") || "local";
 applyEngine($("#engine").value);
 
@@ -165,7 +164,6 @@ $("#apiKey").addEventListener("change", (e) => {
   checkEngineConn();
 });
 $("#apiKey").addEventListener("input", checkConnDebounced);
-$("#sitemapUrl").addEventListener("change", (e) => localStorage.setItem("seoshark_sitemap", e.target.value.trim()));
 
 /* ---------- SERPER.DEV (trong Engine + pill header) ---------- */
 function serperConnected() { return !!(localStorage.getItem("seoshark_serper_key") || "").trim(); }
@@ -349,18 +347,17 @@ function busy(btn, on, label) {
 // --- PHAN TICH ---
 $("#btnAnalyze").addEventListener("click", async () => {
   const url = $("#articleUrl").value.trim();
-  const sitemapUrl = $("#sitemapUrl").value.trim();
   const msg = $("#analyzeMsg");
   msg.innerHTML = "";
   if (!url) { msg.innerHTML = alertHtml("err", "Hãy nhập URL bài viết."); return; }
 
   const btn = $("#btnAnalyze");
-  busy(btn, true, "Đang đọc bài viết & sitemap...");
+  busy(btn, true, "Đang đọc bài viết...");
   try {
     const res = await fetch("/api/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url, sitemapUrl }),
+      body: JSON.stringify({ url }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Lỗi không xác định");
@@ -381,11 +378,10 @@ $("#btnAnalyze").addEventListener("click", async () => {
 
 function renderArticle(d) {
   $("#aTitle").textContent = d.title || "(không có tiêu đề)";
-  $("#aTargetBadge").textContent = `${d.targetCount} URL trong sitemap`;
+  const badge = $("#aTargetBadge"); if (badge) badge.style.display = "none";
   $("#aStats").innerHTML = `
     <div class="stat"><b>${d.wordCount.toLocaleString("vi")}</b><span>Số từ</span></div>
     <div class="stat"><b>${d.blockCount}</b><span>Đoạn / khối</span></div>
-    <div class="stat"><b>${d.pooledCount}</b><span>URL đích liên quan</span></div>
     <div class="stat"><b>${d.blocks.filter(b=>b.isSapo||b.isConclusion).length}</b><span>Khối bị khóa</span></div>`;
 
   $("#aBlocks").innerHTML = d.blocks.map((b) => {
@@ -402,8 +398,8 @@ function addKwRow(keyword = "", url = "") {
   const div = document.createElement("div");
   div.className = "kw-row";
   div.innerHTML = `
-    <input type="text" class="kw" placeholder="Từ khóa / anchor" value="${esc(keyword)}" />
-    <input type="text" class="kwurl" placeholder="URL đích (tùy chọn)" value="${esc(url)}" />
+    <input type="text" class="kw" placeholder="Từ khóa / anchor *" value="${esc(keyword)}" />
+    <input type="text" class="kwurl" placeholder="URL đích * (https://...)" value="${esc(url)}" />
     <button class="ghost small grow0" type="button" title="Xóa">✕</button>`;
   div.querySelector("button").addEventListener("click", () => div.remove());
   $("#kwRows").appendChild(div);
@@ -421,13 +417,7 @@ function commonPayload() {
   };
 }
 
-// --- PHUONG AN 1: TU DONG ---
-$("#btnAuto").addEventListener("click", async () => {
-  const count = parseInt($("#autoCount").value, 10) || 3;
-  await runOptimize({ ...commonPayload(), mode: "auto", count }, $("#btnAuto"));
-});
-
-// --- PHUONG AN 2: TU KHOA ---
+// --- CHEN THEO TU KHOA (URL dich BAT BUOC) ---
 $("#btnKw").addEventListener("click", async () => {
   const keywords = $$("#kwRows .kw-row").map((r) => ({
     keyword: r.querySelector(".kw").value.trim(),
@@ -437,8 +427,12 @@ $("#btnKw").addEventListener("click", async () => {
     $("#optMsg").innerHTML = alertHtml("err", "Hãy nhập ít nhất 1 từ khóa.");
     return;
   }
-  // URL nguoi dung nhap tay -> bo sung vao pool
-  const extraTargets = keywords.filter((k) => k.url).map((k) => ({ url: k.url, title: k.keyword }));
+  const missing = keywords.filter((k) => !/^https?:\/\//i.test(k.url));
+  if (missing.length) {
+    $("#optMsg").innerHTML = alertHtml("err", `Mỗi từ khóa cần 1 URL đích hợp lệ (http/https). Còn thiếu: ${missing.map((m) => esc(m.keyword)).join(", ")}`);
+    return;
+  }
+  const extraTargets = keywords.map((k) => ({ url: k.url, title: k.keyword }));
   await runOptimize({ ...commonPayload(), mode: "keywords", keywords, extraTargets }, $("#btnKw"));
 });
 
@@ -505,11 +499,9 @@ function renderResult(d) {
   $("#renderAfter").innerHTML = d.afterHtml;
   $("#anchorChips").innerHTML = buildChips(d.table, "renderAfter");
 
-  // Code
-  $("#codeBeforeHtml").textContent = formatHtml(d.beforeHtml);
-  $("#codeAfterHtml").textContent = formatHtml(d.afterHtml);
-  $("#codeBeforeMd").textContent = d.beforeMarkdown;
-  $("#codeAfterMd").textContent = d.afterMarkdown;
+  // Markdown (con giu tab Markdown)
+  const cbm = $("#codeBeforeMd"); if (cbm) cbm.textContent = d.beforeMarkdown;
+  const cam = $("#codeAfterMd"); if (cam) cam.textContent = d.afterMarkdown;
 }
 
 function highlightAnchor(text, anchor) {
@@ -598,23 +590,20 @@ document.addEventListener("click", (e) => {
 // ==================== INCOMING LINK ====================
 let incSession = { id: null, target: null, results: null, suggestions: [] };
 
-$("#incSitemapUrl").value = localStorage.getItem("seoshark_sitemap") || "";
-
 // Buoc 1: Phan tich URL dich
 $("#btnIncAnalyze").addEventListener("click", async () => {
   const targetUrl = $("#incTargetUrl").value.trim();
-  const sitemapUrl = $("#incSitemapUrl").value.trim();
   const msg = $("#incAnalyzeMsg");
   msg.innerHTML = "";
   if (!targetUrl) { msg.innerHTML = alertHtml("err", "Hãy nhập URL đích."); return; }
 
   const btn = $("#btnIncAnalyze");
-  busy(btn, true, "Đang đọc bài viết & sitemap...");
+  busy(btn, true, "Đang đọc bài viết...");
   try {
     const res = await fetch("/api/incoming/analyze", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ targetUrl, sitemapUrl }),
+      body: JSON.stringify({ targetUrl }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Lỗi không xác định");
@@ -636,28 +625,11 @@ $("#btnIncAnalyze").addEventListener("click", async () => {
 
 function renderIncTarget(d) {
   $("#incTargetTitle").textContent = d.target.title || d.target.url;
-  $("#incSitemapBadge").textContent = `${d.sitemapCount} bài trong sitemap`;
+  const badge = $("#incSitemapBadge"); if (badge) badge.style.display = "none";
   $("#incStats").innerHTML = `
-    <div class="stat"><b>${(d.target.wordCount || 0).toLocaleString("vi")}</b><span>Số từ</span></div>
-    <div class="stat"><b>${d.suggestions.length}</b><span>Bài cùng chủ đề</span></div>
-    <div class="stat"><b>${d.sitemapCount}</b><span>Tổng bài sitemap</span></div>`;
+    <div class="stat"><b>${(d.target.wordCount || 0).toLocaleString("vi")}</b><span>Số từ</span></div>`;
   $("#incDefaultAnchor").value = d.defaultAnchorSuggestion || "";
-
-  // Goi y bai nguon (bam de them vao PA2)
-  if (!d.suggestions.length) {
-    $("#incSuggestions").innerHTML = alertHtml("warn", "Không đọc được sitemap. Hãy nhập URL bài nguồn thủ công.");
-  } else {
-    $("#incSuggestions").innerHTML = d.suggestions.map((s) => `
-      <div class="sug-row">
-        <button class="ghost small grow0" type="button" data-addsrc="${esc(s.url)}">+ Thêm</button>
-        <div class="sug-main">
-          <div><b>${esc(s.title)}</b> <span class="badge ${s.score > 0 ? "ok" : "ket"} score">điểm ${s.score}</span></div>
-          <a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.url)}</a>
-        </div>
-      </div>`).join("");
-  }
-
-  // reset rows PA2
+  // reset cac dong nhap bai nguon
   $("#incKwRows").innerHTML = "";
   addIncKwRow();
 }
@@ -722,18 +694,7 @@ async function runIncInsert(sources, btn) {
   }
 }
 
-// PA1: tu dong - lay top N bai goi y
-$("#btnIncAuto").addEventListener("click", () => {
-  const n = Math.max(1, Math.min(10, parseInt($("#incAutoCount").value, 10) || 5));
-  if (!incSession.suggestions.length) {
-    $("#incOptMsg").innerHTML = alertHtml("warn", "Không có bài gợi ý từ sitemap. Hãy dùng Phương án 2 (nhập URL thủ công).");
-    return;
-  }
-  const sources = incSession.suggestions.slice(0, n).map((s) => ({ url: s.url, anchor: "" }));
-  runIncInsert(sources, $("#btnIncAuto"));
-});
-
-// PA2: theo tu khoa - tu cac dong nhap
+// Chen theo bai nguon nhap tay
 $("#btnIncKw").addEventListener("click", () => {
   const sources = $$("#incKwRows .kw-row")
     .map((r) => ({ url: r.querySelector(".src-url").value.trim(), anchor: r.querySelector(".src-anchor").value.trim() }))
@@ -744,6 +705,19 @@ $("#btnIncKw").addEventListener("click", () => {
   }
   runIncInsert(sources, $("#btnIncKw"));
 });
+
+// Trich ~n tu dau (giu du ngu canh doan chua anchor), an toan HTML, tu bao anchor bang <mark>.
+function excerptWithAnchor(text, anchor, markId, wordLimit = 200) {
+  const words = String(text || "").trim().split(/\s+/).filter(Boolean);
+  const cut = words.length > wordLimit;
+  let t = esc(cut ? words.slice(0, wordLimit).join(" ") + " …" : words.join(" "));
+  const a = esc((anchor || "").trim());
+  if (a) {
+    const idx = t.toLowerCase().indexOf(a.toLowerCase());
+    if (idx >= 0) t = t.slice(0, idx) + `<mark class="inc-mark" id="${markId}">${t.slice(idx, idx + a.length)}</mark>` + t.slice(idx + a.length);
+  }
+  return t || "<span class='muted'>(trống)</span>";
+}
 
 function renderIncResults(d) {
   const okCount = d.results.filter((r) => r.ok).length;
@@ -758,51 +732,50 @@ function renderIncResults(d) {
       return `<div class="src-card"><div class="src-head"><div class="surl">${esc(r.url)}</div></div>
         <div class="src-body">${alertHtml("err", "❌ " + esc(r.error))}</div></div>`;
     }
-    const rows = (r.table || []).map((t, i) => `<tr>
-        <td>${i + 1}</td>
-        <td><b>${esc(t.anchor)}</b></td>
-        <td>${esc(t.beforeSnippet).slice(0, 160)}</td>
-        <td class="snip-after">${highlightAnchor(t.afterSnippet, t.anchor)}</td>
-        <td>${t.addedContent ? '<span class="badge sapo">Có</span>' : "—"}</td>
+    const tbl = r.table || [];
+    // Chips nhay toi tung anchor (highlight khi bam)
+    const chips = tbl.length
+      ? `<div class="inc-jumps"><span class="lbl">Nhảy tới anchor:</span>${tbl.map((t, i) =>
+          `<button class="chip-jump" type="button" data-jump-mark="inc-mk-${idx}-${i}">🔗 ${esc(t.anchor) || ("link " + (i + 1))}</button>`).join("")}</div>`
+      : "";
+    const rows = tbl.map((t, i) => `<tr>
+        <td class="c-anchor"><b>${esc(t.anchor)}</b>${t.url ? `<div class="c-url"><a href="${esc(t.url)}" target="_blank" rel="noopener">→ ${esc(t.url)}</a></div>` : ""}</td>
+        <td class="c-before">${excerptWithAnchor(t.beforeSnippet, "", "", 200)}</td>
+        <td class="c-after">${excerptWithAnchor(t.afterSnippet, t.anchor, "inc-mk-" + idx + "-" + i, 200)}</td>
+        <td class="c-extra">${t.addedContent
+          ? `<span class="badge sapo">Có</span>${t.reason ? `<div class="c-reason">${esc(t.reason)}</div>` : ""}`
+          : `<span class="badge ket">Không</span>${t.reason ? `<div class="c-reason">${esc(t.reason)}</div>` : ""}`}</td>
       </tr>`).join("");
-    const tableHtml = r.table && r.table.length
-      ? `<table class="cmp"><thead><tr><th>#</th><th>Anchor</th><th>Đoạn TRƯỚC</th><th>Đoạn SAU (đã chèn)</th><th>Viết thêm?</th></tr></thead><tbody>${rows}</tbody></table>`
+    const body = tbl.length
+      ? `${chips}<div class="inc-tbl-wrap"><table class="inc-tbl"><thead><tr>
+          <th style="width:18%">Anchor</th><th style="width:33%">Đoạn trước</th><th style="width:37%">Đoạn sau khi chèn</th><th style="width:12%">Viết thêm</th>
+        </tr></thead><tbody>${rows}</tbody></table></div>`
       : alertHtml("warn", "Không chèn được link vào bài này.");
     const noteHtml = r.notes ? alertHtml("warn", "📌 " + esc(r.notes)) : "";
     return `<div class="src-card">
       <div class="src-head">
         <div class="stitle">📄 ${esc(r.title || r.url)} <span class="badge ok">${r.insertedCount} link</span></div>
-        <div class="surl">${esc(r.url)} &nbsp;·&nbsp; engine: ${esc(r.engine || "")}</div>
+        <a class="surl" href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.url)}</a>
       </div>
       <div class="src-body">
         ${noteHtml}
-        <p class="muted" style="margin:0 0 8px">Các đoạn đã chèn link trỏ về <b>${esc(d.target.title || d.target.url)}</b>:</p>
-        ${tableHtml}
-        <details style="margin-top:14px" open>
-          <summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--brand-dark)">Xem bản gốc trước / sau khi chèn</summary>
-          <div class="chips" style="margin-top:10px">${buildChips(r.table, "inc-after-" + idx)}</div>
-          <div class="split">
-            <div class="pane"><div class="ph">Bản gốc (TRƯỚC)</div><div class="render">${r.beforeHtml}</div></div>
-            <div class="pane after"><div class="ph">Đã chèn link (SAU) <button class="ghost small" data-inccopy="${idx}|afterHtml">Copy HTML</button></div><div class="render" id="inc-after-${idx}">${r.afterHtml}</div></div>
-          </div>
-        </details>
-        <details style="margin-top:10px">
-          <summary style="cursor:pointer;font-weight:700;font-size:13px;color:var(--brand-dark)">Xem mã HTML / Markdown (trước &amp; sau)</summary>
-          <div class="split" style="margin-top:10px">
-            <div class="pane"><div class="ph">HTML — TRƯỚC <button class="ghost small" data-inccopy="${idx}|beforeHtml">Copy</button></div><pre class="code">${esc(formatHtml(r.beforeHtml))}</pre></div>
-            <div class="pane after"><div class="ph">HTML — SAU <button class="ghost small" data-inccopy="${idx}|afterHtml">Copy</button></div><pre class="code">${esc(formatHtml(r.afterHtml))}</pre></div>
-          </div>
-          <div class="split" style="margin-top:10px">
-            <div class="pane"><div class="ph">Markdown — TRƯỚC <button class="ghost small" data-inccopy="${idx}|beforeMarkdown">Copy</button></div><pre class="code">${esc(r.beforeMarkdown)}</pre></div>
-            <div class="pane after"><div class="ph">Markdown — SAU <button class="ghost small" data-inccopy="${idx}|afterMarkdown">Copy</button></div><pre class="code">${esc(r.afterMarkdown)}</pre></div>
-          </div>
-        </details>
+        ${body}
       </div>
     </div>`;
   }).join("");
 
   $("#incResults").innerHTML = html;
 }
+
+// Nhay toi anchor trong bang incoming + hieu ung flash
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-jump-mark]");
+  if (!b) return;
+  const el = document.getElementById(b.dataset.jumpMark);
+  if (!el) { toast("Không tìm thấy anchor"); return; }
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
+});
 
 // ==================== AUTH (ĐĂNG NHẬP) ====================
 let pendingRegEmail = "";

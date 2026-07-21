@@ -367,6 +367,7 @@ function applyAndBuild(article, result) {
       reason: e.reason || "",
       beforeSnippet: before,
       afterSnippet: target.text,
+      afterHtml: e.newHtml, // HTML khoi da chen (co the <a>) - de render + highlight anchor
     });
   }
 
