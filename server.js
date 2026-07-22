@@ -9,7 +9,7 @@ import fs from "node:fs";
 import { extractArticle, blocksToHtml, blocksToMarkdown } from "./src/extract.js";
 import { loadTargets, rankTargets } from "./src/sitemap.js";
 import { optimizeLocally } from "./src/local.js";
-import { optimizeWithGemini, geminiJson, geminiPing } from "./src/gemini.js";
+import { optimizeWithGemini, geminiJson, geminiPing, pickBestGeminiModel } from "./src/gemini.js";
 import { optimizeWithClaude, claudeJson, claudePing } from "./src/claude.js";
 import { auditUrl, benchmark } from "./src/onpage.js";
 import { fetchSerp, serpConfigured } from "./src/serp.js";
@@ -215,7 +215,9 @@ app.post("/api/engine/check", requireAuth, async (req, res) => {
       const k = (apiKey || process.env.GEMINI_API_KEY || "").trim();
       if (!k) return res.json({ ok: false, error: "Chưa nhập Gemini API key." });
       await geminiPing(k);
-      return res.json({ ok: true, label: "Gemini — đã kết nối" });
+      let best = "gemini-3.5-flash";
+      try { best = await pickBestGeminiModel(k); } catch { /* ping OK nhung liet ke loi -> giu mac dinh */ }
+      return res.json({ ok: true, label: `Gemini — đã kết nối (${best})`, model: best });
     }
     if (eng === "claude") {
       const k = (apiKey || process.env.ANTHROPIC_API_KEY || "").trim();
@@ -649,6 +651,38 @@ async function _onpageAIOnce({ engine, key, model, system, user, schema, maxToke
 }
 
 // --- POST /api/onpage/audit : audit trang + doi thu + khuyen nghi ---
+// Content gap CO HOC: heading H2/H3 doi thu CO ma trang muc tieu THIEU (bao dam LUON co gap).
+function mechContentGap(target, competitors, max = 8) {
+  const norm = (s) => normVi(s).replace(/[?!.,:;"'()]/g, " ").replace(/\s+/g, " ").trim();
+  const tgtHeads = (target.headings || []).map((h) => norm(h.text)).filter(Boolean);
+  const tgtBlob = " " + tgtHeads.join(" | ") + " ";
+  const has = (n) => tgtHeads.includes(n) || tgtBlob.includes(" " + n + " ") || (n.length > 12 && tgtBlob.includes(n));
+  const freq = new Map(), label = new Map();
+  for (const c of (competitors || [])) {
+    if (!c || !c.ok) continue;
+    const seen = new Set();
+    for (const h of (c.headings || [])) {
+      if (!h || h.level > 3) continue;
+      const n = norm(h.text);
+      if (!n || n.length < 6 || seen.has(n)) continue; seen.add(n);
+      if (has(n)) continue;
+      freq.set(n, (freq.get(n) || 0) + 1);
+      if (!label.has(n)) label.set(n, String(h.text).trim());
+    }
+  }
+  return [...freq.entries()].sort((a, b) => b[1] - a[1]).slice(0, max).map(([n]) => label.get(n));
+}
+// Tom tat CO HOC (bao dam LUON co summary du AI loi/trong).
+function mechSummary(target, bench) {
+  if (!bench) return `Trang của bạn có ${target.wordCount || 0} từ, ${target.headingCount || 0} heading. Chưa lấy được đối thủ để so sánh (dán URL đối thủ để đối chiếu sâu hơn).`;
+  const p = [`Trang của bạn: ${target.wordCount || 0} từ / ${target.headingCount || 0} heading (đối thủ trung bình ${bench.wordCount} từ, ${bench.headingCount} heading).`];
+  if ((target.wordCount || 0) < bench.wordCount * 0.8) p.push("Nội dung ngắn hơn đối thủ đáng kể, nên bổ sung chiều sâu.");
+  if ((target.headingCount || 0) < bench.headingCount * 0.8) p.push("Ít heading hơn đối thủ, nên phủ thêm sub-topic.");
+  if (!target.hasSchema && bench.withSchema > 0) p.push("Nên bổ sung Schema như đa số đối thủ.");
+  if ((target.internalLinks || 0) < bench.internalLinks) p.push("Internal link ít hơn đối thủ, nên chèn thêm.");
+  return p.join(" ");
+}
+
 app.post("/api/onpage/audit", requireAuth, async (req, res) => {
   try {
     const { url, mainKeyword, subKeywords, competitors, engine, model, apiKey } = req.body || {};
@@ -697,7 +731,10 @@ app.post("/api/onpage/audit", requireAuth, async (req, res) => {
     attachKwStats(target, mainKeyword.trim());
     okComps.forEach((c) => attachKwStats(c, mainKeyword.trim()));
 
-    // 4) Khuyen nghi: AI neu co; nguoc lai co hoc
+    // 4) Khuyen nghi: AI neu co; nguoc lai co hoc.
+    //    Content gap + summary LUON co (co hoc lam nen) -> khong bao gio bi mat khi AI loi/trong.
+    const mGap = mechContentGap(target, okComps);
+    const mSum = mechSummary(target, bench);
     let recommendations, summary = "", engineUsed = "Local (cơ học)", contentGap = [];
     try {
       const { data, engineUsed: eu } = await onpageAI({
@@ -707,12 +744,13 @@ app.post("/api/onpage/audit", requireAuth, async (req, res) => {
         schema: RECOMMEND_SCHEMA, maxTokens: 4096,
       });
       recommendations = Array.isArray(data.recommendations) ? data.recommendations : [];
-      summary = data.summary || "";
-      contentGap = Array.isArray(data.contentGap) ? data.contentGap : [];
+      summary = data.summary || mSum;
+      contentGap = (Array.isArray(data.contentGap) && data.contentGap.length) ? data.contentGap : mGap;
       engineUsed = eu;
     } catch (e) {
       recommendations = mechanicalRecommendations({ target, bench, mainKeyword: mainKeyword.trim() });
-      if (e.message && e.message !== "local") summary = `(AI lỗi: ${e.message} — dùng phân tích cơ học)`;
+      summary = (e.message && e.message !== "local") ? `${mSum} (Lưu ý: AI lỗi — ${e.message}, đang dùng phân tích cơ học.)` : mSum;
+      contentGap = mGap;
     }
 
     gcSessions();

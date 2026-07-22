@@ -17,9 +17,9 @@ const ENGINES = {
     keyPlaceholder: "AIza... (lấy free tại aistudio.google.com)",
     keyHelp: 'Lấy key MIỄN PHÍ tại <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com/app/apikey</a> — không cần thẻ, không nạp tiền.',
     models: [
-      ["gemini-3.5-flash", "Gemini 3.5 Flash (FREE — mới nhất, cao nhất)"],
+      ["gemini-3.5-flash", "Gemini Flash (FREE — tự chọn cao nhất)"],
     ],
-    hint: "Cố định dùng Gemini 3.5 Flash (model cao nhất, miễn phí) xuyên suốt — không tự đổi sang model thấp hơn.",
+    hint: "Tự động dùng model Gemini Flash CAO NHẤT & miễn phí theo API key của bạn (khi Google ra bản mới sẽ tự cập nhật). Cố định trong suốt phiên, không tự tụt xuống model thấp hơn.",
   },
   claude: {
     needKey: true,
@@ -57,8 +57,9 @@ function applyEngine(engine) {
     mw.classList.remove("hidden");
     sel.innerHTML = cfg.models.map(([v, t]) => `<option value="${v}">${t}</option>`).join("");
     const saved = localStorage.getItem("seoshark_model_" + engine);
-    // Cho phep chon moi model (ke ca Pro neu user co tai khoan tra phi)
     if (saved && cfg.models.some(([v]) => v === saved)) sel.value = saved;
+    // Gemini: khôi phục ngay model đã tự phát hiện lần trước (vd 3.6-flash) trong khi chờ check lại
+    if (engine === "gemini" && saved && /^gemini-\d.*flash/i.test(saved)) applyGeminiModel(saved);
   } else {
     mw.classList.add("hidden");
   }
@@ -147,6 +148,13 @@ function prettyModel(engine, model) {
   }
   return "Local";
 }
+// Áp model Gemini tự phát hiện (cao nhất & free) làm lựa chọn duy nhất
+function applyGeminiModel(model) {
+  const sel = $("#model"); if (!sel || !model) return;
+  sel.innerHTML = `<option value="${model}">${prettyModel("gemini", model)} (FREE — tự chọn cao nhất)</option>`;
+  sel.value = model;
+  localStorage.setItem("seoshark_model_gemini", model);
+}
 function setConn(state, text) {
   const s = $("#engineStatus");
   if (s) {
@@ -171,7 +179,11 @@ async function checkEngineConn() {
       body: JSON.stringify({ engine, apiKey: key, model: $("#model").value || undefined }),
     });
     const d = await res.json();
-    if (d.ok) setConn("ok", "✓ " + d.label);
+    if (d.ok) {
+      // Gemini: tự áp model CAO NHẤT & FREE do server phát hiện (vd 3.6-flash khi Google ra mắt)
+      if (engine === "gemini" && d.model) applyGeminiModel(d.model);
+      setConn("ok", "✓ " + d.label);
+    }
     else setConn("fail", "✗ " + (d.error || "Không kết nối được"));
   } catch (e) { setConn("fail", "✗ " + e.message); }
 }
@@ -254,6 +266,7 @@ window.gscConnected = () => (GSC.mode === "sa" ? (GSC.sites || []).length > 0 : 
     if (pill) { pill.classList.toggle("good", conn); pill.classList.toggle("warn", !conn); }
     if (dot) dot.style.background = conn ? "var(--green)" : "var(--amber)";
     if (ec) { ec.textContent = conn ? "Đã kết nối" : (waiting ? "Chờ thêm email" : "Chưa kết nối"); ec.classList.toggle("on", conn); }
+    if (window.opGscApplyState) window.opGscApplyState(); // đồng bộ box GSC trong Onpage khi trạng thái đổi
   }
   window.updateGscPill = updateGscPill;
   const gscPillEl = $("#gscPill");
@@ -1270,13 +1283,27 @@ $$("#onpageTabs .tab").forEach((tab) => {
 
 // GSC trong Onpage: hiện box nếu đã kết nối; nút xem số liệu thật cho URL vừa audit
 let _opGscUrl = "";
+// Đổi controls/hint theo trạng thái GSC (chạy được cả khi GSC kết nối SAU khi audit)
+function opGscApplyState() {
+  const box = $("#opGscBox"); if (!box || box.classList.contains("hidden")) return;
+  const conn = !!(window.gscConnected && window.gscConnected());
+  const ctrls = $("#opGscControls"), hint = $("#opGscHint");
+  if (ctrls) ctrls.classList.toggle("hidden", !conn);
+  if (hint) hint.classList.toggle("hidden", conn);
+}
+window.opGscApplyState = opGscApplyState;
 function opGscReveal(url) {
   _opGscUrl = url || "";
   const box = $("#opGscBox"); if (!box) return;
   $("#opGscResult").innerHTML = ""; $("#opGscMsg").textContent = "";
-  // Hiện box khi đã đăng nhập Google (GIS token còn hạn)
-  box.classList.toggle("hidden", !(window.gscConnected && window.gscConnected()));
+  box.classList.remove("hidden"); // LUÔN hiện box sau khi audit (kết nối hay chưa)
+  opGscApplyState();
 }
+// Link trong hint -> mở hộp Engine để kết nối GSC
+document.addEventListener("click", (e) => {
+  const a = e.target.closest("#opGscOpenSettings"); if (!a) return;
+  e.preventDefault(); const b = $("#engineBox"); if (b) { b.open = true; b.scrollIntoView({ behavior: "smooth", block: "center" }); }
+});
 // Khoảng thời gian GSC: đổi 'range' -> số ngày (raw view) / {range,start,end} (evaluate)
 const OP_GSC_DAYS = { "24h": 1, "7d": 7, "28d": 28, "3m": 90, "6m": 180, "12m": 365 };
 function opGscRangeInfo() {

@@ -38,6 +38,29 @@ export async function geminiPing(apiKey) {
   return true;
 }
 
+// Tu dong chon model Gemini CAO NHAT & MIEN PHI (flash) tu danh sach model cua chinh API key.
+// Khi Google ra model moi (vd 3.6-flash) -> tu dong dung, khong can sua code. Fallback 3.5-flash.
+export async function pickBestGeminiModel(apiKey) {
+  const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`);
+  if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d?.error?.message || `HTTP ${r.status}`); }
+  const d = await r.json();
+  const cands = (d.models || [])
+    .filter((m) => (m.supportedGenerationMethods || []).includes("generateContent"))
+    .map((m) => String(m.name || "").replace(/^models\//, ""))
+    // Chi lay Gemini *flash* (free). Loai pro (can billing) + cac ban dac biet/nho.
+    .filter((n) => /^gemini-\d/.test(n) && /flash/.test(n) && !/pro|thinking|exp\b|vision|embedding|aqa|imagen|-tts|learnlm|gemma|-8b/i.test(n));
+  const score = (n) => {
+    const vm = /gemini-(\d+)\.(\d+)/.exec(n);
+    const ver = vm ? parseInt(vm[1]) * 100 + parseInt(vm[2]) : 0;   // 3.6 -> 306, 3.5 -> 305
+    const stable = /preview|latest/i.test(n) ? 0 : 40;              // uu tien ban on dinh
+    const full = /flash-lite/i.test(n) ? 0 : 20;                    // uu tien flash day du hon flash-lite
+    const base = /^gemini-\d+\.\d+-flash(-lite)?$/i.test(n) ? 10 : 0; // ten goc (alias -> luon tro ban moi nhat)
+    return ver * 1000 + stable + full + base;
+  };
+  cands.sort((a, b) => score(b) - score(a));
+  return cands[0] || "gemini-3.5-flash";
+}
+
 // "Va" JSON bi cat cut (do dung gioi han output): dong lai cac object/array con dang mo
 // sau phan tu HOAN CHINH cuoi cung, de van lay duoc ket qua mot phan thay vi crash ca lo.
 export function closeTruncatedJson(text) {
