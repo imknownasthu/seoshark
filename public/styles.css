@@ -284,6 +284,20 @@ mark.inc-mark.flash{animation:incFlash 1.4s ease}
 .it-grid9 button.on{background:var(--c-blue);border-color:var(--c-blue)}
 .it-note{font-size:.82rem;color:var(--muted)}
 
+/* ===== TRINH SOAN RICH TEXT (kien thuc) ===== */
+.rte{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+.rte-bar{display:flex;flex-wrap:wrap;gap:2px;padding:6px 8px;border-bottom:1px solid var(--line);background:#fbfcff}
+.rte-b{border:1px solid transparent;background:transparent;border-radius:7px;padding:4px 9px;font-size:12.5px;
+  color:var(--ink);cursor:pointer;font-weight:600;min-width:30px}
+.rte-b:hover{background:var(--brand-light);border-color:var(--line);color:var(--c-blue)}
+.rte-ed{min-height:120px;max-height:340px;overflow-y:auto;padding:11px 13px;font-size:14px;line-height:1.65;outline:none;color:var(--ink)}
+.rte-ed:empty::before{content:attr(data-ph);color:var(--muted)}
+.rte-ed h2{font-size:1.15rem;margin:.5em 0 .3em}
+.rte-ed h3{font-size:1.02rem;margin:.5em 0 .3em}
+.rte-ed ul,.rte-ed ol{padding-left:22px;margin:.4em 0}
+.rte-ed p{margin:.4em 0}
+.rte-ed pre{background:#f4f6fb;padding:8px;border-radius:6px;font-size:12px;white-space:pre-wrap;overflow-x:auto}
+
 /* ===== ONPAGE: toi uu cau truc heading — 4 cot ===== */
 .ophead-cols{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:6px 0}
 @media(max-width:900px){.ophead-cols{grid-template-columns:repeat(2,1fr)}}

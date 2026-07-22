@@ -1582,6 +1582,78 @@ function opHeadResolveKnowledge() {
   const k = opKnowList.find((x) => x.id === (($("#opHeadKnowSelect") || {}).value || ""));
   return k ? htmlToReadable(k.content || "") : "";
 }
+// Bien 1 <textarea> thanh trinh soan RICH TEXT (giu textarea an lam noi luu .value = HTML).
+// Nho vay MOI code doc/ghi .value cu van hoat dong (nhan/tra ve HTML), khong phai sua rai rac.
+function makeRichEditor(ta) {
+  if (!ta || ta._rte) return;
+  const wrap = document.createElement("div"); wrap.className = "rte";
+  const bar = document.createElement("div"); bar.className = "rte-bar";
+  const ed = document.createElement("div"); ed.className = "rte-ed"; ed.contentEditable = "true";
+  ed.setAttribute("data-ph", ta.getAttribute("placeholder") || "");
+
+  // Định dạng bằng thao tác DOM (KHÔNG dùng execCommand — đã deprecated & hay bị chặn).
+  const selRange = () => { const s = window.getSelection(); return s && s.rangeCount ? s.getRangeAt(0) : null; };
+  const inEd = (node) => { while (node) { if (node === ed) return true; node = node.parentNode; } return false; };
+  const blockOf = (node) => { while (node && node !== ed) { if (node.nodeType === 1 && /^(P|DIV|H[1-6]|LI|PRE|BLOCKQUOTE)$/.test(node.tagName)) return node; node = node.parentNode; } return null; };
+  // Lưu range cuối cùng NẰM TRONG editor — vì khi bấm nút, focus rời khỏi editor làm mất selection.
+  let saved = null;
+  document.addEventListener("selectionchange", () => { const r = selRange(); if (r && inEd(r.commonAncestorContainer)) saved = r.cloneRange(); });
+  // Lấy range làm việc (ưu tiên selection hiện tại trong editor, else range đã lưu) + gắn lại vào selection.
+  function useRange() {
+    let r = selRange();
+    if (!(r && inEd(r.commonAncestorContainer))) r = saved;
+    if (!r) return null;
+    const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    return window.getSelection().getRangeAt(0);
+  }
+  const selectNode = (el, collapseEnd) => { const s = window.getSelection(); s.removeAllRanges(); const r = document.createRange(); r.selectNodeContents(el); if (collapseEnd) r.collapse(false); s.addRange(r); };
+  function wrapInline(tag) {
+    const r = useRange(); if (!r || r.collapsed) return;
+    const el = document.createElement(tag);
+    try { el.appendChild(r.extractContents()); r.insertNode(el); selectNode(el); } catch {}
+  }
+  function setBlock(tag) {
+    const r = useRange(); if (!r) return;
+    let b = blockOf(r.startContainer);
+    if (!b) { const el = document.createElement(tag); try { el.appendChild(r.extractContents()); r.insertNode(el); } catch { el.textContent = ed.textContent; ed.innerHTML = ""; ed.appendChild(el); } b = el; }
+    else { const nb = document.createElement(tag); nb.innerHTML = b.innerHTML; b.replaceWith(nb); b = nb; }
+    selectNode(b, true);
+  }
+  function makeList(ordered) {
+    const r = useRange(); if (!r) return;
+    const b = blockOf(r.startContainer);
+    const list = document.createElement(ordered ? "ol" : "ul"); const li = document.createElement("li");
+    if (b) { li.innerHTML = b.innerHTML || b.textContent; list.appendChild(li); b.replaceWith(list); }
+    else { try { li.appendChild(r.extractContents()); } catch {} list.appendChild(li); r.insertNode(list); }
+    selectNode(li, true);
+  }
+  function clearFmt() {
+    const r = useRange(); if (!r || r.collapsed) return;
+    const txt = r.toString(); r.deleteContents(); r.insertNode(document.createTextNode(txt));
+  }
+  const ACT = { bold: () => wrapInline("b"), italic: () => wrapInline("i"), h2: () => setBlock("H2"), h3: () => setBlock("H3"), p: () => setBlock("P"), ul: () => makeList(false), ol: () => makeList(true), clear: clearFmt };
+  const run = (name) => { if (ACT[name]) ACT[name](); ed.focus(); ta.dispatchEvent(new Event("input", { bubbles: true })); };
+  const BTNS = [["<b>B</b>", "In đậm", "bold"], ["<i>I</i>", "In nghiêng", "italic"], ["H2", "Tiêu đề H2", "h2"], ["H3", "Tiêu đề H3", "h3"], ["¶", "Đoạn văn", "p"], ["• List", "Danh sách chấm", "ul"], ["1. List", "Danh sách số", "ol"], ["⌫ Xoá ĐD", "Xoá định dạng", "clear"]];
+  BTNS.forEach(([label, title, name]) => {
+    const b = document.createElement("button"); b.type = "button"; b.className = "rte-b"; b.title = title; b.innerHTML = label;
+    b.addEventListener("mousedown", (e) => e.preventDefault());
+    b.addEventListener("click", () => run(name));
+    bar.appendChild(b);
+  });
+
+  ta.style.display = "none";
+  ta.parentNode.insertBefore(wrap, ta);
+  wrap.appendChild(bar); wrap.appendChild(ed); wrap.appendChild(ta);
+  ed.innerHTML = ta.getAttribute("value") || ta.textContent || "";
+  Object.defineProperty(ta, "value", {
+    configurable: true,
+    get() { return ed.textContent.trim() ? ed.innerHTML : ""; },
+    set(v) { ed.innerHTML = v == null ? "" : String(v); },
+  });
+  ed.addEventListener("input", () => ta.dispatchEvent(new Event("input", { bubbles: true })));
+  ta._rte = ed;
+}
+if ($("#opKnowContent")) makeRichEditor($("#opKnowContent"));
 if ($("#opHeadKnowReload")) $("#opHeadKnowReload").addEventListener("click", () => { opLoadKnow(); toast("Đã nạp lại danh sách kiến thức."); });
 async function opLoadSkills() {
   try {
@@ -1610,17 +1682,20 @@ function opResolveSkill() {
   const s = opSkillList.find((x) => x.id === $("#opWsSelect").value);
   return s ? (s.content || "") : "";
 }
-// Đọc file docx/xlsx/txt -> text
-async function opReadDocFile(f, allowXlsx) {
+// Đọc file docx/xlsx/txt. asHtml=true -> giữ cấu trúc (heading/list/đậm) cho rich editor.
+async function opReadDocFile(f, allowXlsx, asHtml) {
   const buf = await f.arrayBuffer();
-  if (/\.docx$/i.test(f.name)) { const res = await window.mammoth.extractRawText({ arrayBuffer: buf }); return res.value || ""; }
-  if (/\.txt$/i.test(f.name)) return new TextDecoder("utf-8").decode(buf);
-  if (allowXlsx && /\.xlsx?$/i.test(f.name)) { const wb = XLSX.read(buf, { type: "array" }); return wb.SheetNames.map((n) => XLSX.utils.sheet_to_csv(wb.Sheets[n])).join("\n"); }
+  if (/\.docx$/i.test(f.name)) {
+    if (asHtml) { const res = await window.mammoth.convertToHtml({ arrayBuffer: buf }); return res.value || ""; }
+    const res = await window.mammoth.extractRawText({ arrayBuffer: buf }); return res.value || "";
+  }
+  if (/\.txt$/i.test(f.name)) { const t = new TextDecoder("utf-8").decode(buf); return asHtml ? esc(t).replace(/\n/g, "<br>") : t; }
+  if (allowXlsx && /\.xlsx?$/i.test(f.name)) { const wb = XLSX.read(buf, { type: "array" }); const csv = wb.SheetNames.map((n) => XLSX.utils.sheet_to_csv(wb.Sheets[n])).join("\n"); return asHtml ? "<pre>" + esc(csv) + "</pre>" : csv; }
   throw new Error(allowXlsx ? "Chỉ .docx/.xlsx" : "Chỉ .docx/.txt");
 }
 // Knowledge editor
 $("#opKnowNew").addEventListener("click", () => { const ed = $("#opKnowEditor"); ed.classList.toggle("hidden"); const k = opKnowList.find((x) => x.id === $("#opKnowSelect").value); if (!ed.classList.contains("hidden") && k) { $("#opKnowTitle").value = k.title || ""; $("#opKnowContent").value = k.content || ""; } });
-$("#opKnowFile").addEventListener("change", async (e) => { const f = e.target.files[0]; if (!f) return; $("#opKnowFileMsg").textContent = "Đang đọc..."; try { const text = await opReadDocFile(f, true); const box = $("#opKnowContent"); box.value = (box.value.trim() ? box.value.trim() + "\n\n" : "") + text.trim(); if (!$("#opKnowTitle").value.trim()) $("#opKnowTitle").value = f.name.replace(/\.(docx|xlsx?)$/i, ""); $("#opKnowFileMsg").textContent = `✓ Đã nạp ${text.trim().length.toLocaleString("vi")} ký tự`; } catch (err) { $("#opKnowFileMsg").textContent = "Lỗi: " + (err.message || err); } finally { e.target.value = ""; } });
+$("#opKnowFile").addEventListener("change", async (e) => { const f = e.target.files[0]; if (!f) return; $("#opKnowFileMsg").textContent = "Đang đọc..."; try { const html = await opReadDocFile(f, true, true); const box = $("#opKnowContent"); const cur = box.value; box.value = (cur ? cur : "") + html; if (!$("#opKnowTitle").value.trim()) $("#opKnowTitle").value = f.name.replace(/\.(docx|xlsx?)$/i, ""); $("#opKnowFileMsg").textContent = `✓ Đã nạp nội dung từ ${esc(f.name)} (giữ định dạng)`; } catch (err) { $("#opKnowFileMsg").textContent = "Lỗi: " + (err.message || err); } finally { e.target.value = ""; } });
 $("#opKnowSave").addEventListener("click", async () => { const content = $("#opKnowContent").value.trim(); if (!content) return toast("Nội dung kiến thức trống."); const editingId = opKnowList.find((x) => x.id === $("#opKnowSelect").value) ? $("#opKnowSelect").value : ""; const btn = $("#opKnowSave"); busy(btn, true, "Đang lưu..."); try { const r = await fetch("/api/knowledge/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: editingId, website: "", title: $("#opKnowTitle").value.trim(), content }) }); const d = await r.json(); if (!r.ok) throw new Error(d.error || "Lưu lỗi"); await opLoadKnow(); $("#opKnowSelect").value = d.id; $("#opKnowEditor").classList.add("hidden"); toast("Đã lưu kiến thức."); } catch (e) { toast("❌ " + e.message); } finally { busy(btn, false); } });
 // Skill editor
 $("#opWsNew").addEventListener("click", () => { const ed = $("#opWsEditor"); ed.classList.toggle("hidden"); const k = opSkillList.find((x) => x.id === $("#opWsSelect").value); if (!ed.classList.contains("hidden") && k) { $("#opWsTitle").value = k.title || ""; $("#opWsContent").value = k.content || ""; } });
@@ -2600,6 +2675,7 @@ $("#opClearSkill").addEventListener("click", () => {
 (function () {
   const analyzeBtn = $("#olAnalyze");
   if (!analyzeBtn) return;
+  if ($("#olKnowContent")) makeRichEditor($("#olKnowContent"));
   let mode = "auto";
   let competitors = [];   // outline đối thủ (đã bóc tách)
   let lastOutline = [];   // kết quả outline cuối
@@ -2668,18 +2744,19 @@ $("#opClearSkill").addEventListener("click", () => {
     $("#olKnowFileMsg").textContent = "Đang đọc file...";
     try {
       const buf = await file.arrayBuffer();
-      let text = "";
+      let html = "";
       if (/\.docx$/i.test(file.name)) {
-        const res = await window.mammoth.extractRawText({ arrayBuffer: buf });
-        text = res.value || "";
+        const res = await window.mammoth.convertToHtml({ arrayBuffer: buf }); // giữ heading/list/đậm
+        html = res.value || "";
       } else if (/\.xlsx?$/i.test(file.name)) {
         const wb = XLSX.read(buf, { type: "array" });
-        text = wb.SheetNames.map((n) => XLSX.utils.sheet_to_csv(wb.Sheets[n])).join("\n");
+        html = "<pre>" + esc(wb.SheetNames.map((n) => XLSX.utils.sheet_to_csv(wb.Sheets[n])).join("\n")) + "</pre>";
       } else { $("#olKnowFileMsg").textContent = "Chỉ hỗ trợ .docx/.xlsx"; return; }
       const box = $("#olKnowContent");
-      box.value = (box.value.trim() ? box.value.trim() + "\n\n" : "") + text.trim();
+      const cur = box.value;
+      box.value = (cur ? cur : "") + html;
       if (!$("#olKnowTitle").value.trim()) $("#olKnowTitle").value = file.name.replace(/\.(docx|xlsx?|)$/i, "");
-      $("#olKnowFileMsg").textContent = `✓ Đã nạp ${text.trim().length.toLocaleString("vi-VN")} ký tự từ ${file.name}`;
+      $("#olKnowFileMsg").textContent = `✓ Đã nạp nội dung từ ${esc(file.name)} (giữ định dạng)`;
     } catch (err) {
       $("#olKnowFileMsg").textContent = "Lỗi đọc file: " + (err.message || err);
     } finally { e.target.value = ""; }
@@ -2799,7 +2876,7 @@ $("#opClearSkill").addEventListener("click", () => {
     const refOutline = $("#olRefOutline").value.trim();
     const websiteName = $("#olWebsite").value.trim();
     const know = knowledge.find((x) => x.id === $("#olKnowSelect").value);
-    const knowledgeText = know ? know.content : "";
+    const knowledgeText = know ? htmlToReadable(know.content || "") : "";
     const engine = $("#engine").value, model = $("#model").value, apiKey = $("#apiKey").value.trim();
     const btn = $("#olGenerate"); busy(btn, true, "Đang tạo outline...");
     setMsg("#olGenMsg", "info", `<span class="spinner" style="border-top-color:transparent"></span>Đang tổng hợp outline${engine !== "local" ? " (AI ~15s)" : ""}...`);
@@ -2874,7 +2951,7 @@ $("#opClearSkill").addEventListener("click", () => {
     setMsg("#olUniqueMsg", "info", '<span class="spinner" style="border-top-color:transparent"></span>AI đang chắt lọc kiến thức & gợi ý (~15s)...');
     $("#olUniqueList").innerHTML = "";
     try {
-      const r = await _fetch("/api/outline/unique", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mainKw, subKws, websiteName, knowledge: know.content, outline: lastOutline, engine, model, apiKey }) });
+      const r = await _fetch("/api/outline/unique", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mainKw, subKws, websiteName, knowledge: htmlToReadable(know.content || ""), outline: lastOutline, engine, model, apiKey }) });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Lỗi gợi ý");
       const list = d.suggestions || [];
@@ -3299,7 +3376,7 @@ $("#opClearSkill").addEventListener("click", () => {
   $("#plOlKnowNew").addEventListener("click", () => {
     const ed = $("#plOlKnowEditor"); ed.classList.toggle("hidden");
     const k = plKnow.find((x) => x.id === $("#plOlKnow").value);
-    if (!ed.classList.contains("hidden") && k) { $("#plOlKnowTitle").value = k.title || ""; $("#plOlKnowContent").value = k.content || ""; }
+    if (!ed.classList.contains("hidden") && k) { $("#plOlKnowTitle").value = k.title || ""; $("#plOlKnowContent").value = htmlToReadable(k.content || ""); }
   });
 
   $("#plOlRun").addEventListener("click", async () => {
@@ -3331,7 +3408,7 @@ $("#opClearSkill").addEventListener("click", () => {
         }
       } else {
         const k = plKnow.find((x) => x.id === $("#plOlKnow").value);
-        if (k) { knowledge = k.content || ""; websiteName = k.website || ""; }
+        if (k) { knowledge = htmlToReadable(k.content || ""); websiteName = k.website || ""; }
       }
       const rg = await _fetch("/api/outline/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mainKw: kw, subKws: [], competitors: comps, knowledge, websiteName, engine, model, apiKey }) });
       const dg = await rg.json();
