@@ -284,6 +284,13 @@ mark.inc-mark.flash{animation:incFlash 1.4s ease}
 .it-grid9 button.on{background:var(--c-blue);border-color:var(--c-blue)}
 .it-note{font-size:.82rem;color:var(--muted)}
 
+/* ===== TỐI ƯU GBP ===== */
+.gbppane{display:none}
+.gbppane.active{display:block}
+.gbp-out{border:1px solid var(--line);border-radius:11px;padding:12px 14px;margin-top:10px;background:#fff}
+.gbp-out .flexbar{margin-bottom:8px}
+.gbp-text{white-space:pre-wrap;line-height:1.6;font-size:14px;color:var(--ink);background:#fbfcff;border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+
 /* ===== TRINH SOAN RICH TEXT (kien thuc) ===== */
 .rte{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
 .rte-bar{display:flex;flex-wrap:wrap;gap:2px;padding:6px 8px;border-bottom:1px solid var(--line);background:#fbfcff}

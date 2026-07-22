@@ -15,6 +15,8 @@ import { auditUrl, benchmark } from "./src/onpage.js";
 import { fetchSerp, serpConfigured } from "./src/serp.js";
 import { serperIndex, serperRank, serperWeb, serperCheck } from "./src/serper.js";
 import { FACTCHECK_SYSTEM, CLAIMS_SCHEMA, buildClaimsPrompt, VERIFY_SCHEMA, buildVerifyPrompt, VN_SOURCES, INTL_SOURCES, sourceRank } from "./src/factcheck-prompt.js";
+import { GBP_SYSTEM, GBP_SCHEMAS, buildGbpPrompt } from "./src/gbp-prompt.js";
+import { readMapLink } from "./src/gmaps.js";
 import { fetchOgMeta } from "./src/sharekit.js";
 import { telegraphPublish, telegramPost } from "./src/autopost.js";
 import { slugify, mdToHtml, pollinationsImage, insertImage, postWordPress, postDevto, postHashnode } from "./src/blog2.js";
@@ -1080,6 +1082,77 @@ app.post("/api/onpage/factcheck", requireAuth, async (req, res) => {
     });
   } catch (e) {
     res.status(500).json({ error: e.message || String(e) });
+  }
+});
+
+// ===================== GBP (GOOGLE BUSINESS PROFILE) =====================
+// AI GBP: chay engine gemini/claude voi prompt+schema theo tung loai; ho tro anh (Vision) cho Gemini.
+async function gbpAI({ engine, key, model, user, schema, maxTokens, image }) {
+  const eng = (engine || "").toLowerCase();
+  if (eng === "gemini") {
+    const gKey = (key || process.env.GEMINI_API_KEY || "").trim();
+    if (!gKey) throw new Error("Chưa có Gemini API key.");
+    const gModel = (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim();
+    const r = await geminiWithFallback((m) => geminiJson({ apiKey: gKey, model: m, system: GBP_SYSTEM, user, schema, maxTokens, image }), gModel);
+    return { data: r.result, engineUsed: `Gemini (${r.model})${r.switched ? " — tự chuyển" : ""}` };
+  }
+  if (eng === "claude") {
+    const cKey = (key || process.env.ANTHROPIC_API_KEY || "").trim();
+    if (!cKey) throw new Error("Chưa có Anthropic API key.");
+    const cModel = (model || process.env.SEOSHARK_MODEL || "claude-sonnet-4-6").trim();
+    const data = await claudeJson({ apiKey: cKey, model: cModel, system: GBP_SYSTEM, user, schema, maxTokens });
+    return { data, engineUsed: `Claude (${cModel})` };
+  }
+  throw new Error("Cần engine Gemini/Claude.");
+}
+
+// Doc thong tin co ban tu link Google Maps rut gon
+app.post("/api/gbp/maps", requireAuth, async (req, res) => {
+  try {
+    const info = await readMapLink((req.body || {}).url);
+    res.json({ ok: true, info });
+  } catch (e) { res.status(400).json({ error: e.message || "Không đọc được link map." }); }
+});
+
+// Tao noi dung GBP theo loai (name|business|post|service|image|review)
+app.post("/api/gbp/generate", requireAuth, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const kind = String(b.kind || "");
+    if (!GBP_SCHEMAS[kind]) return res.status(400).json({ error: "Loại nội dung GBP không hợp lệ." });
+    const { engine, model, apiKey } = b;
+    if (engine !== "gemini" && engine !== "claude") return res.status(400).json({ error: "Cần bật engine Gemini/Claude ở ⚙️ để tạo nội dung GBP." });
+
+    // Post/Service: doc noi dung trang dich de viet dung
+    let pageContent = "";
+    if ((kind === "post" || kind === "service") && b.url && /^https?:\/\//i.test(b.url)) {
+      try { const art = await extractArticle(b.url); pageContent = art.beforeMarkdown || ""; } catch { pageContent = ""; }
+    }
+    const data = {
+      brand: String(b.brand || "").slice(0, 200), branch: String(b.branch || "").slice(0, 200),
+      mapInfo: b.mapInfo && typeof b.mapInfo === "object" ? b.mapInfo : null,
+      knowledge: String(b.knowledge || "").slice(0, 20000),
+      desiredName: String(b.desiredName || ""), url: String(b.url || ""), keyword: String(b.keyword || ""),
+      postType: String(b.postType || "update"), context: String(b.context || ""),
+      review: String(b.review || ""), reviewer: String(b.reviewer || ""), rating: b.rating,
+      avoid: String(b.avoid || ""), pageContent, hasImage: !!(b.image && b.image.data),
+    };
+    const { user, maxTokens } = buildGbpPrompt(kind, data);
+    let image = null;
+    if (kind === "image" && engine === "gemini" && b.image && b.image.data) image = { mimeType: b.image.mimeType || "image/jpeg", data: b.image.data };
+
+    const { data: out, engineUsed } = await gbpAI({ engine, key: apiKey, model, user, schema: GBP_SCHEMAS[kind], maxTokens, image });
+
+    // Dem ky tu (code point, chiu duoc emoji) cho cac loai co gioi han
+    const cc = (s) => [...String(s || "")].length;
+    const meta = {};
+    if (kind === "business") meta.chars = cc(out.text);
+    if (kind === "service") meta.chars = cc(out.text);
+    if (kind === "post") meta.chars = cc(out.content);
+    res.json({ kind, ...out, meta, engineUsed });
+  } catch (e) {
+    if (e.message === "local") return res.status(400).json({ error: "Cần engine Gemini/Claude." });
+    res.status(400).json({ error: "AI lỗi: " + (e.message || "?") });
   }
 });
 

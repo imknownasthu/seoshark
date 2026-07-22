@@ -92,12 +92,15 @@ function toGeminiSchema(s) {
 }
 
 // Goi Gemini tra ve JSON theo schema (dung cho On-page va cac tac vu khac)
-export async function geminiJson({ apiKey, model, system, user, schema, maxTokens = 16384, timeout = 60000 }) {
+export async function geminiJson({ apiKey, model, system, user, schema, maxTokens = 16384, timeout = 60000, image = null }) {
   const mdl = model || "gemini-3.5-flash";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${mdl}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const parts = [{ text: user }];
+  // Gemini multimodal: dinh kem anh (Vision) neu co -> dung cho mo ta hinh anh GBP
+  if (image && image.data) parts.push({ inlineData: { mimeType: image.mimeType || "image/jpeg", data: image.data } });
   const body = {
     systemInstruction: { parts: [{ text: system }] },
-    contents: [{ role: "user", parts: [{ text: user }] }],
+    contents: [{ role: "user", parts }],
     generationConfig: {
       temperature: 0.4,
       maxOutputTokens: maxTokens,

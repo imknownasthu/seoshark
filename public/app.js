@@ -84,10 +84,10 @@ function showSection(section, title) {
   if (el) el.classList.add("active");
   $("#sectionTitle").textContent = title;
 }
-const SECTION_TITLES = { "dashboard": "Bảng điều khiển", "internal-link": "Tối ưu Internal link", "onpage": "Tối ưu Onpage", "serp": "Check Index & Thứ hạng", "share": "Tự động Share Link", "blog2": "Tự động đăng Blog 2.0", "keywords": "Nghiên cứu từ khóa", "outline": "Lên outline chuẩn SEO", "schema": "Schema Markup" };
+const SECTION_TITLES = { "dashboard": "Bảng điều khiển", "internal-link": "Tối ưu Internal link", "onpage": "Tối ưu Onpage", "serp": "Check Index & Thứ hạng", "share": "Tự động Share Link", "blog2": "Tự động đăng Blog 2.0", "keywords": "Nghiên cứu từ khóa", "outline": "Lên outline chuẩn SEO", "schema": "Schema Markup", "gbp": "Tối ưu GBP" };
 // Cac section co the mo bang URL hash (moi menu-item la 1 link #section) -> Ctrl+Click mo tab moi,
 // moi tab dung doc lap (phien la cookie stateless nen tab moi van dang nhap).
-const VALID_SECTIONS = new Set(["dashboard", "outline", "internal-link", "keywords", "onpage", "serp", "schema"]);
+const VALID_SECTIONS = new Set(["dashboard", "outline", "internal-link", "keywords", "onpage", "serp", "schema", "gbp"]);
 function setActiveMenu(sec) { $$("#menu .menu-item").forEach((x) => x.classList.toggle("active", x.dataset.section === sec)); }
 let _opKnowLoadedForOnpage = false;
 function routeToSection(sec) {

@@ -119,6 +119,10 @@
           <svg class="ic" viewBox="0 0 24 24"><path d="M4 7l8-4 8 4-8 4-8-4Z"/><path d="M4 12l8 4 8-4"/><path d="M4 17l8 4 8-4"/></svg>
           Schema Markup
         </a>
+        <a class="menu-item" href="#gbp" data-section="gbp">
+          <svg class="ic" viewBox="0 0 24 24"><path d="M12 21s-6-5.3-6-10a6 6 0 0 1 12 0c0 4.7-6 10-6 10z"/><circle cx="12" cy="11" r="2.2"/></svg>
+          Tối ưu GBP
+        </a>
 
         <div class="menu-label">Sắp ra mắt</div>
         <div class="menu-item disabled" data-section="soon" data-name="Tự động Share Link">
@@ -1382,6 +1386,110 @@
         </div>
       </div>
 
+      <!-- ===== SECTION: TỐI ƯU GBP (GOOGLE BUSINESS PROFILE) ===== -->
+      <div class="section page" data-section="gbp">
+        <section class="card">
+          <h2>1. Thông tin doanh nghiệp <span class="muted" style="font-weight:400;font-size:.8em">(để AI cá nhân hóa)</span></h2>
+          <p class="hint">Nhập thương hiệu, chi nhánh, link Google Maps &amp; chọn tài liệu kiến thức để AI viết đúng thông tin. Cần bật engine <b>Gemini/Claude</b> ở ⚙️.</p>
+          <div class="grid cols-2">
+            <div><label>Thương hiệu *</label><input id="gbpBrand" type="text" placeholder="VD: Nha khoa Shark" /></div>
+            <div><label>Chi nhánh</label><input id="gbpBranch" type="text" placeholder="VD: Chi nhánh Đà Nẵng" /></div>
+          </div>
+          <div style="margin-top:12px">
+            <label>Link Google Maps <span class="muted" style="font-weight:400">(để đọc thông tin địa điểm)</span></label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <input id="gbpMapUrl" type="text" placeholder="https://maps.app.goo.gl/..." style="flex:1;min-width:220px" />
+              <button class="ghost small" id="gbpMapRead" type="button">Đọc map</button>
+            </div>
+            <span class="muted" id="gbpMapMsg" style="font-size:.82rem"></span>
+          </div>
+          <div id="gbpMapInfo" class="hidden" style="margin-top:10px;padding:12px;border:1px dashed var(--line);border-radius:10px;background:#fbfcff">
+            <div class="muted" style="font-size:.8rem;margin-bottom:6px">Thông tin đọc được (xem lại &amp; bổ sung nếu thiếu):</div>
+            <div class="grid cols-2">
+              <div><label>Tên trên map</label><input id="gbpMname" type="text" /></div>
+              <div><label>Danh mục</label><input id="gbpCat" type="text" placeholder="VD: Phòng khám nha khoa" /></div>
+              <div><label>Địa chỉ</label><input id="gbpAddr" type="text" placeholder="Số nhà, đường, phường..." /></div>
+              <div><label>Khu vực</label><input id="gbpArea" type="text" placeholder="VD: Thanh Khê, Đà Nẵng" /></div>
+            </div>
+          </div>
+          <div style="margin-top:12px">
+            <label>Tài liệu kiến thức đã lưu <span class="muted" style="font-weight:400">(dùng chung với "Lên outline")</span></label>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+              <select id="gbpKnowSelect" style="flex:1;min-width:220px"><option value="">— Không dùng —</option></select>
+              <button class="ghost small" id="gbpKnowReload" type="button" title="Nạp lại">↻</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>2. Chọn nội dung cần tối ưu</h2>
+          <div class="tabs subtabs" id="gbpTabs" style="flex-wrap:wrap">
+            <div class="tab active" data-gbp="name">Tên doanh nghiệp</div>
+            <div class="tab" data-gbp="business">Mô tả doanh nghiệp</div>
+            <div class="tab" data-gbp="post">Mô tả bài đăng</div>
+            <div class="tab" data-gbp="service">Mô tả dịch vụ</div>
+            <div class="tab" data-gbp="image">Mô tả hình ảnh</div>
+            <div class="tab" data-gbp="review">Trả lời đánh giá</div>
+          </div>
+
+          <div class="gbppane active" data-gbppane="name">
+            <p class="hint">Nhập tên mong muốn, AI đánh giá theo chuẩn GBP (cảnh báo nếu nhồi từ khóa) &amp; gợi ý biến thể hợp lệ.</p>
+            <label>Tên doanh nghiệp mong muốn *</label>
+            <input id="gbpDesiredName" type="text" placeholder="Tên bạn muốn dùng trên GBP" />
+            <div style="margin-top:12px"><button data-gbpgen="name">Đánh giá &amp; gợi ý tên</button></div>
+          </div>
+
+          <div class="gbppane" data-gbppane="business">
+            <p class="hint">AI tự đề xuất mô tả doanh nghiệp chuẩn GBP (600–750 ký tự). Bấm lại để có bản khác (không trùng bản trước).</p>
+            <div><button data-gbpgen="business">Đề xuất mô tả doanh nghiệp</button></div>
+          </div>
+
+          <div class="gbppane" data-gbppane="post">
+            <p class="hint">AI đọc trang đích + tài liệu để viết bài đăng chuẩn GBP (≤1500 ký tự, không số điện thoại).</p>
+            <div class="grid cols-2">
+              <div><label>Loại bài</label><select id="gbpPostType"><option value="update">Cập nhật</option><option value="offer">Ưu đãi</option><option value="event">Sự kiện</option></select></div>
+              <div><label>Từ khóa / chủ đề *</label><input id="gbpPostKw" type="text" placeholder="VD: niềng răng trong suốt" /></div>
+            </div>
+            <div style="margin-top:12px"><label>URL đích (bài viết / trang dịch vụ để nút CTA trỏ về)</label><input id="gbpPostUrl" type="text" placeholder="https://..." /></div>
+            <div style="margin-top:12px"><button data-gbpgen="post">Viết bài đăng</button></div>
+          </div>
+
+          <div class="gbppane" data-gbppane="service">
+            <p class="hint">Mô tả dịch vụ chuẩn GBP (≤300 ký tự, có nhắc thương hiệu). AI đọc trang dịch vụ để viết đúng.</p>
+            <div><label>Dịch vụ / từ khóa *</label><input id="gbpSvcKw" type="text" placeholder="VD: bọc răng sứ" /></div>
+            <div style="margin-top:12px"><label>URL trang dịch vụ</label><input id="gbpSvcUrl" type="text" placeholder="https://..." /></div>
+            <div style="margin-top:12px"><button data-gbpgen="service">Viết mô tả dịch vụ</button></div>
+          </div>
+
+          <div class="gbppane" data-gbppane="image">
+            <p class="hint">Gõ ngữ cảnh HOẶC tải ảnh để Gemini "nhìn" và viết caption + alt + tên file chuẩn SEO.</p>
+            <div class="grid cols-2">
+              <div><label>Ngữ cảnh / nội dung ảnh</label><input id="gbpImgCtx" type="text" placeholder="VD: bác sĩ đang tư vấn cho khách" /></div>
+              <div><label>Từ khóa</label><input id="gbpImgKw" type="text" placeholder="VD: niềng răng Đà Nẵng" /></div>
+            </div>
+            <div style="margin-top:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+              <label class="ghost small" style="cursor:pointer;display:inline-flex;gap:6px;margin:0">Tải ảnh (Gemini nhìn)<input id="gbpImgFile" type="file" accept="image/*" style="display:none" /></label>
+              <img id="gbpImgPrev" class="hidden" style="height:52px;border-radius:8px;border:1px solid var(--line)" />
+              <span class="muted" id="gbpImgMsg" style="font-size:.82rem"></span>
+            </div>
+            <div style="margin-top:12px"><button data-gbpgen="image">Viết mô tả ảnh</button></div>
+          </div>
+
+          <div class="gbppane" data-gbppane="review">
+            <p class="hint">Dán đánh giá của khách (tích cực/tiêu cực), AI tự phân tích cảm xúc &amp; viết phản hồi phù hợp.</p>
+            <div class="grid cols-2">
+              <div><label>Tên người đánh giá</label><input id="gbpRevName" type="text" placeholder="(tùy chọn)" /></div>
+              <div><label>Số sao</label><select id="gbpRevRating"><option value="">—</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></div>
+            </div>
+            <div style="margin-top:12px"><label>Nội dung đánh giá *</label><textarea id="gbpRevText" rows="4" placeholder="Dán nguyên văn đánh giá của khách..."></textarea></div>
+            <div style="margin-top:12px"><button data-gbpgen="review">Phân tích &amp; viết phản hồi</button></div>
+          </div>
+
+          <div id="gbpMsg" style="margin-top:14px"></div>
+          <div id="gbpResult" style="margin-top:12px"></div>
+        </section>
+      </div>
+
       <!-- ===== SECTION: SCHEMA MARKUP ===== -->
       <div class="section page" data-section="schema">
         <section class="card">
@@ -1461,5 +1569,6 @@
   <script src="app.js"></script>
   <script src="schema.js"></script>
   <script src="imgtools.js"></script>
+  <script src="gbp.js"></script>
 </body>
 </html>
