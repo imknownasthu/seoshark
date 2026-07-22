@@ -1106,6 +1106,27 @@ async function gbpAI({ engine, key, model, user, schema, maxTokens, image }) {
   throw new Error("Cần engine Gemini/Claude.");
 }
 
+// Ep gioi han ky tu (business 750, service 300...): neu vuot -> AI rut gon 1 lan, cuoi cung cat theo cau.
+const _cp = (s) => [...String(s || "")];
+function trimToLimit(s, max) {
+  const arr = _cp(s); if (arr.length <= max) return s;
+  let t = arr.slice(0, max).join("");
+  const cut = Math.max(t.lastIndexOf(". "), t.lastIndexOf("! "), t.lastIndexOf("? "), t.lastIndexOf(". ".trim()), t.lastIndexOf("\n"));
+  if (cut > max * 0.6) t = t.slice(0, cut + 1);
+  return t.trim();
+}
+async function shrinkText(text, min, max, engine, key, model) {
+  if (_cp(text).length <= max) return text;
+  try {
+    const user = `Viết lại đoạn văn sau NGẮN GỌN hơn để còn TỐI ĐA ${max} ký tự${min ? ` (mục tiêu ${min}-${max})` : ""}, đếm cả khoảng trắng, GIỮ ý chính & đúng chuẩn GBP, KHÔNG dùng dấu gạch ngang, KHÔNG thêm URL/số điện thoại:\n"""${text}"""`;
+    const { data } = await gbpAI({ engine, key, model, user, schema: { type: "object", properties: { text: { type: "string" } }, required: ["text"] }, maxTokens: 1024 });
+    const t = String((data && data.text) || "").trim();
+    if (t && _cp(t).length <= max) return t;
+    if (t) text = t;
+  } catch { /* giu ban goc neu retry loi */ }
+  return trimToLimit(text, max);
+}
+
 // Doc thong tin co ban tu link Google Maps rut gon
 app.post("/api/gbp/maps", requireAuth, async (req, res) => {
   try {
@@ -1143,12 +1164,12 @@ app.post("/api/gbp/generate", requireAuth, async (req, res) => {
 
     const { data: out, engineUsed } = await gbpAI({ engine, key: apiKey, model, user, schema: GBP_SCHEMAS[kind], maxTokens, image });
 
-    // Dem ky tu (code point, chiu duoc emoji) cho cac loai co gioi han
+    // Ep gioi han ky tu roi dem (code point, chiu duoc emoji)
     const cc = (s) => [...String(s || "")].length;
     const meta = {};
-    if (kind === "business") meta.chars = cc(out.text);
-    if (kind === "service") meta.chars = cc(out.text);
-    if (kind === "post") meta.chars = cc(out.content);
+    if (kind === "business") { out.text = await shrinkText(out.text, 600, 750, engine, apiKey, model); meta.chars = cc(out.text); }
+    else if (kind === "service") { out.text = await shrinkText(out.text, 0, 300, engine, apiKey, model); meta.chars = cc(out.text); }
+    else if (kind === "post") { out.content = await shrinkText(out.content, 0, 1500, engine, apiKey, model); meta.chars = cc(out.content); }
     res.json({ kind, ...out, meta, engineUsed });
   } catch (e) {
     if (e.message === "local") return res.status(400).json({ error: "Cần engine Gemini/Claude." });

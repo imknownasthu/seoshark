@@ -90,7 +90,7 @@ export function buildGbpPrompt(kind, data) {
       user: [
         ctx, uniq,
         "NHIỆM VỤ: Viết MÔ TẢ DOANH NGHIỆP cho GBP (Business Description).",
-        "CHUẨN GBP: 600-750 ký tự (cả khoảng trắng). Cấu trúc: [Tên DN] là [dịch vụ chính] tại [địa điểm cụ thể]. Chuyên về [thế mạnh]. [USP/điểm khác biệt]. [CTA lời mời, KHÔNG kèm số điện thoại/URL].",
+        "CHUẨN GBP: 600-750 ký tự (cả khoảng trắng). ⛔ TUYỆT ĐỐI KHÔNG vượt 750 ký tự — TỰ ĐẾM và rút gọn TRƯỚC khi trả về; thà 700 ký tự đủ ý còn hơn 800 ký tự bị cắt. Cấu trúc: [Tên DN] là [dịch vụ chính] tại [địa điểm cụ thể]. Chuyên về [thế mạnh]. [USP/điểm khác biệt]. [CTA lời mời, KHÔNG kèm số điện thoại/URL].",
         "- Từ khóa địa phương (tên quận/thành phố cụ thể) phải xuất hiện tự nhiên trong 250 ký tự đầu.",
         "- KHÔNG chèn URL, KHÔNG nhồi từ khóa, KHÔNG nhắc giá/khuyến mãi.",
         "- Đây là phần TỰ ĐỀ XUẤT: viết 1 bản mới hoàn chỉnh, khác các bản trước.",
