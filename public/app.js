@@ -368,6 +368,31 @@ function alertHtml(type, msg) {
 function esc(s) {
   return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
+
+// ===== KHO KIẾN THỨC DÙNG CHUNG (mọi tính năng) =====
+// Nhập/lưu 1 lần ở bất kỳ tính năng nào -> dùng được ở TẤT CẢ. Mọi dropdown tự đồng bộ.
+window.KB = {
+  items: [],
+  _selects: [],
+  _defLabel(k) { return (k.website ? k.website + " · " : "") + (k.title || "Kiến thức"); },
+  registerSelect(el, labeler) {
+    if (!el || this._selects.some((s) => s.el === el)) return;
+    const s = { el, labeler: labeler || this._defLabel };
+    this._selects.push(s); this._fill(s);
+  },
+  _fill(s) {
+    const cur = s.el.value;
+    s.el.innerHTML = `<option value="">— Không dùng —</option>` + this.items.map((k) => `<option value="${esc(k.id)}">${esc(s.labeler(k))}</option>`).join("");
+    if (cur && this.items.some((k) => k.id === cur)) s.el.value = cur;
+  },
+  fillAll() { this._selects = this._selects.filter((s) => s.el && s.el.isConnected); this._selects.forEach((s) => this._fill(s)); },
+  get(id) { return this.items.find((k) => k.id === id); },
+  async load() {
+    try { const r = await fetch("/api/knowledge/list"); const d = await r.json(); this.items = Array.isArray(d.items) ? d.items : []; this.fillAll(); }
+    catch { /* giữ danh sách cũ nếu lỗi mạng */ }
+    return this.items;
+  },
+};
 // Badge ưu tiên: Cao = đỏ nhạt (sapo), Trung bình = xanh (ok), Thấp = xám (ket). Chịu có/không dấu.
 function priorityBadge(p) {
   const s = String(p || "").toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
@@ -860,6 +885,7 @@ function applyUser(user) {
   }
   isAuthed = true;
   checkEngineConn();
+  if (window.KB) KB.load(); // nạp kho kiến thức chung -> mọi dropdown ở mọi tính năng tự đồng bộ
 }
 
 async function checkAuth() {
@@ -1587,21 +1613,12 @@ $("#opSelectAll").addEventListener("change", (e) => {
 });
 
 /* ---------- Onpage: Kiến thức website + Skill (chỉ dùng khi 'Tối ưu toàn bộ bài') ---------- */
-let opKnowList = [], opSkillList = [], opExtrasLoaded = false;
+let opSkillList = [], opExtrasLoaded = false;
 function opSetWsMsg(m, t) { const el = $("#opWsMsg"); if (el) el.innerHTML = m ? `<span style="color:${t === "err" ? "#c0392b" : "var(--green,#2e9e6b)"}">${esc(m)}</span>` : ""; }
-function fillKnowSelect(sel) {
-  if (!sel) return;
-  const cur = sel.value;
-  sel.innerHTML = `<option value="">— Không dùng —</option>` + opKnowList.map((k) => `<option value="${esc(k.id)}">${esc((k.website ? k.website + " · " : "") + (k.title || "Kiến thức"))}</option>`).join("");
-  if (cur && opKnowList.some((k) => k.id === cur)) sel.value = cur;
-}
-async function opLoadKnow() {
-  try {
-    const r = await fetch("/api/knowledge/list"); const d = await r.json(); opKnowList = d.items || [];
-    fillKnowSelect($("#opKnowSelect"));
-    fillKnowSelect($("#opHeadKnowSelect")); // select cho buoc Toi uu heading
-  } catch {}
-}
+// 2 select kiến thức của Onpage lấy từ KHO CHUNG (đồng bộ với Lên outline/GBP)
+KB.registerSelect($("#opKnowSelect"));
+KB.registerSelect($("#opHeadKnowSelect"));
+async function opLoadKnow() { await KB.load(); }
 // Chuyen kien thuc HTML (rich text) -> text de doc de cho AI. Chiu duoc ca text thuong (khong the).
 function htmlToReadable(s) {
   s = String(s || "");
@@ -1624,7 +1641,7 @@ function htmlToReadable(s) {
   return lines.join(" ").replace(/\n\s+/g, "\n").replace(/\n{3,}/g, "\n\n").replace(/[ \t]{2,}/g, " ").trim();
 }
 function opHeadResolveKnowledge() {
-  const k = opKnowList.find((x) => x.id === (($("#opHeadKnowSelect") || {}).value || ""));
+  const k = KB.get((($("#opHeadKnowSelect") || {}).value || ""));
   return k ? htmlToReadable(k.content || "") : "";
 }
 // Bien 1 <textarea> thanh trinh soan RICH TEXT (giu textarea an lam noi luu .value = HTML).
@@ -1718,7 +1735,7 @@ opToggleFullExtras();
 function opResolveKnowledge() {
   const typed = ($("#opKnowContent").value || "").trim();
   if (typed && !$("#opKnowEditor").classList.contains("hidden")) return typed;
-  const k = opKnowList.find((x) => x.id === $("#opKnowSelect").value);
+  const k = KB.get($("#opKnowSelect").value);
   return k ? htmlToReadable(k.content || "") : "";
 }
 function opResolveSkill() {
@@ -1739,9 +1756,9 @@ async function opReadDocFile(f, allowXlsx, asHtml) {
   throw new Error(allowXlsx ? "Chỉ .docx/.xlsx" : "Chỉ .docx/.txt");
 }
 // Knowledge editor
-$("#opKnowNew").addEventListener("click", () => { const ed = $("#opKnowEditor"); ed.classList.toggle("hidden"); const k = opKnowList.find((x) => x.id === $("#opKnowSelect").value); if (!ed.classList.contains("hidden") && k) { $("#opKnowTitle").value = k.title || ""; $("#opKnowContent").value = k.content || ""; } });
+$("#opKnowNew").addEventListener("click", () => { const ed = $("#opKnowEditor"); ed.classList.toggle("hidden"); const k = KB.get($("#opKnowSelect").value); if (!ed.classList.contains("hidden") && k) { $("#opKnowTitle").value = k.title || ""; $("#opKnowContent").value = k.content || ""; } });
 $("#opKnowFile").addEventListener("change", async (e) => { const f = e.target.files[0]; if (!f) return; $("#opKnowFileMsg").textContent = "Đang đọc..."; try { const html = await opReadDocFile(f, true, true); const box = $("#opKnowContent"); const cur = box.value; box.value = (cur ? cur : "") + html; if (!$("#opKnowTitle").value.trim()) $("#opKnowTitle").value = f.name.replace(/\.(docx|xlsx?)$/i, ""); $("#opKnowFileMsg").textContent = `✓ Đã nạp nội dung từ ${esc(f.name)} (giữ định dạng)`; } catch (err) { $("#opKnowFileMsg").textContent = "Lỗi: " + (err.message || err); } finally { e.target.value = ""; } });
-$("#opKnowSave").addEventListener("click", async () => { const content = $("#opKnowContent").value.trim(); if (!content) return toast("Nội dung kiến thức trống."); const editingId = opKnowList.find((x) => x.id === $("#opKnowSelect").value) ? $("#opKnowSelect").value : ""; const btn = $("#opKnowSave"); busy(btn, true, "Đang lưu..."); try { const r = await fetch("/api/knowledge/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: editingId, website: "", title: $("#opKnowTitle").value.trim(), content }) }); const d = await r.json(); if (!r.ok) throw new Error(d.error || "Lưu lỗi"); await opLoadKnow(); $("#opKnowSelect").value = d.id; $("#opKnowEditor").classList.add("hidden"); toast("Đã lưu kiến thức."); } catch (e) { toast("❌ " + e.message); } finally { busy(btn, false); } });
+$("#opKnowSave").addEventListener("click", async () => { const content = $("#opKnowContent").value.trim(); if (!content) return toast("Nội dung kiến thức trống."); const editingId = KB.get($("#opKnowSelect").value) ? $("#opKnowSelect").value : ""; const btn = $("#opKnowSave"); busy(btn, true, "Đang lưu..."); try { const r = await fetch("/api/knowledge/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: editingId, website: "", title: $("#opKnowTitle").value.trim(), content }) }); const d = await r.json(); if (!r.ok) throw new Error(d.error || "Lưu lỗi"); await opLoadKnow(); $("#opKnowSelect").value = d.id; $("#opKnowEditor").classList.add("hidden"); toast("Đã lưu kiến thức."); } catch (e) { toast("❌ " + e.message); } finally { busy(btn, false); } });
 // Skill editor
 $("#opWsNew").addEventListener("click", () => { const ed = $("#opWsEditor"); ed.classList.toggle("hidden"); const k = opSkillList.find((x) => x.id === $("#opWsSelect").value); if (!ed.classList.contains("hidden") && k) { $("#opWsTitle").value = k.title || ""; $("#opWsContent").value = k.content || ""; } });
 $("#opWsFile").addEventListener("change", async (e) => { const f = e.target.files[0]; if (!f) return; $("#opWsFileMsg").textContent = "Đang đọc..."; try { const text = await opReadDocFile(f, false); const box = $("#opWsContent"); box.value = (box.value.trim() ? box.value.trim() + "\n\n" : "") + text.trim(); if (!$("#opWsTitle").value.trim()) $("#opWsTitle").value = f.name.replace(/\.(docx|txt)$/i, ""); $("#opWsFileMsg").textContent = `✓ Đã nạp ${text.trim().length.toLocaleString("vi")} ký tự`; } catch (err) { $("#opWsFileMsg").textContent = "Lỗi: " + (err.message || err); } finally { e.target.value = ""; } });
@@ -2739,19 +2756,9 @@ $("#opClearSkill").addEventListener("click", () => {
   }));
 
   // --- Kho kiến thức ---
-  async function loadKnowledge() {
-    try {
-      const r = await _fetch("/api/knowledge/list");
-      if (!r.ok) return;
-      const d = await r.json();
-      knowledge = d.items || [];
-      const sel = $("#olKnowSelect");
-      const cur = sel.value;
-      sel.innerHTML = `<option value="">— Không dùng —</option>` +
-        knowledge.map((k) => `<option value="${esc(k.id)}">${esc((k.website ? k.website + " · " : "") + (k.title || "Kiến thức"))}</option>`).join("");
-      if (cur && knowledge.some((k) => k.id === cur)) sel.value = cur;
-    } catch {}
-  }
+  // Kiến thức dùng KHO CHUNG KB (đồng bộ với Onpage/GBP)
+  KB.registerSelect($("#olKnowSelect"));
+  async function loadKnowledge() { await KB.load(); }
   // Nạp thư viện lần đầu khi mở tab
   let knowLoaded = false;
   $$('#menu .menu-item').forEach((mi) => mi.addEventListener("click", () => {
@@ -2762,11 +2769,10 @@ $("#opClearSkill").addEventListener("click", () => {
     const ed = $("#olKnowEditor");
     ed.classList.toggle("hidden");
     // Nếu đang chọn 1 mục -> nạp để sửa
-    const k = knowledge.find((x) => x.id === $("#olKnowSelect").value);
+    const k = KB.get($("#olKnowSelect").value);
     if (!ed.classList.contains("hidden") && k) {
       $("#olKnowTitle").value = k.title || "";
       $("#olKnowContent").value = k.content || "";
-      if (k.website && !$("#olWebsite").value.trim()) $("#olWebsite").value = k.website;
     }
   });
 
@@ -2810,8 +2816,8 @@ $("#opClearSkill").addEventListener("click", () => {
   $("#olKnowSave").addEventListener("click", async () => {
     const content = $("#olKnowContent").value.trim();
     if (!content) return setMsg("#olKnowMsg", "err", "❌ Nội dung kiến thức đang trống.");
-    const editingId = knowledge.find((x) => x.id === $("#olKnowSelect").value) ? $("#olKnowSelect").value : "";
-    const payload = { id: editingId, website: $("#olWebsite").value.trim(), title: $("#olKnowTitle").value.trim(), content };
+    const editingId = KB.get($("#olKnowSelect").value) ? $("#olKnowSelect").value : "";
+    const payload = { id: editingId, website: (KB.get(editingId) || {}).website || "", title: $("#olKnowTitle").value.trim(), content };
     const btn = $("#olKnowSave"); busy(btn, true, "Đang lưu...");
     try {
       const r = await _fetch("/api/knowledge/save", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -2935,8 +2941,8 @@ $("#opClearSkill").addEventListener("click", () => {
     if (!competitors.some((c) => (c.headings || []).length)) return setMsg("#olGenMsg", "err", "❌ Chưa có outline đối thủ hợp lệ.");
     const subKws = splitList($("#olSubKws").value);
     const refOutline = $("#olRefOutline").value.trim();
-    const websiteName = $("#olWebsite").value.trim();
-    const know = knowledge.find((x) => x.id === $("#olKnowSelect").value);
+    const know = KB.get($("#olKnowSelect").value);
+    const websiteName = (know && know.website) || ""; // lấy từ tài liệu kiến thức, không cần nhập riêng
     const knowledgeText = know ? htmlToReadable(know.content || "") : "";
     const engine = $("#engine").value, model = $("#model").value, apiKey = $("#apiKey").value.trim();
     const btn = $("#olGenerate"); busy(btn, true, "Đang tạo outline...");
@@ -3001,13 +3007,13 @@ $("#opClearSkill").addEventListener("click", () => {
 
   $("#olUniqueRun").addEventListener("click", async () => {
     if (!lastOutline.length) return setMsg("#olUniqueMsg", "err", "❌ Chưa có outline.");
-    const know = knowledge.find((x) => x.id === $("#olKnowSelect").value);
+    const know = KB.get($("#olKnowSelect").value);
     if (!know || !(know.content || "").trim()) return setMsg("#olUniqueMsg", "err", "❌ Hãy chọn một tài liệu kiến thức (ở mục 2) trước.");
     const engine = $("#engine").value, model = $("#model").value, apiKey = $("#apiKey").value.trim();
     if (engine !== "gemini" && engine !== "claude") return setMsg("#olUniqueMsg", "err", "❌ Cần bật engine Gemini/Claude ở ⚙️ cho gợi ý unique.");
     const mainKw = $("#olMainKw").value.trim();
     const subKws = splitList($("#olSubKws").value);
-    const websiteName = $("#olWebsite").value.trim();
+    const websiteName = (know && know.website) || "";
     const btn = $("#olUniqueRun"); busy(btn, true, "Đang gợi ý...");
     setMsg("#olUniqueMsg", "info", '<span class="spinner" style="border-top-color:transparent"></span>AI đang chắt lọc kiến thức & gợi ý (~15s)...');
     $("#olUniqueList").innerHTML = "";
@@ -3411,20 +3417,9 @@ $("#opClearSkill").addEventListener("click", () => {
   /* ---------- Outline nội tuyến cho 1 từ khóa gợi ý ---------- */
   let olKw = "", olOutline = [];
   // Kiến thức website (dùng chung thư viện /api/knowledge với tab Lên outline)
-  let plKnow = [], plKnowLoaded = false;
-  async function loadPlKnow() {
-    try {
-      const r = await _fetch("/api/knowledge/list");
-      if (!r.ok) return;
-      const d = await r.json();
-      plKnow = d.items || [];
-      const sel = $("#plOlKnow"); if (!sel) return;
-      const cur = sel.value;
-      sel.innerHTML = `<option value="">— Không dùng —</option>` +
-        plKnow.map((k) => `<option value="${esc(k.id)}">${esc((k.website ? k.website + " · " : "") + (k.title || "Kiến thức"))}</option>`).join("");
-      if (cur && plKnow.some((k) => k.id === cur)) sel.value = cur;
-    } catch {}
-  }
+  let plKnowLoaded = false;
+  if ($("#plOlKnow")) KB.registerSelect($("#plOlKnow"));
+  async function loadPlKnow() { await KB.load(); }
   function openOutline(kw) {
     olKw = kw; olOutline = [];
     $("#plOlKw").textContent = kw;
@@ -3436,7 +3431,7 @@ $("#opClearSkill").addEventListener("click", () => {
   $("#plOlClose").addEventListener("click", () => $("#plOutlinePanel").classList.add("hidden"));
   $("#plOlKnowNew").addEventListener("click", () => {
     const ed = $("#plOlKnowEditor"); ed.classList.toggle("hidden");
-    const k = plKnow.find((x) => x.id === $("#plOlKnow").value);
+    const k = KB.get($("#plOlKnow").value);
     if (!ed.classList.contains("hidden") && k) { $("#plOlKnowTitle").value = k.title || ""; $("#plOlKnowContent").value = htmlToReadable(k.content || ""); }
   });
 
@@ -3468,7 +3463,7 @@ $("#opClearSkill").addEventListener("click", () => {
           } catch {}
         }
       } else {
-        const k = plKnow.find((x) => x.id === $("#plOlKnow").value);
+        const k = KB.get($("#plOlKnow").value);
         if (k) { knowledge = htmlToReadable(k.content || ""); websiteName = k.website || ""; }
       }
       const rg = await _fetch("/api/outline/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mainKw: kw, subKws: [], competitors: comps, knowledge, websiteName, engine, model, apiKey }) });

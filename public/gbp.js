@@ -2,7 +2,6 @@
 (function () {
   const sec = document.querySelector('.section[data-section="gbp"]');
   if (!sec) return;
-  let gbpKnow = [];
   let lastByKind = {};      // chống trùng: nội dung lần trước theo từng loại
   let imgData = null;       // {mimeType, data} base64 cho Vision
   let gbpMapCoords = "";
@@ -14,15 +13,9 @@
     $("#gbpResult").innerHTML = ""; $("#gbpMsg").innerHTML = "";
   }));
 
-  // ---- Tài liệu kiến thức ----
-  async function loadKnow() {
-    try {
-      const r = await fetch("/api/knowledge/list"); const d = await r.json(); gbpKnow = d.items || [];
-      const s = $("#gbpKnowSelect"); const cur = s.value;
-      s.innerHTML = `<option value="">— Không dùng —</option>` + gbpKnow.map((k) => `<option value="${esc(k.id)}">${esc((k.website ? k.website + " · " : "") + (k.title || "Kiến thức"))}</option>`).join("");
-      if (cur && gbpKnow.some((k) => k.id === cur)) s.value = cur;
-    } catch {}
-  }
+  // ---- Tài liệu kiến thức (KHO CHUNG KB — đồng bộ với Outline/Onpage) ----
+  window.KB.registerSelect($("#gbpKnowSelect"));
+  async function loadKnow() { await window.KB.load(); }
   let knowLoaded = false;
   function maybeLoadKnow() { if (location.hash.replace(/^#/, "") === "gbp" && !knowLoaded) { knowLoaded = true; loadKnow(); } }
   window.addEventListener("hashchange", maybeLoadKnow);
@@ -65,7 +58,7 @@
   function ctxPayload() {
     const mapInfo = { name: $("#gbpMname").value.trim(), address: $("#gbpAddr").value.trim(), area: $("#gbpArea").value.trim(), category: $("#gbpCat").value.trim(), coords: gbpMapCoords };
     const hasMap = mapInfo.name || mapInfo.address || mapInfo.area || mapInfo.category;
-    const k = gbpKnow.find((x) => x.id === $("#gbpKnowSelect").value);
+    const k = window.KB.get($("#gbpKnowSelect").value);
     return {
       brand: $("#gbpBrand").value.trim(), branch: $("#gbpBranch").value.trim(),
       mapInfo: hasMap ? mapInfo : null,

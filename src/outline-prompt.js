@@ -62,7 +62,7 @@ export function buildUniquePrompt({ mainKw, subKws = [], websiteName = "", knowl
   parts.push(`TỪ KHÓA CHÍNH: ${mainKw}`);
   if (subKws.length) parts.push(`TỪ KHÓA PHỤ: ${subKws.join(", ")}`);
   if (websiteName) parts.push(`WEBSITE: ${websiteName}`);
-  parts.push(`KIẾN THỨC WEBSITE (nguồn để rút yếu tố unique):\n${String(knowledge || "").trim().slice(0, 8000)}`);
+  parts.push(`KIẾN THỨC WEBSITE (nguồn để rút yếu tố unique — đọc ĐẦY ĐỦ):\n${String(knowledge || "").trim().slice(0, 40000)}`);
   parts.push(`OUTLINE ĐÃ CHỐT (chỉ gợi ý cho heading trong đây):\n${outlineText}`);
   parts.push("YÊU CẦU: Gợi ý thêm nội dung unique vào các heading phù hợp nhất (heading phải trùng khớp outline), nêu rõ 'what' và 'how'.");
 
@@ -131,7 +131,7 @@ export function buildOutlinePrompt({ mainKw, subKws = [], refOutline = "", knowl
   if (subKws.length) parts.push(`TỪ KHÓA PHỤ: ${subKws.join(", ")}`);
   if (websiteName) parts.push(`WEBSITE cần soạn: ${websiteName}`);
   if (refOutline && String(refOutline).trim()) parts.push(`OUTLINE THAM KHẢO (heading mong muốn của người dùng):\n${String(refOutline).trim()}`);
-  if (knowledge && String(knowledge).trim()) parts.push(`KIẾN THỨC WEBSITE (dùng để đi đúng hướng non-commodity, KHÔNG nhồi chi tiết vào heading):\n${String(knowledge).trim().slice(0, 6000)}`);
+  if (knowledge && String(knowledge).trim()) parts.push(`KIẾN THỨC WEBSITE (đọc ĐẦY ĐỦ để đi đúng định vị non-commodity, khai thác tối đa thông tin thật; KHÔNG nhồi chi tiết máy móc vào heading):\n${String(knowledge).trim().slice(0, 40000)}`);
   parts.push(`OUTLINE CÁC ĐỐI THỦ TOP SERP (phân tích kỹ làm CĂN CỨ, nhưng CHẮT LỌC chứ không copy toàn bộ):\n${competitorsBlock(competitorOutlines)}`);
   parts.push(
     "YÊU CẦU: Xuất Title SEO + Meta description + outline (H2/H3/H4) TỐT NHẤT cho từ khóa chính — chắt lọc heading thiết yếu, đúng search intent, " +

@@ -1042,7 +1042,7 @@ app.post("/api/onpage/factcheck", requireAuth, async (req, res) => {
     if (content.replace(/\s+/g, "").length < 80) {
       return res.status(400).json({ error: "Nội dung quá ngắn để kiểm chứng. Hãy nhập URL bài viết hoặc file Word đầy đủ." });
     }
-    const knowledge = String(body.knowledge || "").slice(0, 20000);
+    const knowledge = String(body.knowledge || "").slice(0, 60000);
 
     // 2) GIAI DOAN A: AI liet ke so lieu can kiem chung + truy van tim nguon
     let claims = [];
@@ -1215,7 +1215,7 @@ app.post("/api/gbp/generate", requireAuth, async (req, res) => {
     const data = {
       brand: String(b.brand || "").slice(0, 200), branch: String(b.branch || "").slice(0, 200),
       mapInfo: b.mapInfo && typeof b.mapInfo === "object" ? b.mapInfo : null,
-      knowledge: String(b.knowledge || "").slice(0, 20000),
+      knowledge: String(b.knowledge || "").slice(0, 60000),
       desiredName: String(b.desiredName || ""), url: String(b.url || ""), keyword: String(b.keyword || ""),
       postType: String(b.postType || "update"), context: String(b.context || ""),
       review: String(b.review || ""), reviewer: String(b.reviewer || ""), rating: b.rating,

@@ -72,7 +72,7 @@ export function buildClaimsPrompt({ content, url, mainKeyword, knowledge }) {
     "",
     url ? `URL bài viết: ${url}` : "",
     mainKeyword ? `Từ khóa chính: ${mainKeyword}` : "",
-    knowledge ? `\nKiến thức thương hiệu (bối cảnh, KHÔNG coi là nguồn kiểm chứng):\n${knowledge.slice(0, 6000)}` : "",
+    knowledge ? `\nKiến thức thương hiệu (bối cảnh, KHÔNG coi là nguồn kiểm chứng):\n${knowledge.slice(0, 40000)}` : "",
     "",
     "===== NỘI DUNG BÀI VIẾT =====",
     String(content || "").slice(0, 24000),

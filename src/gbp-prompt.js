@@ -24,7 +24,7 @@ function ctxBlock({ brand, branch, mapInfo, knowledge }) {
     const parts = [m.name && `tên: ${m.name}`, m.address && `địa chỉ: ${m.address}`, m.area && `khu vực: ${m.area}`, m.category && `danh mục: ${m.category}`].filter(Boolean);
     if (parts.length) lines.push(`Thông tin Google Maps (${parts.join("; ")})`);
   }
-  if (knowledge && knowledge.trim()) lines.push(`\nTÀI LIỆU KIẾN THỨC (dùng để cá nhân hóa, KHÔNG bịa thêm):\n${knowledge.slice(0, 8000)}`);
+  if (knowledge && knowledge.trim()) lines.push(`\nTÀI LIỆU KIẾN THỨC (dùng để cá nhân hóa, KHÔNG bịa thêm):\n${knowledge.slice(0, 40000)}`);
   return lines.length ? "=== BỐI CẢNH DOANH NGHIỆP ===\n" + lines.join("\n") + "\n" : "";
 }
 
