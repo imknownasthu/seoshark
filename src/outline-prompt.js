@@ -93,6 +93,9 @@ export function buildOutlinePrompt({ mainKw, subKws = [], refOutline = "", knowl
     "Các khung dưới đây là PHƯƠNG PHÁP THAM KHẢO tổng quát, KHÔNG mặc định ngành nào.\n\n" +
     "PHƯƠNG PHÁP (chắt lọc, không áp cứng):\n" +
     "• Xác định SEARCH INTENT chủ đạo của từ khóa; toàn bộ cấu trúc phải phục vụ intent đó.\n" +
+    "• LẤY ĐIỂM CHUNG trước: heading (hoặc ý) mà NHIỀU đối thủ TOP cùng có = tín hiệu MẠNH nhất về intent → gần như BẮT BUỘC đưa vào (sau khi gộp đồng nghĩa). Ý chỉ 1 đối thủ có thì cân nhắc kỹ, chỉ giữ nếu thật sự cần cho intent.\n" +
+    "• CÔ ĐỌNG là ưu tiên hàng đầu: outline cuối phải NGẮN GỌN, tập trung vào TỪ KHÓA CHÍNH + PHỤ + mấu chốt bài viết. KHÔNG dài dòng, KHÔNG thêm heading cho 'đủ nhiều'. Thà ít heading mà đúng trọng tâm còn hơn nhiều heading lan man.\n" +
+    "• Sau khi lấy điểm chung, BỔ SUNG 1-2 heading QUAN TRỌNG mà đa số đối thủ còn thiếu nhưng cần để lên top (đúng intent, tăng E-E-A-T/GEO) — chỉ khi thực sự tạo giá trị.\n" +
     "• CHẮT LỌC MẠNH, TUYỆT ĐỐI KHÔNG COPY 1-1: KHÔNG lấy hợp (union) tất cả heading của đối thủ rồi liệt kê. " +
     "Chọn bộ heading TINH GỌN, tốt nhất — outline cuối thường ÍT heading hơn tổng heading đối thủ cộng lại. Mỗi heading phải 'xứng đáng có mặt' (đúng intent + hữu ích thật + đạt tiêu chí Google). Phân vân thì BỎ.\n" +
     "• HIỂU NGỮ NGHĨA & GỘP heading ĐỒNG NGHĨA/TRÙNG Ý thành DUY NHẤT 1 heading tối ưu (đây là yêu cầu quan trọng nhất). Nhìn Ý ĐỊNH của heading, không nhìn câu chữ. Ví dụ:\n" +

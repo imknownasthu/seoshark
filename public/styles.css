@@ -87,7 +87,9 @@ svg.ic{width:19px;height:19px;stroke:currentColor;stroke-width:1.8;fill:none;
 .menu-item{
   position:relative;display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:12px;
   color:#3a4266;font-weight:500;cursor:pointer;font-size:14.5px;border:1px solid transparent;transition:.15s;
+  text-decoration:none;
 }
+a.menu-item:hover{text-decoration:none}
 .menu-item svg.ic{width:19px;height:19px;color:var(--muted)}
 .menu-item:hover{background:#F1F4FC;color:var(--ink)}
 .menu-item.active{
@@ -281,6 +283,29 @@ mark.inc-mark.flash{animation:incFlash 1.4s ease}
 .it-grid9 button{border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer;padding:0}
 .it-grid9 button.on{background:var(--c-blue);border-color:var(--c-blue)}
 .it-note{font-size:.82rem;color:var(--muted)}
+
+/* ===== ONPAGE: toi uu cau truc heading — 4 cot ===== */
+.ophead-cols{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:6px 0}
+@media(max-width:900px){.ophead-cols{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.ophead-cols{grid-template-columns:1fr}}
+.oph-col{border:1px solid var(--line);border-radius:12px;background:#fff;overflow:hidden;display:flex;flex-direction:column}
+.oph-col.c-del{border-top:3px solid #e5484d}
+.oph-col.c-fix{border-top:3px solid #e6961a}
+.oph-col.c-add{border-top:3px solid #1eae74}
+.oph-col.c-keep{border-top:3px solid var(--muted)}
+.oph-colhead{display:flex;align-items:center;justify-content:space-between;gap:6px;padding:9px 11px;font-weight:700;
+  font-size:12.5px;border-bottom:1px solid var(--line);background:#fbfcff}
+.oph-count{font-family:var(--mono);font-size:11px;background:var(--line);color:var(--muted);border-radius:999px;padding:1px 8px}
+.oph-list{padding:8px;display:flex;flex-direction:column;gap:7px;overflow-y:auto}
+.oph-card{border:1px solid var(--line);border-radius:9px;padding:8px 9px;font-size:12.5px;line-height:1.5;background:#fff}
+.oph-card .oph-del{color:#c0392b}
+.oph-card .oph-new{color:#128a5b}
+.oph-card .oph-old{color:var(--muted);font-size:11.5px}
+.oph-card .oph-fix{color:var(--brand-dark)}
+.oph-card .oph-pos,.oph-card .oph-reason{font-size:11px;margin-top:4px;color:var(--muted)}
+.oph-empty{font-size:12px;text-align:center;padding:10px 0}
+.oph-final{border:1px solid var(--line);border-radius:10px;background:#fbfcff;padding:12px 14px;font-size:13.5px;line-height:1.85}
+.oph-oline b{color:var(--c-blue);font-family:var(--mono);font-size:12px;margin-right:2px}
 .it-sec{font-family:var(--mono);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;
   color:var(--c-blue);margin:14px 0 2px;padding-bottom:5px;border-bottom:1px solid var(--line)}
 .it-sec:first-child{margin-top:0}

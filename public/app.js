@@ -84,25 +84,44 @@ function showSection(section, title) {
   if (el) el.classList.add("active");
   $("#sectionTitle").textContent = title;
 }
-const SECTION_TITLES = { "dashboard": "Bảng điều khiển", "internal-link": "Tối ưu Internal link", "onpage": "Tối ưu Onpage", "serp": "Check Index & Thứ hạng", "share": "Tự động Share Link", "blog2": "Tự động đăng Blog 2.0", "keywords": "Nghiên cứu từ khóa", "outline": "Lên outline chuẩn SEO" };
-// Điều hướng nhanh từ thẻ Dashboard hoặc bất kỳ đâu
-function gotoSection(sec) { const mi = document.querySelector(`#menu .menu-item[data-section="${sec}"]`); if (mi) mi.click(); }
+const SECTION_TITLES = { "dashboard": "Bảng điều khiển", "internal-link": "Tối ưu Internal link", "onpage": "Tối ưu Onpage", "serp": "Check Index & Thứ hạng", "share": "Tự động Share Link", "blog2": "Tự động đăng Blog 2.0", "keywords": "Nghiên cứu từ khóa", "outline": "Lên outline chuẩn SEO", "schema": "Schema Markup" };
+// Cac section co the mo bang URL hash (moi menu-item la 1 link #section) -> Ctrl+Click mo tab moi,
+// moi tab dung doc lap (phien la cookie stateless nen tab moi van dang nhap).
+const VALID_SECTIONS = new Set(["dashboard", "outline", "internal-link", "keywords", "onpage", "serp", "schema"]);
+function setActiveMenu(sec) { $$("#menu .menu-item").forEach((x) => x.classList.toggle("active", x.dataset.section === sec)); }
+let _opKnowLoadedForOnpage = false;
+function routeToSection(sec) {
+  if (!VALID_SECTIONS.has(sec)) sec = "dashboard";
+  setActiveMenu(sec);
+  showSection(sec, SECTION_TITLES[sec] || sec);
+  const c = document.querySelector(".content"); if (c) c.scrollTop = 0;
+  // Nap tai lieu kien thuc cho buoc "Toi uu heading" khi vao Onpage
+  if (sec === "onpage" && !_opKnowLoadedForOnpage && typeof opLoadKnow === "function") { _opKnowLoadedForOnpage = true; opLoadKnow(); }
+}
+function sectionFromHash() {
+  const h = (location.hash || "").replace(/^#/, "").trim();
+  return VALID_SECTIONS.has(h) ? h : "dashboard";
+}
+window.addEventListener("hashchange", () => routeToSection(sectionFromHash()));
+
+// Dieu huong nhanh tu the Dashboard -> doi hash (de dong bo tab/nut back)
+function gotoSection(sec) { location.hash = sec; }
 document.querySelectorAll("#quickTools .tool-card[data-goto]").forEach((c) => c.addEventListener("click", () => gotoSection(c.dataset.goto)));
 { const sn = document.getElementById("soonNotify"); if (sn) sn.addEventListener("click", () => toast("Đã ghi nhận! Chúng tôi sẽ báo bạn khi tính năng ra mắt.")); }
-$$("#menu .menu-item").forEach((mi) => {
-  mi.addEventListener("click", () => {
-    $$("#menu .menu-item").forEach((x) => x.classList.remove("active"));
-    mi.classList.add("active");
-    const sec = mi.dataset.section;
-    if (sec === "soon") {
-      const name = mi.dataset.name || "Tính năng sắp ra mắt";
-      $("#soonName").textContent = name;
-      showSection("soon", name);
-    } else {
-      showSection(sec, SECTION_TITLES[sec] || sec);
-    }
+
+// Cac muc "Sap ra mat" (placeholder) — bam hien panel, KHONG doi hash/mo tab
+$$('#menu .menu-item[data-section="soon"]').forEach((mi) => {
+  mi.addEventListener("click", (e) => {
+    e.preventDefault();
+    setActiveMenu(null); mi.classList.add("active");
+    const name = mi.dataset.name || "Tính năng sắp ra mắt";
+    $("#soonName").textContent = name;
+    showSection("soon", name);
   });
 });
+
+// Khoi tao section theo hash luc tai trang (moi tab tu doc hash cua no)
+routeToSection(sectionFromHash());
 
 // --- Khoi phuc cau hinh da luu ---
 $("#engine").value = localStorage.getItem("seoshark_engine") || "local";
@@ -1372,7 +1391,7 @@ if ($("#btnOpHeadings")) $("#btnOpHeadings").addEventListener("click", async () 
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         id: opSession.id, engine, model: $("#model").value || undefined, apiKey: $("#apiKey").value.trim() || undefined,
-        knowledge: opResolveKnowledge() || undefined, skill: opResolveSkill() || undefined,
+        knowledge: opHeadResolveKnowledge() || undefined, skill: opResolveSkill() || undefined,
         gscQueries: (_opGscQueries || []).slice(0, 20),
       }),
     });
@@ -1386,43 +1405,42 @@ function renderOpHeadings(d) {
   opHeadOutline = d.finalOutline || [];
   const items = d.items || [];
   const by = (a) => items.filter((x) => x.action === a);
-  const badge = { keep: '<span class="badge ok">GIỮ</span>', rewrite: '<span class="badge sapo">SỬA</span>', remove: '<span class="badge ket">XÓA</span>', add: '<span class="badge ok">THÊM</span>' };
-  const imp = (i) => (i ? `<span class="muted" style="font-size:.78rem"> · Ảnh hưởng: ${esc(i)}</span>` : "");
-  const row = (it) => {
-    const head = it.action === "add"
-      ? `<b style="color:#2e9e6b">+ H${it.level}: ${esc(it.suggested || "")}</b>${it.position ? `<span class="muted"> (chèn ${esc(it.position)})</span>` : ""}`
-      : it.action === "rewrite"
-        ? `<div class="muted"><s>H${it.level}: ${esc(it.current)}</s></div><b style="color:var(--brand-dark)">→ H${it.level}: ${esc(it.suggested || "")}</b>`
-        : it.action === "remove"
-          ? `<s style="color:#c0392b">H${it.level}: ${esc(it.current)}</s>`
-          : `<b>H${it.level}: ${esc(it.current)}</b>`;
-    return `<div class="opd" style="margin-bottom:6px">${badge[it.action] || ""}${imp(it.impact)}<div style="margin-top:3px">${head}</div><div class="muted" style="margin-top:3px">💡 ${esc(it.reason || "")}</div></div>`;
+  const card = (it) => {
+    let body;
+    if (it.action === "add") body = `<b class="oph-new">+ H${it.level}: ${esc(it.suggested || "")}</b>${it.position ? `<div class="muted oph-pos">chèn ${esc(it.position)}</div>` : ""}`;
+    else if (it.action === "rewrite") body = `<div class="oph-old"><s>H${it.level}: ${esc(it.current)}</s></div><b class="oph-fix">→ H${it.level}: ${esc(it.suggested || "")}</b>`;
+    else if (it.action === "remove") body = `<s class="oph-del">H${it.level}: ${esc(it.current)}</s>`;
+    else body = `<b>H${it.level}: ${esc(it.current)}</b>`;
+    return `<div class="oph-card">${body}${it.reason ? `<div class="oph-reason">💡 ${esc(it.reason)}</div>` : ""}</div>`;
   };
-  const sec = (title, arr, color) => (arr.length ? `<h4 style="margin:12px 0 6px;color:${color}">${title} (${arr.length})</h4>${arr.map(row).join("")}` : "");
+  const col = (title, arr, cls) => `<div class="oph-col ${cls}"><div class="oph-colhead">${title}<span class="oph-count">${arr.length}</span></div><div class="oph-list">${arr.map(card).join("") || '<div class="muted oph-empty">— không có —</div>'}</div></div>`;
+
   let html = "";
   if (d.summary) html += alertHtml("info", esc(d.summary));
-  if (d.intent) html += `<div class="opd" style="margin-bottom:8px"><b>Search intent:</b> ${esc(d.intent)}</div>`;
-  html += sec("🗑️ Nên XÓA / GỘP (lạc đề · trùng lặp · làm loãng nội dung)", by("remove"), "#c0392b");
-  html += sec("✏️ Nên SỬA LẠI (diễn đạt kém / sai cấp bậc / nhồi từ khóa)", by("rewrite"), "var(--brand-dark)");
-  html += sec("➕ Nên THÊM (content gap so với đối thủ)", by("add"), "#2e9e6b");
-  html += sec("✅ GIỮ NGUYÊN", by("keep"), "var(--muted)");
+  if (d.intent) html += `<div class="opd" style="margin-bottom:10px"><b>Search intent:</b> ${esc(d.intent)}</div>`;
+  html += `<div class="ophead-cols">
+    ${col("🗑️ Nên xóa / gộp", by("remove"), "c-del")}
+    ${col("✏️ Nên sửa lại", by("rewrite"), "c-fix")}
+    ${col("➕ Nên thêm", by("add"), "c-add")}
+    ${col("✅ Giữ nguyên", by("keep"), "c-keep")}
+  </div>`;
+
   if (opHeadOutline.length) {
-    const tree = opHeadOutline.map((o) => {
-      const tag = { add: '<span class="badge ok" style="font-size:.65rem">mới</span>', rewrite: '<span class="badge sapo" style="font-size:.65rem">sửa</span>' }[o.status] || "";
-      return `<div style="padding:3px 0;padding-left:${(o.level - 1) * 20}px"><span class="muted" style="font-size:.72rem;border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-right:6px">H${o.level}</span>${esc(o.text)} ${tag}</div>`;
+    const rows = opHeadOutline.map((o) => {
+      const tag = { add: '<span class="badge ok" style="font-size:.6rem">mới</span>', rewrite: '<span class="badge sapo" style="font-size:.6rem">sửa</span>' }[o.status] || "";
+      const indent = Math.max(0, o.level - 2) * 18;
+      return `<div class="oph-oline" style="padding-left:${indent}px"><b>H${o.level}:</b> ${esc(o.text)} ${tag}</div>`;
     }).join("");
-    html += `<h4 style="margin:14px 0 6px">📄 Outline CUỐI sau tối ưu</h4>
-      <div style="padding:10px;border:1px solid var(--line);border-radius:10px;background:#fff">${tree}</div>
-      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:8px">
-        <button class="ghost small" id="opHeadCopy" type="button">Copy outline (Markdown)</button>
-        <label style="display:flex;gap:6px;align-items:center;font-weight:600;font-size:13px;cursor:pointer"><input type="checkbox" id="opHeadUse" checked style="width:16px;height:16px;accent-color:var(--c-blue)"> Dùng outline này khi "Tối ưu toàn bộ bài"</label>
-      </div>`;
+    html += `<div class="flexbar" style="margin:16px 0 6px"><h4 style="margin:0">📄 Outline cuối sau tối ưu</h4><button class="ghost small" id="opHeadCopy" type="button">Copy outline</button></div>
+      <div class="oph-final">${rows}</div>
+      <label style="display:flex;gap:6px;align-items:center;font-weight:600;font-size:13px;cursor:pointer;margin-top:8px"><input type="checkbox" id="opHeadUse" checked style="width:16px;height:16px;accent-color:var(--c-blue)"> Dùng outline này khi "Tối ưu toàn bộ bài"</label>`;
   }
   $("#opHeadResult").innerHTML = html;
   const cp = $("#opHeadCopy");
   if (cp) cp.addEventListener("click", () => {
-    const md = opHeadOutline.map((o) => "#".repeat(o.level) + " " + o.text).join("\n");
-    navigator.clipboard.writeText(md).then(() => toast("Đã copy outline!")).catch(() => toast("Không copy được."));
+    // Dinh dang de copy: "H2: noi dung" moi dong (theo yeu cau nguoi dung)
+    const txt = opHeadOutline.map((o) => `H${o.level}: ${o.text}`).join("\n");
+    navigator.clipboard.writeText(txt).then(() => toast("Đã copy outline!")).catch(() => toast("Không copy được."));
   });
 }
 
@@ -1526,14 +1544,45 @@ $("#opSelectAll").addEventListener("change", (e) => {
 /* ---------- Onpage: Kiến thức website + Skill (chỉ dùng khi 'Tối ưu toàn bộ bài') ---------- */
 let opKnowList = [], opSkillList = [], opExtrasLoaded = false;
 function opSetWsMsg(m, t) { const el = $("#opWsMsg"); if (el) el.innerHTML = m ? `<span style="color:${t === "err" ? "#c0392b" : "var(--green,#2e9e6b)"}">${esc(m)}</span>` : ""; }
+function fillKnowSelect(sel) {
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = `<option value="">— Không dùng —</option>` + opKnowList.map((k) => `<option value="${esc(k.id)}">${esc((k.website ? k.website + " · " : "") + (k.title || "Kiến thức"))}</option>`).join("");
+  if (cur && opKnowList.some((k) => k.id === cur)) sel.value = cur;
+}
 async function opLoadKnow() {
   try {
     const r = await fetch("/api/knowledge/list"); const d = await r.json(); opKnowList = d.items || [];
-    const sel = $("#opKnowSelect"); const cur = sel.value;
-    sel.innerHTML = `<option value="">— Không dùng —</option>` + opKnowList.map((k) => `<option value="${esc(k.id)}">${esc((k.website ? k.website + " · " : "") + (k.title || "Kiến thức"))}</option>`).join("");
-    if (cur && opKnowList.some((k) => k.id === cur)) sel.value = cur;
+    fillKnowSelect($("#opKnowSelect"));
+    fillKnowSelect($("#opHeadKnowSelect")); // select cho buoc Toi uu heading
   } catch {}
 }
+// Chuyen kien thuc HTML (rich text) -> text de doc de cho AI. Chiu duoc ca text thuong (khong the).
+function htmlToReadable(s) {
+  s = String(s || "");
+  if (!/<[a-z!/]/i.test(s)) return s.trim(); // khong co the HTML -> text thuong
+  const box = document.createElement("div");
+  box.innerHTML = s;
+  const lines = [];
+  const walk = (el) => {
+    el.childNodes.forEach((n) => {
+      if (n.nodeType === 3) { const t = n.textContent.replace(/\s+/g, " "); if (t.trim()) lines.push(t); return; }
+      if (n.nodeType !== 1) return;
+      const tag = n.tagName.toLowerCase();
+      if (/^h[1-6]$/.test(tag)) { lines.push("\n" + "#".repeat(+tag[1]) + " " + n.textContent.trim()); return; }
+      if (tag === "li") { lines.push("- " + n.textContent.replace(/\s+/g, " ").trim()); return; }
+      if (["p", "div", "br", "ul", "ol", "tr"].includes(tag)) { walk(n); lines.push("\n"); return; }
+      walk(n);
+    });
+  };
+  walk(box);
+  return lines.join(" ").replace(/\n\s+/g, "\n").replace(/\n{3,}/g, "\n\n").replace(/[ \t]{2,}/g, " ").trim();
+}
+function opHeadResolveKnowledge() {
+  const k = opKnowList.find((x) => x.id === (($("#opHeadKnowSelect") || {}).value || ""));
+  return k ? htmlToReadable(k.content || "") : "";
+}
+if ($("#opHeadKnowReload")) $("#opHeadKnowReload").addEventListener("click", () => { opLoadKnow(); toast("Đã nạp lại danh sách kiến thức."); });
 async function opLoadSkills() {
   try {
     const r = await fetch("/api/skills/list"); const d = await r.json(); opSkillList = d.items || [];
@@ -1553,7 +1602,7 @@ function opResolveKnowledge() {
   const typed = ($("#opKnowContent").value || "").trim();
   if (typed && !$("#opKnowEditor").classList.contains("hidden")) return typed;
   const k = opKnowList.find((x) => x.id === $("#opKnowSelect").value);
-  return k ? (k.content || "") : "";
+  return k ? htmlToReadable(k.content || "") : "";
 }
 function opResolveSkill() {
   const typed = ($("#opWsContent").value || "").trim();

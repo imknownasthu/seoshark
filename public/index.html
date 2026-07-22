@@ -90,35 +90,35 @@
 
       <nav class="menu" id="menu">
         <div class="menu-label">Điều hướng</div>
-        <div class="menu-item active" data-section="dashboard">
+        <a class="menu-item active" href="#dashboard" data-section="dashboard">
           <svg class="ic" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
           Bảng điều khiển
-        </div>
+        </a>
         <div class="menu-label">Công cụ SEO</div>
-        <div class="menu-item" data-section="outline">
+        <a class="menu-item" href="#outline" data-section="outline">
           <svg class="ic" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>
           Lên outline chuẩn SEO
-        </div>
-        <div class="menu-item" data-section="internal-link">
+        </a>
+        <a class="menu-item" href="#internal-link" data-section="internal-link">
           <svg class="ic" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1.5-1.5"/></svg>
           Tối ưu Internal link
-        </div>
-        <div class="menu-item" data-section="keywords">
+        </a>
+        <a class="menu-item" href="#keywords" data-section="keywords">
           <svg class="ic" viewBox="0 0 24 24"><circle cx="8" cy="14" r="4"/><path d="M11 11l7-7 3 3M17 9l2 2"/></svg>
           Nghiên cứu từ khóa
-        </div>
-        <div class="menu-item" data-section="onpage">
+        </a>
+        <a class="menu-item" href="#onpage" data-section="onpage">
           <svg class="ic" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 1 18 0"/><path d="M12 12l4-2.5"/><circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/></svg>
           Tối ưu Onpage
-        </div>
-        <div class="menu-item" data-section="serp">
+        </a>
+        <a class="menu-item" href="#serp" data-section="serp">
           <svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/><path d="M8 11l2 2 3.5-4"/></svg>
           Check Index &amp; Thứ hạng
-        </div>
-        <div class="menu-item" data-section="schema">
+        </a>
+        <a class="menu-item" href="#schema" data-section="schema">
           <svg class="ic" viewBox="0 0 24 24"><path d="M4 7l8-4 8 4-8 4-8-4Z"/><path d="M4 12l8 4 8-4"/><path d="M4 17l8 4 8-4"/></svg>
           Schema Markup
-        </div>
+        </a>
 
         <div class="menu-label">Sắp ra mắt</div>
         <div class="menu-item disabled" data-section="soon" data-name="Tự động Share Link">
@@ -586,6 +586,13 @@
                 <div class="muted" style="font-size:.83rem;margin-top:2px">Soi <b>từng heading</b> hiện có → <b>Giữ / Sửa lại / Xóa</b> (lạc đề, trùng lặp, làm loãng nội dung) → <b>Thêm</b> mục còn thiếu, rồi dựng <b>outline cuối</b>.</div>
               </div>
               <button class="ghost small" id="btnOpHeadings" type="button">Phân tích &amp; tối ưu heading</button>
+            </div>
+            <div style="margin-top:10px;display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+              <div style="flex:1;min-width:220px">
+                <label style="font-size:12px">Tài liệu kiến thức đã lưu <span class="muted" style="font-weight:400">(cá nhân hóa outline cuối — dùng chung với "Lên outline")</span></label>
+                <select id="opHeadKnowSelect"><option value="">— Không dùng —</option></select>
+              </div>
+              <button class="ghost small" id="opHeadKnowReload" type="button" title="Nạp lại danh sách">↻</button>
             </div>
             <div id="opHeadMsg" style="margin-top:8px"></div>
             <div id="opHeadResult" style="margin-top:10px"></div>

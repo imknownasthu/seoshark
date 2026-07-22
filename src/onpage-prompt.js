@@ -388,8 +388,8 @@ BUOC 2 — SOI TUNG HEADING HIEN CO (phai xu ly HET, khong bo sot), gan DUNG 1 a
   • "keep": phuc vu dung intent, dien dat tot, doi thu cung co hoac la the manh rieng.
   • "rewrite": DUNG chu de nhung DIEN DAT KEM -> viet lai. Cac loi can bat: mo ho/chung chung; sao rong; NHOI TU KHOA; sai cap bac (H3 le loi, H2 dang le la H3); dang cau hoi nhung khong tra loi thang; qua dai/qua ngan; khong chua tu khoa/bien the khi can.
   • "remove": KHONG phuc vu intent -> XOA hoac GOP. Bat cac truong hop: LAC DE; TRUNG LAP y voi heading khac; noi dung QUA MONG khong dang 1 muc rieng; mang tinh QUANG CAO/ban hang lam LOANG noi dung; muc phu tro vun vat lam loang trong tam. PHAI neu ro ly do lam loang.
-BUOC 3 — THEM heading con THIEU (content gap so voi doi thu + sub-intent chua phu${gq ? " + nhu cau tu truy van GSC" : ""}), ghi ro vi tri chen.
-BUOC 4 — Dung finalOutline: outline CUOI sau khi ap dung het (bo cai xoa, thay cai sua, chen cai them), thu tu LOGIC theo hanh trinh nguoi doc (nhan dien van de -> hieu -> giai phap -> chi phi/luu y -> hanh dong).
+BUOC 3 — THEM heading con THIEU. Uu tien theo DIEM CHUNG: y/heading ma NHIEU doi thu TOP cung co (sau khi gop dong nghia) = tin hieu MANH ve intent -> nen them neu bai dang thieu. Y chi 1 doi thu co thi chi them khi that su can cho intent${gq ? " + nhu cau tu truy van GSC" : ""}. Ghi ro vi tri chen.
+BUOC 4 — Dung finalOutline: outline CUOI sau khi ap dung het (bo cai xoa, thay cai sua, chen cai them). YEU CAU CO DONG: outline cuoi NGAN GON, tap trung tu khoa chinh/phu + mau chot bai, KHONG dai dong, KHONG them heading cho "du nhieu". Thu tu LOGIC theo hanh trinh nguoi doc (nhan dien van de -> hieu -> giai phap -> chi phi/luu y -> hanh dong).
 
 NGUYEN TAC (moi linh vuc):
 - Dung 1 H1 chua tu khoa chinh. Phan cap logic: H3 phai thuoc 1 H2; cha co 0 hoac >=2 con (khong de con don le).
