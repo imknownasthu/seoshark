@@ -651,26 +651,56 @@ async function _onpageAIOnce({ engine, key, model, system, user, schema, maxToke
 }
 
 // --- POST /api/onpage/audit : audit trang + doi thu + khuyen nghi ---
-// Content gap CO HOC: heading H2/H3 doi thu CO ma trang muc tieu THIEU (bao dam LUON co gap).
-function mechContentGap(target, competitors, max = 8) {
+// Content gap CO HOC — CHAT LOC THONG MINH (bao dam LUON co gap, nhung SACH):
+// bo so thu tu (1., 1.1.), LOC ten thuong hieu doi thu/target (theo domain), bo muc quang cao,
+// GOP trung lap ngu nghia (Jaccard). Chi giu chu de CHUNG co gia tri.
+function mechContentGap(target, competitors, mainKeyword, max = 8) {
   const norm = (s) => normVi(s).replace(/[?!.,:;"'()]/g, " ").replace(/\s+/g, " ").trim();
-  const tgtHeads = (target.headings || []).map((h) => norm(h.text)).filter(Boolean);
+  const squash = (s) => normVi(s).replace(/[^a-z0-9]/g, "");
+  const kwSq = squash(mainKeyword || "");
+  // Nhan dien "brand label" tu domain (VD updental.com -> updental) — bo cai trung voi tu khoa
+  const brands = new Set();
+  const addBrand = (host) => {
+    if (!host) return;
+    let h = String(host).replace(/^www\./, "").replace(/\.(com|net|org|vn|info|co|io|biz|clinic|dental)(\.vn)?$/i, "");
+    const lab = h.replace(/[^a-z0-9]/gi, "").toLowerCase();
+    if (lab.length >= 4 && !kwSq.includes(lab) && !(kwSq.length >= 6 && lab.includes(kwSq.slice(0, 6)))) brands.add(lab);
+  };
+  addBrand(target && target.host);
+  (competitors || []).forEach((c) => c && addBrand(c.host));
+  const hasBrand = (s) => { const sq = squash(s); return [...brands].some((b) => sq.includes(b)); };
+  const PROMO = /vi sao|nen chon|tra gop|uu dai|khuyen mai|giam gia|dang ky|lien he|hotline|goi ngay|dat lich ngay|cam ket|bao hanh tron doi|dia chi|so dien thoai/i;
+  const stripNum = (s) => String(s || "").replace(/^\s*\d+([.)]\d+)*[.):]?\s*/, "").trim();
+  // Cắt đuôi nhắc thương hiệu/địa danh: "... tại/cùng/ở/của/với <Tên riêng>" -> bỏ, giữ chủ đề chung
+  const stripBrandTail = (s) => String(s || "").replace(/\s+(tại|cùng|ở|của|với|by|at|with)\s+\p{Lu}[^\n]*$/u, "").trim();
+  const clean = (s) => stripBrandTail(stripNum(s));
+  const STOP = new Set("va la co the cua cho khi nao nhu bao nhieu nhung voi tai cac mot khong duoc".split(" "));
+  const toks = (n) => new Set(norm(n).split(" ").filter((w) => w.length > 1 && !STOP.has(w)));
+  const jac = (a, b) => { const A = toks(a), B = toks(b); if (!A.size || !B.size) return 0; let i = 0; A.forEach((x) => B.has(x) && i++); return i / (A.size + B.size - i); };
+
+  const tgtHeads = (target.headings || []).map((h) => norm(clean(h.text))).filter(Boolean);
   const tgtBlob = " " + tgtHeads.join(" | ") + " ";
   const has = (n) => tgtHeads.includes(n) || tgtBlob.includes(" " + n + " ") || (n.length > 12 && tgtBlob.includes(n));
+
   const freq = new Map(), label = new Map();
   for (const c of (competitors || [])) {
     if (!c || !c.ok) continue;
     const seen = new Set();
     for (const h of (c.headings || [])) {
       if (!h || h.level > 3) continue;
-      const n = norm(h.text);
+      const text = clean(h.text);
+      const n = norm(text);
       if (!n || n.length < 6 || seen.has(n)) continue; seen.add(n);
-      if (has(n)) continue;
+      if (has(n) || hasBrand(text) || PROMO.test(n)) continue;
       freq.set(n, (freq.get(n) || 0) + 1);
-      if (!label.has(n)) label.set(n, String(h.text).trim());
+      if (!label.has(n)) label.set(n, text.trim());
     }
   }
-  return [...freq.entries()].sort((a, b) => b[1] - a[1]).slice(0, max).map(([n]) => label.get(n));
+  // Uu tien chu de nhieu doi thu cung co (cross-competitor = intent that); gop trung ngu nghia.
+  const sorted = [...freq.entries()].sort((a, b) => b[1] - a[1]).map(([n]) => label.get(n));
+  const out = [];
+  for (const item of sorted) { if (out.some((x) => jac(x, item) >= 0.55)) continue; out.push(item); if (out.length >= max) break; }
+  return out;
 }
 // Tom tat CO HOC (bao dam LUON co summary du AI loi/trong).
 function mechSummary(target, bench) {
@@ -733,7 +763,7 @@ app.post("/api/onpage/audit", requireAuth, async (req, res) => {
 
     // 4) Khuyen nghi: AI neu co; nguoc lai co hoc.
     //    Content gap + summary LUON co (co hoc lam nen) -> khong bao gio bi mat khi AI loi/trong.
-    const mGap = mechContentGap(target, okComps);
+    const mGap = mechContentGap(target, okComps, mainKeyword.trim());
     const mSum = mechSummary(target, bench);
     let recommendations, summary = "", engineUsed = "Local (cơ học)", contentGap = [];
     try {

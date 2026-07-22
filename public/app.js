@@ -1099,6 +1099,15 @@ $("#btnOpAudit").addEventListener("click", async () => {
   if (!url) { msg.innerHTML = alertHtml("err", "Hãy nhập URL bài viết."); return; }
   if (!mainKeyword) { msg.innerHTML = alertHtml("err", "Hãy nhập từ khóa chính."); return; }
 
+  // MỖI bài/từ khóa là ĐỘC LẬP: xóa sạch kết quả phân tích trước (outline heading, GSC, tối ưu)
+  // để không dính "lịch sử" của bài/từ khóa khác — phân tích lại từ đầu.
+  opSession = { id: null, data: null, optimize: null };
+  opHeadOutline = [];
+  _opGscQueries = [];
+  ["opHeadResult", "opHeadMsg", "opGscResult", "opGscEvalResult", "opRecs", "opOptMsg", "opSummary", "opCompareTable"].forEach((id) => { const el = $("#" + id); if (el) el.innerHTML = ""; });
+  $("#opOptResultCard").classList.add("hidden");
+  $("#opResultCard").classList.add("hidden");
+
   const manualMode = $("#opCompTabs .tab.active").dataset.comp === "manual";
   const competitors = manualMode
     ? $$("#opCompRows .op-comp-url").map((i) => i.value.trim()).filter((v) => /^https?:\/\//i.test(v))

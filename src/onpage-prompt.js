@@ -34,7 +34,7 @@ export const RECOMMEND_SCHEMA = {
   type: "object",
   properties: {
     summary: { type: "string", description: "Nhan xet tong quan ngan gon ve On-page cua trang so voi doi thu." },
-    contentGap: { type: "array", items: { type: "string" }, description: "Cac sub-topic/noi dung doi thu CO ma trang muc tieu THIEU (lien quan search intent). Cu the, ngan gon." },
+    contentGap: { type: "array", items: { type: "string" }, description: "Cac CHU DE CHUNG doi thu CO ma trang muc tieu THIEU (theo search intent). SACH: khong ten thuong hieu/doi thu, khong so thu tu, da gop trung lap, khong muc quang cao. Ngan gon, toi da 8." },
     recommendations: {
       type: "array",
       items: {
@@ -229,7 +229,12 @@ ${bench ? `TRUNG BINH DOI THU: do dai ${bench.wordCount} tu, ${bench.headingCoun
 
 YEU CAU:
 1. So sanh tung tieu chi On-page giua trang muc tieu va doi thu (Title, Meta, H1, Heading, Sapo, mat do tu khoa, do dai, Schema, anh/alt, internal/external, video, E-E-A-T, FAQ/social proof).
-2. Liet ke CONTENT GAP: cac sub-topic/noi dung doi thu co ma trang muc tieu thieu (lien quan search intent cua "${mainKeyword}").
+2. Liet ke CONTENT GAP: cac sub-topic/noi dung doi thu co ma trang muc tieu THIEU (lien quan search intent cua "${mainKeyword}"). QUY TAC BAT BUOC de content gap SACH & co gia tri:
+   - CHI neu CHU DE CHUNG. TUYET DOI KHONG kem ten thuong hieu/doi thu (bo cac ten rieng nhu "Up Dental", "I-Dent", "Nha khoa X"...). Neu 1 heading doi thu gan ten thuong hieu, hay TRUU TUONG HOA thanh chu de chung (vd "Nieng rang tra gop cung Up Dental" -> "Chinh sach tra gop khi nieng rang").
+   - BO so thu tu/danh so dau muc ("1.", "1.1.", "2)"...).
+   - GOP cac muc TRUNG Y NGHIA thanh 1 (vd "Nieng rang 5 trieu co an toan khong?" ≡ "Co the nieng rang 5 trieu khong?" -> 1 muc).
+   - BO muc quang cao/dieu huong/CTA (uu dai, tra gop, lien he, dat lich...). Chi giu muc THUC SU huu ich cho nguoi doc dung search intent.
+   - Toi da 8 muc, ngan gon.
 3. Dua khuyen nghi cu the de dua tu khoa "${mainKeyword}" len top: moi khuyen nghi co priority (Cao/Trung binh/Thap), hien trang, muc tieu (tham chieu doi thu/chuan), hanh dong cu the co the lam ngay, ly do/loi ich. Bao gom ca goi y E-E-A-T va GEO/AIO khi phu hop.
 4. Sap xep khuyen nghi tu Cao den Thap. Ngan gon, chinh xac, khong chung chung.${VN_RULE}`;
 }
