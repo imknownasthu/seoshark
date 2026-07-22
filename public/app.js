@@ -17,14 +17,9 @@ const ENGINES = {
     keyPlaceholder: "AIza... (lấy free tại aistudio.google.com)",
     keyHelp: 'Lấy key MIỄN PHÍ tại <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com/app/apikey</a> — không cần thẻ, không nạp tiền.',
     models: [
-      ["gemini-3.5-flash", "Gemini 3.5 Flash (FREE — mới nhất, khuyên dùng)"],
-      ["gemini-3.1-flash-lite", "Gemini 3.1 Flash-Lite (FREE — nhanh)"],
-      ["gemini-2.5-flash", "Gemini 2.5 Flash (FREE — ổn định)"],
-      ["gemini-2.5-flash-lite", "Gemini 2.5 Flash-Lite (FREE — rẻ nhất)"],
-      ["gemini-3.1-pro-preview", "Gemini 3.1 Pro (⚠ cần bật billing)"],
-      ["gemini-2.5-pro", "Gemini 2.5 Pro (⚠ cần bật billing)"],
+      ["gemini-3.5-flash", "Gemini 3.5 Flash (FREE — mới nhất, cao nhất)"],
     ],
-    hint: "Dùng model FREE (Flash) là đủ. Nếu model chọn không khả dụng/hết quota, công cụ TỰ chuyển sang Flash free khác.",
+    hint: "Cố định dùng Gemini 3.5 Flash (model cao nhất, miễn phí) xuyên suốt — không tự đổi sang model thấp hơn.",
   },
   claude: {
     needKey: true,
@@ -137,6 +132,21 @@ document.querySelector(".engine-pill").addEventListener("click", () => {
 // --- TRANG THAI KET NOI ENGINE ---
 let isAuthed = false;
 let connTimer = null;
+// Tên model đẹp để hiện trên header (VD gemini-3.5-flash -> "Gemini 3.5 Flash")
+function prettyModel(engine, model) {
+  if (engine === "gemini") {
+    const m = (model || "gemini-3.5-flash");
+    const nice = { "gemini-3.5-flash": "Gemini 3.5 Flash" };
+    return nice[m] || ("Gemini " + m.replace(/^gemini-/, "").replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()));
+  }
+  if (engine === "claude") {
+    const m = (model || "");
+    if (/opus/i.test(m)) return "Claude Opus";
+    if (/haiku/i.test(m)) return "Claude Haiku";
+    return "Claude Sonnet";
+  }
+  return "Local";
+}
 function setConn(state, text) {
   const s = $("#engineStatus");
   if (s) {
@@ -144,9 +154,8 @@ function setConn(state, text) {
     s.style.color = state === "ok" ? "var(--green)" : state === "fail" ? "var(--red)" : "var(--muted)";
   }
   const engine = $("#engine").value;
-  const name = engine === "gemini" ? "Gemini" : engine === "claude" ? "Claude" : "Local";
   const connected = state === "ok";
-  const label = engine === "local" ? "Local · Sẵn sàng" : (connected ? name + " · đã kết nối" : name + " · chưa kết nối");
+  const label = engine === "local" ? "Local · Sẵn sàng" : `${prettyModel(engine, ($("#model") || {}).value)} · ${connected ? "đã kết nối" : "chưa kết nối"}`;
   setAiPill(connected, label);
 }
 async function checkEngineConn() {
@@ -2823,18 +2832,34 @@ $("#opClearSkill").addEventListener("click", () => {
   });
 
   // --- Tạo outline cuối ---
-  function badges(it) {
-    let b = "";
-    if (it.hasMain) b += ` <span title="Chứa từ khóa chính" style="color:var(--green)">★</span>`;
-    if (it.hitSubs && it.hitSubs.length) b += ` <span title="Chứa từ khóa phụ" style="color:var(--orange)">●</span>`;
-    return b;
+  // Tô màu ĐÚNG phần từ khóa trong heading (không tô cả heading). Chính = xanh, phụ = cam.
+  const _kwNorm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/\p{M}/gu, "").replace(/đ/g, "d");
+  function highlightKw(text, mainKw, subKws) {
+    const raw = String(text || "");
+    const nraw = _kwNorm(raw);
+    const marks = [];
+    const add = (kw, cls) => {
+      const nk = _kwNorm(kw).trim(); if (!nk) return;
+      let i = 0; while ((i = nraw.indexOf(nk, i)) !== -1) { marks.push({ s: i, e: i + nk.length, cls }); i += nk.length; }
+    };
+    add(mainKw, "kw-main");
+    (subKws || []).forEach((sk) => add(sk, "kw-sub"));
+    if (!marks.length) return esc(raw);
+    // Ưu tiên vùng dài hơn (từ khóa chính thường dài); bỏ vùng chồng lấn
+    marks.sort((a, b) => a.s - b.s || (b.e - b.s) - (a.e - a.s));
+    const keep = []; let last = -1;
+    for (const m of marks) { if (m.s >= last) { keep.push(m); last = m.e; } }
+    let out = "", pos = 0;
+    for (const m of keep) { out += esc(raw.slice(pos, m.s)) + `<mark class="${m.cls}">${esc(raw.slice(m.s, m.e))}</mark>`; pos = m.e; }
+    return out + esc(raw.slice(pos));
   }
   function renderTree() {
+    const mk = $("#olMainKw").value.trim();
+    const sk = splitList($("#olSubKws").value);
     $("#olTree").innerHTML = lastOutline.map((it) => {
-      const pad = (it.level - 2) * 22;
-      const tag = `<span class="muted" style="font-size:.72rem;border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-right:6px">H${it.level}</span>`;
+      const pad = (it.level - 2) * 18;
       const weight = it.level === 2 ? "600" : it.level === 3 ? "500" : "400";
-      return `<div style="padding:4px 0;padding-left:${pad}px;font-weight:${weight}">${tag}${esc(it.text)}${badges(it)}</div>`;
+      return `<div class="ol-oline" style="padding-left:${pad}px;font-weight:${weight}"><b>H${it.level}:</b> ${highlightKw(it.text, mk, sk)}</div>`;
     }).join("");
   }
   // Title SEO + Meta description với đếm ký tự (xanh nếu trong khoảng chuẩn) + nút copy
@@ -2864,7 +2889,7 @@ $("#opClearSkill").addEventListener("click", () => {
     const head = [];
     if (lastTitle) head.push(`Title: ${lastTitle}`);
     if (lastMeta) head.push(`Meta description: ${lastMeta}`);
-    const body = lastOutline.map((it) => `${"#".repeat(it.level)} ${it.text}`).join("\n");
+    const body = lastOutline.map((it) => `H${it.level}: ${it.text}`).join("\n");
     return (head.length ? head.join("\n") + "\n\n" : "") + body;
   }
 

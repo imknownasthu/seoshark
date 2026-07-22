@@ -214,6 +214,12 @@ button.ghost.small:hover,.btn-sm:hover{border-color:var(--c-blue);color:var(--c-
 .badge.sapo{background:rgba(224,49,49,.14);color:#c0392b}
 .badge.ket{background:var(--line);color:var(--muted)}
 mark{background:#fff3bf;color:#7a5b00;padding:0 4px;border-radius:4px;font-weight:600}
+/* Tô màu từ khóa trong outline: chính = xanh, phụ = cam */
+mark.kw-main{background:rgba(30,174,116,.18);color:#0c7a4d}
+mark.kw-sub{background:rgba(230,150,26,.2);color:#a9670a}
+.ol-final{border:1px solid var(--line);border-radius:10px;background:#fbfcff;padding:12px 14px;line-height:1.9}
+.ol-final .ol-oline{padding:2px 0}
+.ol-final .ol-oline>b{color:var(--c-blue);font-family:var(--mono);font-size:12px;margin-right:3px}
 
 /* ===== KET QUA INCOMING: bang 4 cot + nhay toi anchor ===== */
 .inc-jumps{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:2px 0 10px}

@@ -263,27 +263,22 @@ const RECOVERABLE = /quota|exceeded|limit: 0|RESOURCE_EXHAUSTED|429|not found|40
 const TRANSIENT = /overload|high demand|experiencing high|try again later|temporar|429|RESOURCE_EXHAUSTED|\b503\b|\b500\b|INTERNAL|unavailable/i;
 const _sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Goi callFn(model) lan luot voi model chon -> cac Flash free; moi model thu lai neu qua tai tam thoi.
-// Tra ve { result, model, switched }. Nem lastErr neu tat ca that bai.
-async function geminiWithFallback(callFn, chosenModel, { attemptsPerModel = 3, backoffMs = 1500 } = {}) {
-  const chain = [chosenModel, ...FREE_FLASH].filter(Boolean);
-  const tried = new Set();
+// CHI dung DUNG 1 model (khong tu tut xuong model thap hon) — theo yeu cau: cố định Gemini 3.5.
+// Loi qua tai tam thoi -> nghi (backoff) roi thu lai CUNG model, toi da `attempts` lan.
+// Tra ve { result, model, switched:false }. Nem lastErr neu that bai het.
+async function geminiWithFallback(callFn, chosenModel, { attemptsPerModel = 4, backoffMs = 1500 } = {}) {
+  const m = chosenModel || "gemini-3.5-flash";
   let lastErr;
-  for (const m of chain) {
-    if (tried.has(m)) continue;
-    tried.add(m);
-    for (let attempt = 1; attempt <= attemptsPerModel; attempt++) {
-      try {
-        const result = await callFn(m);
-        return { result, model: m, switched: m !== chosenModel };
-      } catch (e) {
-        lastErr = e;
-        const msg = e.message || "";
-        if (!RECOVERABLE.test(msg)) throw e; // loi khac (vd sai key) -> nem ngay
-        // Qua tai tam thoi -> nghi roi thu lai CUNG model; loi model khac (404/not found) -> qua model tiep
-        if (TRANSIENT.test(msg) && attempt < attemptsPerModel) { await _sleep(backoffMs * attempt); continue; }
-        break;
-      }
+  for (let attempt = 1; attempt <= attemptsPerModel; attempt++) {
+    try {
+      const result = await callFn(m);
+      return { result, model: m, switched: false };
+    } catch (e) {
+      lastErr = e;
+      const msg = e.message || "";
+      if (!RECOVERABLE.test(msg)) throw e; // loi khac (vd sai key) -> nem ngay
+      if (TRANSIENT.test(msg) && attempt < attemptsPerModel) { await _sleep(backoffMs * attempt); continue; }
+      break; // loi khong the thu lai (404/not found...) -> dung, KHONG doi model
     }
   }
   throw lastErr;
