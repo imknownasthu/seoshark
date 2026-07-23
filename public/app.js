@@ -1499,6 +1499,30 @@ if ($("#btnOpHeadings")) $("#btnOpHeadings").addEventListener("click", async () 
   } catch (e) { msg.innerHTML = alertHtml("err", "❌ " + e.message); }
   finally { busy(btn, false); }
 });
+// Bang "diem chung doi thu" = search intent Google dang thuong -> outline cuoi PHAI phu het
+function renderConsensus(c) {
+  if (!c || !c.nComp || !(c.clusters || []).length) return "";
+  const musts = c.clusters.filter((x) => x.must);
+  const opts = c.clusters.filter((x) => !x.must);
+  const row = (x) => `<div class="cons-row${x.must ? " must" : ""}">
+      <span class="cons-share" title="${x.count}/${c.nComp} đối thủ TOP có mục này">${x.count}/${c.nComp}</span>
+      <span class="cons-label">${esc(x.label)}</span>
+      <span class="cons-state ${x.covered ? "on" : "off"}">${x.covered ? "bài đã có" : "bài đang thiếu"}</span>
+    </div>`;
+  const full = c.mustCount && c.coveredCount >= c.mustCount;
+  const added = (c.autoAdded || []).length;
+  return `<details class="cons-box" ${full && !added ? "" : "open"}>
+    <summary><b>Search intent chung của TOP ${c.nComp} đối thủ</b>
+      <span class="badge ${full ? "ok" : "sapo"}">${c.coveredCount}/${c.mustCount} mục bắt buộc đã phủ</span>
+      ${added ? `<span class="badge sapo">tự bổ sung ${added}</span>` : ""}
+    </summary>
+    <div class="cons-note">Các mục <b>bắt buộc</b> là những mục ≥ ${c.mustMin}/${c.nComp} đối thủ TOP cùng có (đã gom nhóm các cách gọi khác nhau) — outline cuối phải phủ hết, kiến thức website chỉ là lớp làm sâu thêm.</div>
+    ${musts.map(row).join("")}
+    ${opts.length ? `<div class="cons-sub">Tùy chọn (ít đối thủ có)</div>${opts.map(row).join("")}` : ""}
+    ${added ? `<div class="cons-note warn">⚠ AI bỏ sót ${added} mục bắt buộc — hệ thống đã tự chèn vào outline cuối: ${(c.autoAdded || []).map((t) => `“${esc(t)}”`).join(", ")}</div>` : ""}
+  </details>`;
+}
+
 function renderOpHeadings(d) {
   opHeadOutline = d.finalOutline || [];
   const items = d.items || [];
@@ -1516,6 +1540,7 @@ function renderOpHeadings(d) {
   let html = "";
   if (d.summary) html += alertHtml("info", esc(d.summary));
   if (d.intent) html += `<div class="opd" style="margin-bottom:10px"><b>Search intent:</b> ${esc(d.intent)}</div>`;
+  html += renderConsensus(d.consensus);
   html += `<div class="ophead-cols">
     ${col("🗑️ Nên xóa / gộp", by("remove"), "c-del")}
     ${col("✏️ Nên sửa lại", by("rewrite"), "c-fix")}
@@ -1525,7 +1550,9 @@ function renderOpHeadings(d) {
 
   if (opHeadOutline.length) {
     const rows = opHeadOutline.map((o) => {
-      const tag = { add: '<span class="badge ok" style="font-size:.6rem">mới</span>', rewrite: '<span class="badge sapo" style="font-size:.6rem">sửa</span>' }[o.status] || "";
+      const tag = o.source === "consensus"
+        ? `<span class="badge sapo" style="font-size:.6rem" title="${esc(o.note || "")}">intent chung</span>`
+        : { add: '<span class="badge ok" style="font-size:.6rem">mới</span>', rewrite: '<span class="badge sapo" style="font-size:.6rem">sửa</span>' }[o.status] || "";
       const indent = Math.max(0, o.level - 2) * 18;
       return `<div class="oph-oline" style="padding-left:${indent}px"><b>H${o.level}:</b> ${esc(o.text)} ${tag}</div>`;
     }).join("");

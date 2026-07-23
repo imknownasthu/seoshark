@@ -13,6 +13,7 @@ import { optimizeWithGemini, geminiJson, geminiPing, pickBestGeminiModel, listFr
 import {
   geminiWithFallback, aiHeaders, noteAiModel, cacheModelChain, liveModel, prettyModelName, QUOTA_ERR,
 } from "./src/ai-fallback.js";
+import { buildConsensus, consensusView, checkCoverage, insertMissing } from "./src/heading-consensus.js";
 import { optimizeWithClaude, claudeJson, claudePing } from "./src/claude.js";
 import { auditUrl, benchmark } from "./src/onpage.js";
 import { fetchSerp, serpConfigured } from "./src/serp.js";
@@ -950,10 +951,15 @@ app.post("/api/onpage/headings", requireAuth, async (req, res) => {
     const skill = String(body.skill || "").slice(0, 100000);
     const gscQueries = Array.isArray(body.gscQueries) ? body.gscQueries.slice(0, 20) : [];
 
+    // DIEM CHUNG doi thu = search intent Google dang thuong -> tinh BANG CODE (khong de AI tu doan),
+    // dua vao prompt duoi dang bang bat buoc, roi kiem tra lai ket qua AI o duoi.
+    const consensus = buildConsensus(competitors, { targetHeadings: target.headings || [], mainKeyword });
+    const consensusText = consensusView(consensus, { mainKeyword });
+
     const { data, engineUsed } = await onpageAI({
       engine, key: apiKey, model,
       system: ONPAGE_SYSTEM,
-      user: buildHeadingPrompt({ target, competitors, bench, mainKeyword, subKeywords, knowledge, skill, gscQueries }),
+      user: buildHeadingPrompt({ target, competitors, bench, mainKeyword, subKeywords, knowledge, skill, gscQueries, consensusText }),
       schema: HEADING_SCHEMA, maxTokens: 24576,
     });
     const items = (Array.isArray(data.items) ? data.items : []).map((it) => ({
@@ -965,10 +971,40 @@ app.post("/api/onpage/headings", requireAuth, async (req, res) => {
       reason: String(it.reason || "").trim(),
       impact: String(it.impact || "").trim(),
     })).filter((it) => ["keep", "rewrite", "remove", "add"].includes(it.action));
-    const finalOutline = (Array.isArray(data.finalOutline) ? data.finalOutline : [])
+    let finalOutline = (Array.isArray(data.finalOutline) ? data.finalOutline : [])
       .map((o) => ({ level: Math.min(4, Math.max(1, Number(o.level) || 2)), text: String(o.text || "").trim(), status: String(o.status || "").toLowerCase() }))
       .filter((o) => o.text);
-    res.json({ intent: data.intent || "", items, finalOutline, summary: data.summary || "", engineUsed, currentHeadings: target.headings || [] });
+
+    // LUOI AN TOAN: AI van co the bo sot muc ma DA SO doi thu deu co (nhat la khi co Kien thuc
+    // website keo no ve huong ca nhan hoa). Kiem tra lai bang code va tu chen cum con thieu
+    // dung vi tri theo hanh trinh doi thu.
+    const cov = checkCoverage(finalOutline, consensus, { mainKeyword });
+    let autoAdded = [];
+    if (cov.missing.length) {
+      const ins = insertMissing(finalOutline, cov.missing, consensus, { mainKeyword });
+      finalOutline = ins.outline;
+      autoAdded = ins.added;
+      // Bo sung vao cot "Nen them" de nguoi dung thay ly do
+      for (const c of cov.missing) {
+        items.push({
+          action: "add", level: c.level || 2, current: "", suggested: c.label,
+          position: "theo thu tu doi thu", impact: "Cao",
+          reason: `Điểm chung ${c.count}/${consensus.nComp} đối thủ TOP — bắt buộc theo search intent (AI đã bỏ sót, hệ thống tự bổ sung).`,
+        });
+      }
+    }
+
+    res.json({
+      intent: data.intent || "", items, finalOutline, summary: data.summary || "", engineUsed,
+      currentHeadings: target.headings || [],
+      // Bang diem chung cho UI: nguoi dung thay ro outline cuoi da bam search intent den dau
+      consensus: {
+        nComp: consensus.nComp, mustMin: consensus.mustMin || 0,
+        clusters: (consensus.clusters || []).map(({ toks, ...c }) => c),
+        coveredCount: cov.covered.length, mustCount: cov.covered.length + cov.missing.length,
+        autoAdded: autoAdded.map((a) => a.text),
+      },
+    });
   } catch (e) {
     if (e.message === "local") return res.status(400).json({ error: "Cần engine Gemini/Claude." });
     res.status(400).json({ error: "AI lỗi: " + (e.message || "?") });

@@ -367,7 +367,7 @@ TOI UU GEO / AI OVERVIEW (bat buoc, ap dung MOI linh vuc):
 - UNIQUE / SPECIFIC / AUTHENTIC: outline nen tao cho o cac muc CO GOC NHIN/DU LIEU RIENG (so lieu cu the, kinh nghiem thuc te, so sanh doc quyen) thay vi chi dinh nghia chung chung (tranh "commodity content").
 - FORMAT theo noi dung: muc so sanh/gia -> bang; muc uu diem/luu y/danh sach -> bullet; quy trinh -> danh sach danh so; muc giai thich co che -> doan van. (Format la goi y trong ly do, khong bat buoc ghi vao text heading.)`;
 
-export function buildHeadingPrompt({ target, competitors, bench, mainKeyword, subKeywords, knowledge, skill, gscQueries }) {
+export function buildHeadingPrompt({ target, competitors, bench, mainKeyword, subKeywords, knowledge, skill, gscQueries, consensusText }) {
   const cur = (target.headings || []).map((h, i) => `  ${i + 1}. H${h.level}: ${h.text}`).join("\n");
   const comp = (competitors || []).filter((c) => c && c.ok).map((c, i) => {
     const hs = (c.headings || []).slice(0, 20).map((h) => `     H${h.level}: ${h.text}`).join("\n");
@@ -384,17 +384,28 @@ ${cur || "  (bai chua co heading nao)"}
 
 === OUTLINE CUA DOI THU TOP SERP ===
 ${comp || "  (khong co)"}
-${gq ? `\n=== TRUY VAN THAT NGUOI DUNG DANG TIM (Google Search Console) ===\n${gq}\n` : ""}
+${consensusText ? `\n${consensusText}\n` : ""}${gq ? `\n=== TRUY VAN THAT NGUOI DUNG DANG TIM (Google Search Console) ===\n${gq}\n` : ""}
 NHIEM VU: TOI UU TOAN DIEN CAU TRUC HEADING nhu mot chuyen gia SEO Onpage + SEO Content (ap dung phuong phap onpage-competitor-analysis va nguyen tac SEO content DA LINH VUC — tu nhan dien linh vuc cua bai, KHONG ap cung 1 nganh).
-
+${consensusText ? `
+⚠️ LUAT SO 1 — SEARCH INTENT CHUNG THANG MOI THU KHAC:
+- Bang "DIEM CHUNG OUTLINE DOI THU" o tren la thu Google DANG THUONG cho tu khoa nay. MOI cum ghi [BAT BUOC] PHAI xuat hien trong finalOutline: bai da co -> keep/rewrite cho sat intent; bai dang thieu -> BAT BUOC action "add".
+- TUYET DOI KHONG duoc "remove" mot heading dang phuc vu cum [BAT BUOC] (chi duoc rewrite cho tot hon, hoac gop 2 heading trung nhau THANH 1 heading van phuc vu cum do).
+- Neu ban thay mot cum [BAT BUOC] khong hop voi bai, VAN PHAI dua vao (co the doi cach dien dat / doi cap H2-H3), vi do la nhu cau tim kiem THAT — khong phai y kien chu quan.
+- KIEN THUC WEBSITE / SKILL chi duoc dung de: (a) lam SAU va KHAC BIET ben trong cac muc cot loi tren, (b) them TOI DA 2 muc rieng (goc nhin/du lieu doc quyen) dat SAU cac muc cot loi. KHONG duoc thay the, cat bot hay day cac muc cot loi xuong duoi. Ca nhan hoa la LOP PHU, khong phai lop thay the.
+- THU TU finalOutline bam theo "vi tri TB trong bai doi thu" (nho -> lon) de dung hanh trinh tim kiem, tru khi co ly do logic ro rang.
+- Cum ghi [tuy chon] (it doi thu co): chi them khi that su phuc vu intent hoac la the manh rieng cua website.
+` : ""}
 QUY TRINH BAT BUOC:
-BUOC 1 — Xac dinh SEARCH INTENT cua "${mainKeyword}" + liet ke cac SUB-INTENT bat buoc phai phu (bam heading doi thu TOP${gq ? " + truy van that GSC" : ""}).
+BUOC 1 — Xac dinh SEARCH INTENT cua "${mainKeyword}" + liet ke cac SUB-INTENT bat buoc phai phu (${consensusText ? "LAY TRUC TIEP tu bang DIEM CHUNG o tren — moi cum [BAT BUOC] la 1 sub-intent" : "bam heading doi thu TOP"}${gq ? " + truy van that GSC" : ""}).
 BUOC 2 — SOI TUNG HEADING HIEN CO (phai xu ly HET, khong bo sot), gan DUNG 1 action:
   • "keep": phuc vu dung intent, dien dat tot, doi thu cung co hoac la the manh rieng.
   • "rewrite": DUNG chu de nhung DIEN DAT KEM -> viet lai. Cac loi can bat: mo ho/chung chung; sao rong; NHOI TU KHOA; sai cap bac (H3 le loi, H2 dang le la H3); dang cau hoi nhung khong tra loi thang; qua dai/qua ngan; khong chua tu khoa/bien the khi can.
   • "remove": KHONG phuc vu intent -> XOA hoac GOP. Bat cac truong hop: LAC DE; TRUNG LAP y voi heading khac; noi dung QUA MONG khong dang 1 muc rieng; mang tinh QUANG CAO/ban hang lam LOANG noi dung; muc phu tro vun vat lam loang trong tam. PHAI neu ro ly do lam loang.
-BUOC 3 — THEM heading con THIEU. Uu tien theo DIEM CHUNG: y/heading ma NHIEU doi thu TOP cung co (sau khi gop dong nghia) = tin hieu MANH ve intent -> nen them neu bai dang thieu. Y chi 1 doi thu co thi chi them khi that su can cho intent${gq ? " + nhu cau tu truy van GSC" : ""}. Ghi ro vi tri chen.
-BUOC 4 — Dung finalOutline: outline CUOI sau khi ap dung het (bo cai xoa, thay cai sua, chen cai them). YEU CAU CO DONG: outline cuoi NGAN GON, tap trung tu khoa chinh/phu + mau chot bai, KHONG dai dong, KHONG them heading cho "du nhieu". Thu tu LOGIC theo hanh trinh nguoi doc (nhan dien van de -> hieu -> giai phap -> chi phi/luu y -> hanh dong).
+BUOC 3 — THEM heading con THIEU. ${consensusText ? 'BAT DAU tu bang DIEM CHUNG: MOI cum [BAT BUOC] dang "bai DANG THIEU" -> PHAI co 1 item action="add" tuong ung (dien dat lai cho tu nhien & hop giong bai, khong copy nguyen van doi thu). Sau do moi xet cum [tuy chon]' : "Uu tien theo DIEM CHUNG: y/heading ma NHIEU doi thu TOP cung co (sau khi gop dong nghia) = tin hieu MANH ve intent -> nen them neu bai dang thieu. Y chi 1 doi thu co thi chi them khi that su can cho intent"}${gq ? " + nhu cau tu truy van GSC" : ""}. Ghi ro vi tri chen.
+BUOC 4 — Dung finalOutline: outline CUOI sau khi ap dung het (bo cai xoa, thay cai sua, chen cai them).
+  • BAT BUOC: phu DU ${consensusText ? "100% cac cum [BAT BUOC]" : "cac y ma nhieu doi thu cung co"} — day la dieu kien khong the thieu. Truoc khi tra ket qua, HAY TU KIEM TRA lai: doi chieu tung cum [BAT BUOC] voi finalOutline, thieu cum nao thi bo sung ngay.
+  • CO DONG: ngoai cac muc cot loi tren, KHONG them heading cho "du nhieu"; moi muc them phai phuc vu intent hoac la the manh rieng.
+  • THU TU: bam hanh trinh tim kiem cua nguoi dung (theo vi tri TB cua doi thu; thong thuong: nhan dien/khai niem -> phan loai/lua chon -> quy trinh -> chi phi -> luu y/rui ro -> danh gia/dia chi -> FAQ).
 
 NGUYEN TAC (moi linh vuc):
 - Dung 1 H1 chua tu khoa chinh. Phan cap logic: H3 phai thuoc 1 H2; cha co 0 hoac >=2 con (khong de con don le).
@@ -403,7 +414,7 @@ NGUYEN TAC (moi linh vuc):
 - Uu tien muc CO NHU CAU TIM KIEM THAT; cat bo muc lan man/quang cao.
 - E-E-A-T: voi linh vuc YMYL (y te/tai chinh/phap ly) can co muc the hien kinh nghiem/chuyen mon/dan nguon.
 - Giong tu nhien nhu chuyen gia nguoi Viet viet, KHONG sao rong, KHONG dau vet AI.
-${skill && skill.trim() ? "- TUAN THU tuyet doi SKILL cua nguoi dung o tren (giong van, cau truc, quy tac).\n" : ""}${knowledge && knowledge.trim() ? "- Van dung KIEN THUC WEBSITE de dat muc the hien the manh rieng (non-commodity), khong bia.\n" : ""}${GEO_RULE}
+${skill && skill.trim() ? "- TUAN THU tuyet doi SKILL cua nguoi dung o tren (giong van, cau truc, quy tac) — nhung KHONG duoc vi Skill ma bo qua cac muc phuc vu search intent chung.\n" : ""}${knowledge && knowledge.trim() ? "- Van dung KIEN THUC WEBSITE de dat muc the hien the manh rieng (non-commodity), khong bia. LUU Y: kien thuc website la LOP LAM SAU/KHAC BIET, KHONG duoc thay the cac muc cot loi ma doi thu TOP deu co.\n" : ""}${GEO_RULE}
 
 Khi dat finalOutline: AP DUNG GEO o tren — heading chinh & FAQ uu tien dang cau hoi dung intent, nhung van co muc cum danh tu cho tu nhien.
 KHONG bia so lieu. Tra ve DUNG schema (items co du keep/rewrite/remove/add + finalOutline).${VN_RULE}`;
