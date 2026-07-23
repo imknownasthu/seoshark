@@ -85,12 +85,22 @@ function competitorsBlock(competitorOutlines) {
     .join("\n\n");
 }
 
-export function buildOutlinePrompt({ mainKw, subKws = [], refOutline = "", knowledge = "", websiteName = "", competitorOutlines = [] }) {
+export function buildOutlinePrompt({ mainKw, subKws = [], refOutline = "", knowledge = "", websiteName = "", competitorOutlines = [], consensusText = "" }) {
   const system =
     "Bạn là chuyên gia SEO content chiến lược, làm việc ĐA LĨNH VỰC (y tế, TMĐT, bất động sản, giáo dục, du lịch, tài chính, pháp lý, công nghệ, làm đẹp...). " +
     "Nhiệm vụ: từ outline của các đối thủ TOP SERP, TỔNG HỢP ra MỘT outline heading (H2/H3/H4) TỐT NHẤT cho từ khóa chính.\n\n" +
     "⚠️ QUAN TRỌNG: Tự nhận diện ĐÚNG lĩnh vực của từ khóa rồi áp dụng phương pháp cho phù hợp lĩnh vực ĐÓ. " +
     "Các khung dưới đây là PHƯƠNG PHÁP THAM KHẢO tổng quát, KHÔNG mặc định ngành nào.\n\n" +
+    (consensusText
+      ? "⚠️ LUẬT SỐ 1 — SEARCH INTENT CHUNG THẮNG MỌI THỨ KHÁC:\n" +
+        "• Trong phần dữ liệu bên dưới có bảng 'ĐIỂM CHUNG OUTLINE ĐỐI THỦ' — đã gộp đồng nghĩa BẰNG THUẬT TOÁN (không phải suy đoán). Đây là thứ Google đang thưởng cho từ khóa này.\n" +
+        "• MỌI cụm ghi [BAT BUOC] PHẢI có mặt trong outline cuối, không được bỏ bất kỳ cụm nào. Bạn được quyền diễn đạt lại cho tự nhiên/hợp giọng bài, gộp 2 cụm rất gần nhau thành 1 heading bao trùm, hoặc đổi cấp H2/H3 — nhưng KHÔNG được bỏ ý.\n" +
+        "• KIẾN THỨC WEBSITE là LỚP PHỦ để làm sâu và khác biệt, KHÔNG phải lớp thay thế: dùng nó để làm giàu chính các mục cốt lõi ở trên, cộng thêm TỐI ĐA 2 mục riêng (góc nhìn/dữ liệu độc quyền) đặt SAU các mục cốt lõi. Tuyệt đối không vì cá nhân hóa mà cắt bớt hay đẩy mục cốt lõi xuống dưới.\n" +
+        "• THỨ TỰ outline bám 'vị trí TB trong bài đối thủ' (nhỏ → lớn) để đúng hành trình tìm kiếm, trừ khi có lý do logic rõ ràng.\n" +
+        "• Cụm ghi [tuy chon] (ít đối thủ có): chỉ thêm khi thật sự phục vụ intent hoặc là thế mạnh riêng của website.\n" +
+        "• Nguyên tắc 'CÔ ĐỌNG' bên dưới áp dụng cho phần NGOÀI các cụm [BAT BUOC] — không được lấy lý do cô đọng để cắt mục cốt lõi.\n" +
+        "• TRƯỚC KHI TRẢ KẾT QUẢ: tự đối chiếu lại từng cụm [BAT BUOC] với outline vừa dựng — thiếu cụm nào thì bổ sung ngay.\n\n"
+      : "") +
     "PHƯƠNG PHÁP (chắt lọc, không áp cứng):\n" +
     "• Xác định SEARCH INTENT chủ đạo của từ khóa; toàn bộ cấu trúc phải phục vụ intent đó.\n" +
     "• LẤY ĐIỂM CHUNG trước: heading (hoặc ý) mà NHIỀU đối thủ TOP cùng có = tín hiệu MẠNH nhất về intent → gần như BẮT BUỘC đưa vào (sau khi gộp đồng nghĩa). Ý chỉ 1 đối thủ có thì cân nhắc kỹ, chỉ giữ nếu thật sự cần cho intent.\n" +
@@ -133,8 +143,10 @@ export function buildOutlinePrompt({ mainKw, subKws = [], refOutline = "", knowl
   if (refOutline && String(refOutline).trim()) parts.push(`OUTLINE THAM KHẢO (heading mong muốn của người dùng):\n${String(refOutline).trim()}`);
   if (knowledge && String(knowledge).trim()) parts.push(`KIẾN THỨC WEBSITE (đọc ĐẦY ĐỦ để đi đúng định vị non-commodity, khai thác tối đa thông tin thật; KHÔNG nhồi chi tiết máy móc vào heading):\n${String(knowledge).trim().slice(0, 40000)}`);
   parts.push(`OUTLINE CÁC ĐỐI THỦ TOP SERP (phân tích kỹ làm CĂN CỨ, nhưng CHẮT LỌC chứ không copy toàn bộ):\n${competitorsBlock(competitorOutlines)}`);
+  if (consensusText) parts.push(consensusText);
   parts.push(
     "YÊU CẦU: Xuất Title SEO + Meta description + outline (H2/H3/H4) TỐT NHẤT cho từ khóa chính — chắt lọc heading thiết yếu, đúng search intent, " +
+    (consensusText ? "PHỦ ĐỦ 100% các cụm [BAT BUOC] trong bảng điểm chung, " : "") +
     "tuân thủ mọi QUY TẮC CẤU TRÚC ở trên (đặc biệt: cha có 0 hoặc ≥2 con; sentence case; không gạch ngang; Title 50–60 ký tự; Meta 140–160 ký tự)."
   );
 

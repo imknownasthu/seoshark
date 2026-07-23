@@ -13,7 +13,7 @@ import { optimizeWithGemini, geminiJson, geminiPing, pickBestGeminiModel, listFr
 import {
   geminiWithFallback, aiHeaders, noteAiModel, cacheModelChain, liveModel, prettyModelName, QUOTA_ERR,
 } from "./src/ai-fallback.js";
-import { buildConsensus, consensusView, checkCoverage, insertMissing } from "./src/heading-consensus.js";
+import { buildConsensus, consensusView, checkCoverage, insertMissing, markCoverage, refineLocalOutline } from "./src/heading-consensus.js";
 import { optimizeWithClaude, claudeJson, claudePing } from "./src/claude.js";
 import { auditUrl, benchmark } from "./src/onpage.js";
 import { fetchSerp, serpConfigured } from "./src/serp.js";
@@ -1000,7 +1000,7 @@ app.post("/api/onpage/headings", requireAuth, async (req, res) => {
       // Bang diem chung cho UI: nguoi dung thay ro outline cuoi da bam search intent den dau
       consensus: {
         nComp: consensus.nComp, mustMin: consensus.mustMin || 0,
-        clusters: (consensus.clusters || []).map(({ toks, ...c }) => c),
+        clusters: (consensus.clusters || []).map(({ toks, members, ...c }) => c),
         coveredCount: cov.covered.length, mustCount: cov.covered.length + cov.missing.length,
         autoAdded: autoAdded.map((a) => a.text),
       },
@@ -2335,8 +2335,15 @@ app.post("/api/outline/generate", requireAuth, async (req, res) => {
     let outline = [], engineUsed = "Local", aiError = "", title = "", metaDescription = "";
     const eng = (engine || "local").toLowerCase();
 
+    // DIEM CHUNG doi thu = search intent Google dang thuong. Tinh BANG CODE roi ep AI phu du.
+    // "Outline tham khao" cua nguoi dung duoc coi la phan da co (de danh dau cum nao con thieu).
+    const refHeads = String(refOutline || "").split(/\n+/).map((s) => s.trim()).filter(Boolean)
+      .map((s) => ({ level: 2, text: s.replace(/^#+\s*/, "").replace(/^h[1-6]\s*[:.-]\s*/i, "") }));
+    const consensus = buildConsensus(comp, { targetHeadings: refHeads, mainKeyword: main });
+    const consensusText = consensusView(consensus, { mainKeyword: main });
+
     if (eng === "gemini" || eng === "claude") {
-      const { system, user, schema } = buildOutlinePrompt({ mainKw: main, subKws: subs, refOutline, knowledge, websiteName, competitorOutlines: comp });
+      const { system, user, schema } = buildOutlinePrompt({ mainKw: main, subKws: subs, refOutline, knowledge, websiteName, competitorOutlines: comp, consensusText });
       try {
         let d = null, usedModel = "";
         if (eng === "gemini") {
@@ -2369,14 +2376,31 @@ app.post("/api/outline/generate", requireAuth, async (req, res) => {
       }
     }
 
-    // Fallback / Local: gop co hoc outline doi thu
+    // Fallback / Local: gop co hoc outline doi thu.
+    // mergeOutlinesLocal so khop theo CHUOI nen de ra nhieu muc trung y ("Chi phi dieu tri" +
+    // "Bang gia..." + "Gia..."); refineLocalOutline gop chung lai theo cum dong nghia + sap xep
+    // theo hanh trinh doc cua doi thu.
     if (!outline.length) {
-      outline = mergeOutlinesLocal(comp, { mainKw: main, subKws: subs });
+      outline = refineLocalOutline(mergeOutlinesLocal(comp, { mainKw: main, subKws: subs }), consensus, { mainKeyword: main });
       engineUsed = (eng === "gemini" || eng === "claude") ? "Local (AI lỗi)" : "Local";
     }
 
+    // LUOI AN TOAN: cum ma DA SO doi thu deu co ma outline con thieu -> tu chen dung vi tri
+    // (AI hay bo sot khi co Kien thuc website keo ve huong ca nhan hoa; Local gop co hoc cung sot).
+    const cov = checkCoverage(outline, consensus, { mainKeyword: main });
+    let autoAdded = [];
+    if (cov.missing.length) {
+      const ins = insertMissing(outline, cov.missing, consensus, { mainKeyword: main });
+      outline = ins.outline;
+      autoAdded = ins.added;
+    }
+
     // Chuan hoa cau truc (level 2-4; cha co 0 hoac >=2 con -> con don le nang len cung cap) + danh dau tu khoa
-    outline = normalizeOutline(outline).map((it) => ({ ...it, ...markKeywords(it.text, main, subs) }));
+    const addedSet = new Set(autoAdded.map((a) => a.text));
+    outline = normalizeOutline(outline).map((it) => ({
+      ...it, ...markKeywords(it.text, main, subs),
+      ...(addedSet.has(it.text) ? { source: "consensus" } : {}),
+    }));
 
     // Title/Meta co ban khi AI khong chay (de field khong rong) — AI cho chat luong tot hon nhieu
     if (!title) {
@@ -2387,7 +2411,17 @@ app.post("/api/outline/generate", requireAuth, async (req, res) => {
       metaDescription = `Tìm hiểu ${main}${subs.length ? ", " + subs.slice(0, 2).join(", ") : ""}. Thông tin đầy đủ, dễ hiểu giúp bạn quyết định đúng. Xem ngay!`.slice(0, 160);
     }
 
-    res.json({ outline, engineUsed, count: outline.length, aiError, title, metaDescription });
+    res.json({
+      outline, engineUsed, count: outline.length, aiError, title, metaDescription,
+      consensus: {
+        nComp: consensus.nComp, mustMin: consensus.mustMin || 0,
+        // Chua co "bai hien tai" -> danh dau covered theo chinh OUTLINE VUA TAO
+        clusters: markCoverage(consensus.clusters, outline, { mainKeyword: main }).map(({ toks, members, ...c }) => c),
+        coveredCount: cov.covered.length + autoAdded.length, mustCount: cov.covered.length + cov.missing.length,
+        autoAdded: autoAdded.map((a) => a.text),
+        scope: "outline", // UI doi nhan: "outline da co" thay vi "bai da co"
+      },
+    });
   } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
 });
 

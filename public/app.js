@@ -1504,10 +1504,12 @@ function renderConsensus(c) {
   if (!c || !c.nComp || !(c.clusters || []).length) return "";
   const musts = c.clusters.filter((x) => x.must);
   const opts = c.clusters.filter((x) => !x.must);
+  // scope="outline" (công cụ Lên outline, chưa có bài) vs mặc định (Onpage, soi bài hiện tại)
+  const [okLbl, noLbl] = c.scope === "outline" ? ["outline đã có", "chưa có"] : ["bài đã có", "bài đang thiếu"];
   const row = (x) => `<div class="cons-row${x.must ? " must" : ""}">
       <span class="cons-share" title="${x.count}/${c.nComp} đối thủ TOP có mục này">${x.count}/${c.nComp}</span>
       <span class="cons-label">${esc(x.label)}</span>
-      <span class="cons-state ${x.covered ? "on" : "off"}">${x.covered ? "bài đã có" : "bài đang thiếu"}</span>
+      <span class="cons-state ${x.covered ? "on" : "off"}">${x.covered ? okLbl : noLbl}</span>
     </div>`;
   const full = c.mustCount && c.coveredCount >= c.mustCount;
   const added = (c.autoAdded || []).length;
@@ -1519,7 +1521,7 @@ function renderConsensus(c) {
     <div class="cons-note">Các mục <b>bắt buộc</b> là những mục ≥ ${c.mustMin}/${c.nComp} đối thủ TOP cùng có (đã gom nhóm các cách gọi khác nhau) — outline cuối phải phủ hết, kiến thức website chỉ là lớp làm sâu thêm.</div>
     ${musts.map(row).join("")}
     ${opts.length ? `<div class="cons-sub">Tùy chọn (ít đối thủ có)</div>${opts.map(row).join("")}` : ""}
-    ${added ? `<div class="cons-note warn">⚠ AI bỏ sót ${added} mục bắt buộc — hệ thống đã tự chèn vào outline cuối: ${(c.autoAdded || []).map((t) => `“${esc(t)}”`).join(", ")}</div>` : ""}
+    ${added ? `<div class="cons-note warn">⚠ Đã bỏ sót ${added} mục bắt buộc — hệ thống tự chèn vào outline: ${(c.autoAdded || []).map((t) => `“${esc(t)}”`).join(", ")}</div>` : ""}
   </details>`;
 }
 
@@ -2796,6 +2798,7 @@ $("#opClearSkill").addEventListener("click", () => {
   let competitors = [];   // outline đối thủ (đã bóc tách)
   let lastOutline = [];   // kết quả outline cuối
   let lastTitle = "", lastMeta = ""; // Title SEO + Meta description
+  let lastConsensus = null; // bảng "search intent chung" của đối thủ TOP
   let knowledge = [];     // thư viện kiến thức của tài khoản
   let analyzedKw = "";    // từ khóa đã phân tích đối thủ (để phát hiện đổi từ khóa)
 
@@ -2952,11 +2955,15 @@ $("#opClearSkill").addEventListener("click", () => {
   function renderTree() {
     const mk = $("#olMainKw").value.trim();
     const sk = splitList($("#olSubKws").value);
-    $("#olTree").innerHTML = lastOutline.map((it) => {
+    const tree = lastOutline.map((it) => {
       const pad = (it.level - 2) * 18;
       const weight = it.level === 2 ? "600" : it.level === 3 ? "500" : "400";
-      return `<div class="ol-oline" style="padding-left:${pad}px;font-weight:${weight}"><b>H${it.level}:</b> ${highlightKw(it.text, mk, sk)}</div>`;
+      const tag = it.source === "consensus"
+        ? ' <span class="badge sapo" style="font-size:.6rem" title="Điểm chung của đối thủ TOP — bắt buộc theo search intent">intent chung</span>' : "";
+      return `<div class="ol-oline" style="padding-left:${pad}px;font-weight:${weight}"><b>H${it.level}:</b> ${highlightKw(it.text, mk, sk)}${tag}</div>`;
     }).join("");
+    // Bang "search intent chung cua doi thu" dat ngay tren cay outline
+    $("#olTree").innerHTML = renderConsensus(lastConsensus) + tree;
   }
   // Title SEO + Meta description với đếm ký tự (xanh nếu trong khoảng chuẩn) + nút copy
   function renderTitleMeta() {
@@ -3009,6 +3016,7 @@ $("#opClearSkill").addEventListener("click", () => {
       lastOutline = d.outline || [];
       if (!lastOutline.length) { setMsg("#olGenMsg", "warn", "Không tạo được outline."); return; }
       lastTitle = d.title || ""; lastMeta = d.metaDescription || "";
+      lastConsensus = d.consensus || null;
       // reset gợi ý unique cũ
       $("#olUniqueList").innerHTML = ""; $("#olUniqueMsg").innerHTML = "";
       $("#olEngineUsed").textContent = "— " + (d.engineUsed || "");

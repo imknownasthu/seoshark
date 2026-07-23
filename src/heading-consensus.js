@@ -116,7 +116,8 @@ export function simToCluster(toks, cluster) {
  * @returns { nComp, clusters:[{label, variants, hosts, count, share, avgPos, level, must, covered, matched}] }
  */
 export function buildConsensus(competitors, { targetHeadings = [], mainKeyword = "", maxClusters = 15 } = {}) {
-  const comps = (competitors || []).filter((c) => c && c.ok && (c.headings || []).length);
+  // c.ok chi co o luong Onpage (doi thu doc loi -> ok:false). Luong "Len outline" khong co truong nay.
+  const comps = (competitors || []).filter((c) => c && c.ok !== false && (c.headings || []).length);
   const nComp = comps.length;
   if (!nComp) return { nComp: 0, clusters: [] };
 
@@ -211,6 +212,76 @@ export function checkCoverage(finalOutline, cons, { mainKeyword = "" } = {}) {
     else missing.push(c);
   }
   return { missing, covered };
+}
+
+/**
+ * Don outline gop CO HOC (engine Local): gop cac H2 TRUNG Y (vd "Chi phi dieu tri" +
+ * "Bang gia ... moi nhat" + "Gia ..." -> 1 muc) va sap xep lai theo hanh trinh doc cua doi thu.
+ * Chi dung cho Local: ban AI da tu chat loc nen khong can (va khong nen) ep gop.
+ */
+export function refineLocalOutline(outline, cons, { mainKeyword = "" } = {}) {
+  const rows = outline || [];
+  if (!rows.length || !cons?.clusters?.length) return rows;
+
+  // Cat thanh cac khoi: 1 H2 + cac heading con di kem
+  const blocks = [];
+  for (const r of rows) {
+    if (r.level <= 2 || !blocks.length) blocks.push({ head: r, kids: [] });
+    else blocks[blocks.length - 1].kids.push(r);
+  }
+
+  const clusterOf = (text) => {
+    const toks = contentTokens(text, mainKeyword);
+    let best = null, bs = 0;
+    for (const c of cons.clusters) { const s = simToCluster(toks, c); if (s > bs) { bs = s; best = c; } }
+    return bs >= SIM_MIN ? best : null;
+  };
+
+  const seen = new Map(); // cluster -> block giu lai
+  const kept = [];
+  for (const b of blocks) {
+    const cl = clusterOf(b.head.text);
+    if (cl && seen.has(cl)) {
+      // Trung y voi khoi truoc -> gop con vao khoi do, bo heading trung
+      const first = seen.get(cl);
+      for (const k of b.kids) if (!first.kids.some((x) => x.text === k.text)) first.kids.push(k);
+      continue;
+    }
+    if (cl) seen.set(cl, b);
+    b.cluster = cl;
+    kept.push(b);
+  }
+
+  // Sap xep theo vi tri trung binh cua doi thu (khoi khong khop cum nao giu nguyen thu tu tuong doi)
+  kept.forEach((b, i) => { b.ord = b.cluster ? b.cluster.avgPos : (i / Math.max(1, kept.length - 1)); });
+  kept.sort((a, b) => a.ord - b.ord);
+
+  // Bo con trung y trong cung 1 khoi
+  const out = [];
+  for (const b of kept) {
+    out.push(b.head);
+    const usedKid = new Map();
+    for (const k of b.kids) {
+      const cl = clusterOf(k.text);
+      if (cl && usedKid.has(cl)) continue;
+      if (cl) usedKid.set(cl, true);
+      out.push(k);
+    }
+  }
+  return out;
+}
+
+/**
+ * Danh dau lai covered/matched cua tung cum theo MOT outline cho truoc.
+ * Dung cho cong cu "Len outline" (chua co bai) -> hien "outline cuoi da phu cum nao".
+ */
+export function markCoverage(clusters, outline, { mainKeyword = "" } = {}) {
+  const rows = (outline || []).filter((o) => o && o.text).map((o) => ({ o, toks: contentTokens(o.text, mainKeyword) }));
+  return (clusters || []).map((c) => {
+    let best = null, bs = 0;
+    for (const r of rows) { const s = simToCluster(r.toks, c); if (s > bs) { bs = s; best = r.o; } }
+    return { ...c, covered: bs >= SIM_MIN, matched: bs >= SIM_MIN && best ? best.text : "" };
+  });
 }
 
 /**
