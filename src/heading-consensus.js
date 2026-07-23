@@ -143,6 +143,8 @@ export function buildConsensus(competitors, { targetHeadings = [], mainKeyword =
         clusters.push(cl);
       }
       const label = stripLeadNum(h.text).trim();
+      // Heading danh so ("1. Nha khoa ABC") = MOT HANG MUC trong danh sach, khong phai muc intent
+      if (/^\s*\d{1,2}\s*[.)\-–:]\s+\S/.test(String(h.text))) cl.numbered = (cl.numbered || 0) + 1;
       cl.variants.set(label, (cl.variants.get(label) || 0) + 1);
       cl.levels.push(h.level);
       cl.posSum += hs.length > 1 ? i / (hs.length - 1) : 0;
@@ -151,8 +153,9 @@ export function buildConsensus(competitors, { targetHeadings = [], mainKeyword =
     });
   });
 
-  // Cum BAT BUOC: >= nua so doi thu (toi thieu 2 doi thu)
-  const mustMin = Math.max(2, Math.ceil(nComp / 2));
+  // Cum BAT BUOC: phai la DA SO RO RANG (>=60% doi thu, toi thieu 2). Truoc day de >=50% thi
+  // voi 4 doi thu chi can 2/4 la bi ep vao — tin hieu qua yeu, de lam loang outline.
+  const mustMin = Math.max(2, Math.ceil(nComp * 0.6));
   const tgt = (targetHeadings || []).filter((h) => h && h.text).map((h) => ({ h, toks: contentTokens(h.text, mainKeyword) }));
 
   const out = clusters.map((cl) => {
@@ -162,6 +165,9 @@ export function buildConsensus(competitors, { targetHeadings = [], mainKeyword =
     const levels = cl.levels.slice().sort((a, b) => cl.levels.filter((x) => x === a).length - cl.levels.filter((x) => x === b).length);
     let matched = null, mSim = 0;
     for (const t of tgt) { const s = simToCluster(t.toks, cl); if (s > mSim) { mSim = s; matched = t.h; } }
+    // Cum gom cac HANG MUC danh sach (Top 10 dia chi...) -> KHONG duoc ep vao outline:
+    // do la noi dung cu the cua tung bai (thuong la ten thuong hieu doi thu), khong phai intent.
+    const isItem = (cl.numbered || 0) >= Math.max(1, Math.ceil(cl.variants.size / 2));
     return {
       label,
       variants: [...cl.variants.keys()].slice(0, 4),
@@ -170,7 +176,8 @@ export function buildConsensus(competitors, { targetHeadings = [], mainKeyword =
       share: +(count / nComp).toFixed(2),
       avgPos: +(cl.posSum / (cl.posN || 1)).toFixed(3),
       level: levels[levels.length - 1] || 2,
-      must: count >= mustMin,
+      isItem,
+      must: count >= mustMin && !isItem,
       covered: mSim >= SIM_MIN,
       matched: mSim >= SIM_MIN && matched ? matched.text : "",
       toks: cl.toks,        // dung noi bo (kiem tra outline cuoi), khong gui ra UI
@@ -219,7 +226,7 @@ export function checkCoverage(finalOutline, cons, { mainKeyword = "" } = {}) {
  * "Bang gia ... moi nhat" + "Gia ..." -> 1 muc) va sap xep lai theo hanh trinh doc cua doi thu.
  * Chi dung cho Local: ban AI da tu chat loc nen khong can (va khong nen) ep gop.
  */
-export function refineLocalOutline(outline, cons, { mainKeyword = "" } = {}) {
+export function refineLocalOutline(outline, cons, { mainKeyword = "", archetype = null } = {}) {
   const rows = outline || [];
   if (!rows.length || !cons?.clusters?.length) return rows;
 
@@ -237,10 +244,20 @@ export function refineLocalOutline(outline, cons, { mainKeyword = "" } = {}) {
     return bs >= SIM_MIN ? best : null;
   };
 
+  // Bai dang TOPLIST: cac heading hang muc cua doi thu CHINH LA TEN THUONG HIEU cua ho
+  // ("1. Nha khoa Shark"...). Gop co hoc se be nguyen danh sach doi thu vao outline cua minh
+  // -> thay bang KHUNG danh sach de nguoi viet tu dien.
+  const isToplist = archetype?.type === "toplist";
   const seen = new Map(); // cluster -> block giu lai
   const kept = [];
+  let droppedItems = 0, droppedPos = 0;
   for (const b of blocks) {
     const cl = clusterOf(b.head.text);
+    if (isToplist && cl?.isItem) {
+      droppedItems++;
+      droppedPos += cl.avgPos;
+      continue;
+    }
     if (cl && seen.has(cl)) {
       // Trung y voi khoi truoc -> gop con vao khoi do, bo heading trung
       const first = seen.get(cl);
@@ -250,6 +267,20 @@ export function refineLocalOutline(outline, cons, { mainKeyword = "" } = {}) {
     if (cl) seen.set(cl, b);
     b.cluster = cl;
     kept.push(b);
+  }
+
+  // Chen KHUNG danh sach thay cho cac hang muc vua bo (dung dang bai, khong lo ten doi thu)
+  if (isToplist && droppedItems) {
+    const n = Math.min(Math.max(archetype.avgItems || droppedItems, 3), 10);
+    const kw = String(mainKeyword || "").trim();
+    kept.push({
+      head: { level: 2, text: `Top ${n} ${kw}`.trim(), source: "archetype" },
+      kids: Array.from({ length: Math.min(n, 5) }, (_, i) => ({
+        level: 3, text: `Lựa chọn ${i + 1} (điền tên và điểm nổi bật)`, source: "archetype",
+      })),
+      // Dat dung cho ma doi thu dat danh sach (vi tri TB cua cac hang muc)
+      cluster: { avgPos: droppedPos / droppedItems },
+    });
   }
 
   // Sap xep theo vi tri trung binh cua doi thu (khoi khong khop cum nao giu nguyen thu tu tuong doi)

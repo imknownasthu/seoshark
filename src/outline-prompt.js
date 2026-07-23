@@ -85,12 +85,20 @@ function competitorsBlock(competitorOutlines) {
     .join("\n\n");
 }
 
-export function buildOutlinePrompt({ mainKw, subKws = [], refOutline = "", knowledge = "", websiteName = "", competitorOutlines = [], consensusText = "" }) {
+export function buildOutlinePrompt({ mainKw, subKws = [], refOutline = "", knowledge = "", websiteName = "", competitorOutlines = [], consensusText = "", archetypeText = "" }) {
   const system =
     "Bạn là chuyên gia SEO content chiến lược, làm việc ĐA LĨNH VỰC (y tế, TMĐT, bất động sản, giáo dục, du lịch, tài chính, pháp lý, công nghệ, làm đẹp...). " +
     "Nhiệm vụ: từ outline của các đối thủ TOP SERP, TỔNG HỢP ra MỘT outline heading (H2/H3/H4) TỐT NHẤT cho từ khóa chính.\n\n" +
     "⚠️ QUAN TRỌNG: Tự nhận diện ĐÚNG lĩnh vực của từ khóa rồi áp dụng phương pháp cho phù hợp lĩnh vực ĐÓ. " +
     "Các khung dưới đây là PHƯƠNG PHÁP THAM KHẢO tổng quát, KHÔNG mặc định ngành nào.\n\n" +
+    (archetypeText
+      ? "⚠️ LUẬT SỐ 0 — DẠNG CẤU TRÚC BÀI PHẢI KHỚP TOP SERP (quan trọng hơn cả việc chọn từng heading):\n" +
+        "• Trong dữ liệu bên dưới có khối 'DẠNG CẤU TRÚC MÀ TOP SERP ĐANG DÙNG'. Google đang thưởng DẠNG BÀI đó cho từ khóa này — outline cuối PHẢI đi theo đúng dạng cấu trúc ấy.\n" +
+        "• Sai dạng cấu trúc là sai intent ngay từ gốc: nếu đa số đối thủ viết dạng TOPLIST/LIỆT KÊ mà bạn dựng outline dạng giải thích khái niệm (là gì → nguyên nhân → cách xử lý) thì outline đó KHÔNG dùng được, dù từng heading nghe hợp lý.\n" +
+        "• Ngược lại, nếu đa số đối thủ viết dạng hướng dẫn/dịch vụ thì ĐỪNG bẻ bài thành danh sách liệt kê.\n" +
+        "• TITLE SEO cũng phải phản ánh đúng dạng bài (vd dạng toplist: 'Top N …' / 'N cách …'; dạng hướng dẫn: 'Cách …'; dạng so sánh: 'A hay B …').\n" +
+        "• Trong khuôn dạng đó, vẫn áp dụng đầy đủ các nguyên tắc chắt lọc, cô đọng, GEO và quy tắc cấu trúc heading bên dưới.\n\n"
+      : "") +
     (consensusText
       ? "⚠️ LUẬT SỐ 1 — SEARCH INTENT CHUNG THẮNG MỌI THỨ KHÁC:\n" +
         "• Trong phần dữ liệu bên dưới có bảng 'ĐIỂM CHUNG OUTLINE ĐỐI THỦ' — đã gộp đồng nghĩa BẰNG THUẬT TOÁN (không phải suy đoán). Đây là thứ Google đang thưởng cho từ khóa này.\n" +
@@ -143,9 +151,12 @@ export function buildOutlinePrompt({ mainKw, subKws = [], refOutline = "", knowl
   if (refOutline && String(refOutline).trim()) parts.push(`OUTLINE THAM KHẢO (heading mong muốn của người dùng):\n${String(refOutline).trim()}`);
   if (knowledge && String(knowledge).trim()) parts.push(`KIẾN THỨC WEBSITE (đọc ĐẦY ĐỦ để đi đúng định vị non-commodity, khai thác tối đa thông tin thật; KHÔNG nhồi chi tiết máy móc vào heading):\n${String(knowledge).trim().slice(0, 40000)}`);
   parts.push(`OUTLINE CÁC ĐỐI THỦ TOP SERP (phân tích kỹ làm CĂN CỨ, nhưng CHẮT LỌC chứ không copy toàn bộ):\n${competitorsBlock(competitorOutlines)}`);
+  if (archetypeText) parts.push(archetypeText);
   if (consensusText) parts.push(consensusText);
   parts.push(
-    "YÊU CẦU: Xuất Title SEO + Meta description + outline (H2/H3/H4) TỐT NHẤT cho từ khóa chính — chắt lọc heading thiết yếu, đúng search intent, " +
+    "YÊU CẦU: Xuất Title SEO + Meta description + outline (H2/H3/H4) TỐT NHẤT cho từ khóa chính — " +
+    (archetypeText ? "ĐÚNG DẠNG CẤU TRÚC mà TOP SERP đang dùng, " : "") +
+    "chắt lọc heading thiết yếu, đúng search intent, " +
     (consensusText ? "PHỦ ĐỦ 100% các cụm [BAT BUOC] trong bảng điểm chung, " : "") +
     "tuân thủ mọi QUY TẮC CẤU TRÚC ở trên (đặc biệt: cha có 0 hoặc ≥2 con; sentence case; không gạch ngang; Title 50–60 ký tự; Meta 140–160 ký tự)."
   );

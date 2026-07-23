@@ -2798,7 +2798,6 @@ $("#opClearSkill").addEventListener("click", () => {
   let competitors = [];   // outline đối thủ (đã bóc tách)
   let lastOutline = [];   // kết quả outline cuối
   let lastTitle = "", lastMeta = ""; // Title SEO + Meta description
-  let lastConsensus = null; // bảng "search intent chung" của đối thủ TOP
   let knowledge = [];     // thư viện kiến thức của tài khoản
   let analyzedKw = "";    // từ khóa đã phân tích đối thủ (để phát hiện đổi từ khóa)
 
@@ -2955,15 +2954,11 @@ $("#opClearSkill").addEventListener("click", () => {
   function renderTree() {
     const mk = $("#olMainKw").value.trim();
     const sk = splitList($("#olSubKws").value);
-    const tree = lastOutline.map((it) => {
+    $("#olTree").innerHTML = lastOutline.map((it) => {
       const pad = (it.level - 2) * 18;
       const weight = it.level === 2 ? "600" : it.level === 3 ? "500" : "400";
-      const tag = it.source === "consensus"
-        ? ' <span class="badge sapo" style="font-size:.6rem" title="Điểm chung của đối thủ TOP — bắt buộc theo search intent">intent chung</span>' : "";
-      return `<div class="ol-oline" style="padding-left:${pad}px;font-weight:${weight}"><b>H${it.level}:</b> ${highlightKw(it.text, mk, sk)}${tag}</div>`;
+      return `<div class="ol-oline" style="padding-left:${pad}px;font-weight:${weight}"><b>H${it.level}:</b> ${highlightKw(it.text, mk, sk)}</div>`;
     }).join("");
-    // Bang "search intent chung cua doi thu" dat ngay tren cay outline
-    $("#olTree").innerHTML = renderConsensus(lastConsensus) + tree;
   }
   // Title SEO + Meta description với đếm ký tự (xanh nếu trong khoảng chuẩn) + nút copy
   function renderTitleMeta() {
@@ -3016,10 +3011,11 @@ $("#opClearSkill").addEventListener("click", () => {
       lastOutline = d.outline || [];
       if (!lastOutline.length) { setMsg("#olGenMsg", "warn", "Không tạo được outline."); return; }
       lastTitle = d.title || ""; lastMeta = d.metaDescription || "";
-      lastConsensus = d.consensus || null;
       // reset gợi ý unique cũ
       $("#olUniqueList").innerHTML = ""; $("#olUniqueMsg").innerHTML = "";
-      $("#olEngineUsed").textContent = "— " + (d.engineUsed || "");
+      // Chỉ 1 dòng nhãn: outline đang bám dạng cấu trúc nào của TOP SERP
+      const arch = d.archetype ? ` · bám dạng ${d.archetype.label} (${d.archetype.count}/${d.archetype.nComp} đối thủ)` : "";
+      $("#olEngineUsed").textContent = "— " + (d.engineUsed || "") + arch;
       renderTitleMeta();
       renderTree();
       if (d.aiError) setMsg("#olGenMsg", "warn", `⚠️ AI (Gemini/Claude) không chạy được nên đã dùng Local. Lý do: <b>${esc(d.aiError)}</b>. Kiểm tra lại API key & model ở ⚙️ (nút "Kiểm tra kết nối").`);

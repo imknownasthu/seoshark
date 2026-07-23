@@ -14,6 +14,7 @@ import {
   geminiWithFallback, aiHeaders, noteAiModel, cacheModelChain, liveModel, prettyModelName, QUOTA_ERR,
 } from "./src/ai-fallback.js";
 import { buildConsensus, consensusView, checkCoverage, insertMissing, markCoverage, refineLocalOutline } from "./src/heading-consensus.js";
+import { detectArchetype, archetypeView } from "./src/outline-archetype.js";
 import { optimizeWithClaude, claudeJson, claudePing } from "./src/claude.js";
 import { auditUrl, benchmark } from "./src/onpage.js";
 import { fetchSerp, serpConfigured } from "./src/serp.js";
@@ -2342,8 +2343,13 @@ app.post("/api/outline/generate", requireAuth, async (req, res) => {
     const consensus = buildConsensus(comp, { targetHeadings: refHeads, mainKeyword: main });
     const consensusText = consensusView(consensus, { mainKeyword: main });
 
+    // DANG CAU TRUC ma TOP SERP dang dung (toplist / huong dan / so sanh / dich vu / kien thuc).
+    // Sai dang cau truc = sai intent tu goc, du tung heading nghe hop ly.
+    const archetype = detectArchetype(comp);
+    const archetypeText = archetypeView(archetype);
+
     if (eng === "gemini" || eng === "claude") {
-      const { system, user, schema } = buildOutlinePrompt({ mainKw: main, subKws: subs, refOutline, knowledge, websiteName, competitorOutlines: comp, consensusText });
+      const { system, user, schema } = buildOutlinePrompt({ mainKw: main, subKws: subs, refOutline, knowledge, websiteName, competitorOutlines: comp, consensusText, archetypeText });
       try {
         let d = null, usedModel = "";
         if (eng === "gemini") {
@@ -2381,7 +2387,7 @@ app.post("/api/outline/generate", requireAuth, async (req, res) => {
     // "Bang gia..." + "Gia..."); refineLocalOutline gop chung lai theo cum dong nghia + sap xep
     // theo hanh trinh doc cua doi thu.
     if (!outline.length) {
-      outline = refineLocalOutline(mergeOutlinesLocal(comp, { mainKw: main, subKws: subs }), consensus, { mainKeyword: main });
+      outline = refineLocalOutline(mergeOutlinesLocal(comp, { mainKw: main, subKws: subs }), consensus, { mainKeyword: main, archetype });
       engineUsed = (eng === "gemini" || eng === "claude") ? "Local (AI lỗi)" : "Local";
     }
 
@@ -2411,16 +2417,14 @@ app.post("/api/outline/generate", requireAuth, async (req, res) => {
       metaDescription = `Tìm hiểu ${main}${subs.length ? ", " + subs.slice(0, 2).join(", ") : ""}. Thông tin đầy đủ, dễ hiểu giúp bạn quyết định đúng. Xem ngay!`.slice(0, 160);
     }
 
+    // Cong cu "Len outline" CHI hien ket qua outline (khong bay bang diem chung ra UI) —
+    // consensus/archetype chi la co che ben trong de outline bam dung intent + dung dang bai.
     res.json({
       outline, engineUsed, count: outline.length, aiError, title, metaDescription,
-      consensus: {
-        nComp: consensus.nComp, mustMin: consensus.mustMin || 0,
-        // Chua co "bai hien tai" -> danh dau covered theo chinh OUTLINE VUA TAO
-        clusters: markCoverage(consensus.clusters, outline, { mainKeyword: main }).map(({ toks, members, ...c }) => c),
-        coveredCount: cov.covered.length + autoAdded.length, mustCount: cov.covered.length + cov.missing.length,
-        autoAdded: autoAdded.map((a) => a.text),
-        scope: "outline", // UI doi nhan: "outline da co" thay vi "bai da co"
-      },
+      // Nhan gon ve dang cau truc dang duoc ap dung (hien 1 dong canh "engine da dung")
+      archetype: archetype && archetype.dominant
+        ? { label: archetype.label, count: archetype.count, nComp: archetype.nComp }
+        : null,
     });
   } catch (e) { res.status(500).json({ error: e.message || "Lỗi server" }); }
 });
