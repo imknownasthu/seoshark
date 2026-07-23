@@ -130,11 +130,24 @@ export function detectArchetype(competitors) {
   };
 }
 
-// Khoi mo ta dua vao prompt
-export function archetypeView(a) {
+// Dang cua CHINH BAI DANG TOI UU (de biet co dang lech dang voi TOP SERP khong)
+export function detectPageArchetype(page) {
+  if (!page || !(page.headings || []).length) return null;
+  const s = scoreCompetitor({ title: page.title || page.titleTag || "", headings: page.headings });
+  return { type: s.type, label: ARCHETYPES[s.type]?.label || s.type, items: s.items };
+}
+
+// Khoi mo ta dua vao prompt. `current` = dang cua bai hien tai (chi co o luong Onpage).
+export function archetypeView(a, { current = null } = {}) {
   if (!a || !a.dominant) return "";
-  return `=== DẠNG CẤU TRÚC MÀ TOP SERP ĐANG DÙNG (tự nhận diện từ outline đối thủ) ===
+  const head = `=== DẠNG CẤU TRÚC MÀ TOP SERP ĐANG DÙNG (tự nhận diện từ outline đối thủ) ===
 ${a.count}/${a.nComp} đối thủ TOP viết bài theo dạng: ${a.label}${a.type === "toplist" && a.avgItems ? ` (trung bình ~${a.avgItems} hạng mục)` : ""}.
 ⇒ Google đang thưởng DẠNG BÀI này cho từ khóa. Outline cuối PHẢI đi theo đúng dạng cấu trúc đó, không được viết sang dạng khác.
 Cách triển khai: ${a.guide}`;
+  if (!current) return head;
+  return current.type === a.type
+    ? `${head}\nBài đang tối ưu HIỆN ĐANG ĐÚNG dạng này (${current.label}) — giữ nguyên khuôn dạng, chỉ tinh chỉnh bên trong.`
+    : `${head}\n⚠️ LỆCH DẠNG: bài đang tối ưu hiện ở dạng ${current.label}, trong khi TOP SERP là ${a.label}. ` +
+      `Đây là vấn đề LỚN NHẤT của bài — phải TÁI CẤU TRÚC (dùng remove/rewrite/add) để chuyển bài về đúng dạng ${a.label}, ` +
+      `không chỉ sửa vặt từng heading. Nêu rõ lý do "lệch dạng bài so với TOP SERP" trong các mục liên quan.`;
 }

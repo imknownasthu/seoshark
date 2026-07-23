@@ -367,7 +367,7 @@ TOI UU GEO / AI OVERVIEW (bat buoc, ap dung MOI linh vuc):
 - UNIQUE / SPECIFIC / AUTHENTIC: outline nen tao cho o cac muc CO GOC NHIN/DU LIEU RIENG (so lieu cu the, kinh nghiem thuc te, so sanh doc quyen) thay vi chi dinh nghia chung chung (tranh "commodity content").
 - FORMAT theo noi dung: muc so sanh/gia -> bang; muc uu diem/luu y/danh sach -> bullet; quy trinh -> danh sach danh so; muc giai thich co che -> doan van. (Format la goi y trong ly do, khong bat buoc ghi vao text heading.)`;
 
-export function buildHeadingPrompt({ target, competitors, bench, mainKeyword, subKeywords, knowledge, skill, gscQueries, consensusText }) {
+export function buildHeadingPrompt({ target, competitors, bench, mainKeyword, subKeywords, knowledge, skill, gscQueries, consensusText, archetypeText }) {
   const cur = (target.headings || []).map((h, i) => `  ${i + 1}. H${h.level}: ${h.text}`).join("\n");
   const comp = (competitors || []).filter((c) => c && c.ok).map((c, i) => {
     const hs = (c.headings || []).slice(0, 20).map((h) => `     H${h.level}: ${h.text}`).join("\n");
@@ -384,9 +384,16 @@ ${cur || "  (bai chua co heading nao)"}
 
 === OUTLINE CUA DOI THU TOP SERP ===
 ${comp || "  (khong co)"}
-${consensusText ? `\n${consensusText}\n` : ""}${gq ? `\n=== TRUY VAN THAT NGUOI DUNG DANG TIM (Google Search Console) ===\n${gq}\n` : ""}
+${archetypeText ? `\n${archetypeText}\n` : ""}${consensusText ? `\n${consensusText}\n` : ""}${gq ? `\n=== TRUY VAN THAT NGUOI DUNG DANG TIM (Google Search Console) ===\n${gq}\n` : ""}
 NHIEM VU: TOI UU TOAN DIEN CAU TRUC HEADING nhu mot chuyen gia SEO Onpage + SEO Content (ap dung phuong phap onpage-competitor-analysis va nguyen tac SEO content DA LINH VUC — tu nhan dien linh vuc cua bai, KHONG ap cung 1 nganh).
-${consensusText ? `
+${archetypeText ? `
+⚠️ LUAT SO 0 — DANG CAU TRUC BAI PHAI KHOP TOP SERP (xet TRUOC khi soi tung heading):
+- Khoi "DANG CAU TRUC MA TOP SERP DANG DUNG" o tren cho biet Google dang thuong DANG BAI nao cho tu khoa. finalOutline PHAI di theo dung dang do.
+- Sai dang cau truc = sai intent tu goc: du tung heading nghe hop ly, bai van kho len top. Vi du TOP SERP la TOPLIST/LIET KE ma bai dang di kieu giai thich khai niem -> phai TAI CAU TRUC ve dang danh sach (them cac muc hang muc, bo bot phan dinh nghia dai dong), chu khong phai sua vai chu trong heading.
+- Neu phai tai cau truc: dung du 4 action (remove muc khong con hop dang bai, rewrite muc can doi goc nhin, add cac muc dac trung cua dang bai do), va ghi RO ly do "lech dang bai so voi TOP SERP" o cac muc lien quan. Danh impact "Cao" cho cac thay doi nay.
+- Neu bai DA dung dang: giu nguyen khuon dang, chi tinh chinh ben trong — KHONG duoc doi sang dang khac.
+- Voi dang TOPLIST: KHONG duoc be nguyen ten thuong hieu/don vi ma doi thu liet ke vao bai nay (do la doi thu cua website). Dat hang muc theo tieu chi/nhom hoac de dang khung de nguoi viet tu dien, tru khi ten do co san trong KIEN THUC WEBSITE.
+` : ""}${consensusText ? `
 ⚠️ LUAT SO 1 — SEARCH INTENT CHUNG THANG MOI THU KHAC:
 - Bang "DIEM CHUNG OUTLINE DOI THU" o tren la thu Google DANG THUONG cho tu khoa nay. MOI cum ghi [BAT BUOC] PHAI xuat hien trong finalOutline: bai da co -> keep/rewrite cho sat intent; bai dang thieu -> BAT BUOC action "add".
 - TUYET DOI KHONG duoc "remove" mot heading dang phuc vu cum [BAT BUOC] (chi duoc rewrite cho tot hon, hoac gop 2 heading trung nhau THANH 1 heading van phuc vu cum do).
@@ -403,7 +410,7 @@ BUOC 2 — SOI TUNG HEADING HIEN CO (phai xu ly HET, khong bo sot), gan DUNG 1 a
   • "remove": KHONG phuc vu intent -> XOA hoac GOP. Bat cac truong hop: LAC DE; TRUNG LAP y voi heading khac; noi dung QUA MONG khong dang 1 muc rieng; mang tinh QUANG CAO/ban hang lam LOANG noi dung; muc phu tro vun vat lam loang trong tam. PHAI neu ro ly do lam loang.
 BUOC 3 — THEM heading con THIEU. ${consensusText ? 'BAT DAU tu bang DIEM CHUNG: MOI cum [BAT BUOC] dang "bai DANG THIEU" -> PHAI co 1 item action="add" tuong ung (dien dat lai cho tu nhien & hop giong bai, khong copy nguyen van doi thu). Sau do moi xet cum [tuy chon]' : "Uu tien theo DIEM CHUNG: y/heading ma NHIEU doi thu TOP cung co (sau khi gop dong nghia) = tin hieu MANH ve intent -> nen them neu bai dang thieu. Y chi 1 doi thu co thi chi them khi that su can cho intent"}${gq ? " + nhu cau tu truy van GSC" : ""}. Ghi ro vi tri chen.
 BUOC 4 — Dung finalOutline: outline CUOI sau khi ap dung het (bo cai xoa, thay cai sua, chen cai them).
-  • BAT BUOC: phu DU ${consensusText ? "100% cac cum [BAT BUOC]" : "cac y ma nhieu doi thu cung co"} — day la dieu kien khong the thieu. Truoc khi tra ket qua, HAY TU KIEM TRA lai: doi chieu tung cum [BAT BUOC] voi finalOutline, thieu cum nao thi bo sung ngay.
+  ${archetypeText ? "• DUNG DANG BAI: finalOutline phai doc len ra dung DANG CAU TRUC ma TOP SERP dang dung (xem LUAT SO 0). Tu kiem tra lai dieu nay TRUOC TIEN.\n  " : ""}• BAT BUOC: phu DU ${consensusText ? "100% cac cum [BAT BUOC]" : "cac y ma nhieu doi thu cung co"} — day la dieu kien khong the thieu. Truoc khi tra ket qua, HAY TU KIEM TRA lai: doi chieu tung cum [BAT BUOC] voi finalOutline, thieu cum nao thi bo sung ngay.
   • CO DONG: ngoai cac muc cot loi tren, KHONG them heading cho "du nhieu"; moi muc them phai phuc vu intent hoac la the manh rieng.
   • THU TU: bam hanh trinh tim kiem cua nguoi dung (theo vi tri TB cua doi thu; thong thuong: nhan dien/khai niem -> phan loai/lua chon -> quy trinh -> chi phi -> luu y/rui ro -> danh gia/dia chi -> FAQ).
 

@@ -14,7 +14,7 @@ import {
   geminiWithFallback, aiHeaders, noteAiModel, cacheModelChain, liveModel, prettyModelName, QUOTA_ERR,
 } from "./src/ai-fallback.js";
 import { buildConsensus, consensusView, checkCoverage, insertMissing, markCoverage, refineLocalOutline } from "./src/heading-consensus.js";
-import { detectArchetype, archetypeView } from "./src/outline-archetype.js";
+import { detectArchetype, detectPageArchetype, archetypeView } from "./src/outline-archetype.js";
 import { optimizeWithClaude, claudeJson, claudePing } from "./src/claude.js";
 import { auditUrl, benchmark } from "./src/onpage.js";
 import { fetchSerp, serpConfigured } from "./src/serp.js";
@@ -957,10 +957,16 @@ app.post("/api/onpage/headings", requireAuth, async (req, res) => {
     const consensus = buildConsensus(competitors, { targetHeadings: target.headings || [], mainKeyword });
     const consensusText = consensusView(consensus, { mainKeyword });
 
+    // DANG CAU TRUC ma TOP SERP dang dung + dang cua CHINH BAI NAY (de biet co lech dang khong).
+    // Lech dang = sai intent tu goc -> AI phai tai cau truc, khong chi sua vat tung heading.
+    const archetype = detectArchetype(competitors);
+    const pageArch = detectPageArchetype({ title: target.titleTag, headings: target.headings });
+    const archetypeText = archetypeView(archetype, { current: pageArch });
+
     const { data, engineUsed } = await onpageAI({
       engine, key: apiKey, model,
       system: ONPAGE_SYSTEM,
-      user: buildHeadingPrompt({ target, competitors, bench, mainKeyword, subKeywords, knowledge, skill, gscQueries, consensusText }),
+      user: buildHeadingPrompt({ target, competitors, bench, mainKeyword, subKeywords, knowledge, skill, gscQueries, consensusText, archetypeText }),
       schema: HEADING_SCHEMA, maxTokens: 24576,
     });
     const items = (Array.isArray(data.items) ? data.items : []).map((it) => ({
@@ -998,6 +1004,15 @@ app.post("/api/onpage/headings", requireAuth, async (req, res) => {
     res.json({
       intent: data.intent || "", items, finalOutline, summary: data.summary || "", engineUsed,
       currentHeadings: target.headings || [],
+      // Dang bai cua TOP SERP + dang hien tai cua bai -> UI canh bao khi lech dang
+      archetype: archetype && archetype.dominant
+        ? {
+            label: archetype.label, count: archetype.count, nComp: archetype.nComp,
+            avgItems: archetype.avgItems,
+            current: pageArch ? pageArch.label : "",
+            mismatch: !!(pageArch && pageArch.type !== archetype.type),
+          }
+        : null,
       // Bang diem chung cho UI: nguoi dung thay ro outline cuoi da bam search intent den dau
       consensus: {
         nComp: consensus.nComp, mustMin: consensus.mustMin || 0,

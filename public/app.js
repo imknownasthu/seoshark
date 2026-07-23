@@ -1499,6 +1499,20 @@ if ($("#btnOpHeadings")) $("#btnOpHeadings").addEventListener("click", async () 
   } catch (e) { msg.innerHTML = alertHtml("err", "❌ " + e.message); }
   finally { busy(btn, false); }
 });
+// Dang cau truc bai ma TOP SERP dang dung — lech dang = sai intent tu goc
+function renderArchetype(a) {
+  if (!a) return "";
+  const items = a.avgItems && /TOPLIST/i.test(a.label) ? ` · trung bình ~${a.avgItems} hạng mục` : "";
+  if (!a.mismatch) {
+    return `<div class="arch-box ok"><b>Dạng bài TOP SERP:</b> ${esc(a.label)} (${a.count}/${a.nComp} đối thủ)${items}
+      ${a.current ? `<span class="arch-ok">✓ bài đang đúng dạng</span>` : ""}</div>`;
+  }
+  return `<div class="arch-box warn"><b>⚠ Bài đang LỆCH DẠNG so với TOP SERP</b>
+    <div class="arch-line">TOP SERP: <b>${esc(a.label)}</b> (${a.count}/${a.nComp} đối thủ)${items} · Bài này: <b>${esc(a.current)}</b></div>
+    <div class="cons-note">Sai dạng cấu trúc là sai search intent ngay từ gốc — outline cuối bên dưới đã được tái cấu trúc về đúng dạng của TOP SERP.</div>
+  </div>`;
+}
+
 // Bang "diem chung doi thu" = search intent Google dang thuong -> outline cuoi PHAI phu het
 function renderConsensus(c) {
   if (!c || !c.nComp || !(c.clusters || []).length) return "";
@@ -1542,6 +1556,7 @@ function renderOpHeadings(d) {
   let html = "";
   if (d.summary) html += alertHtml("info", esc(d.summary));
   if (d.intent) html += `<div class="opd" style="margin-bottom:10px"><b>Search intent:</b> ${esc(d.intent)}</div>`;
+  html += renderArchetype(d.archetype);
   html += renderConsensus(d.consensus);
   html += `<div class="ophead-cols">
     ${col("🗑️ Nên xóa / gộp", by("remove"), "c-del")}
