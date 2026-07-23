@@ -38,9 +38,9 @@ export async function geminiPing(apiKey) {
   return true;
 }
 
-// Tu dong chon model Gemini CAO NHAT & MIEN PHI (flash) tu danh sach model cua chinh API key.
-// Khi Google ra model moi (vd 3.6-flash) -> tu dong dung, khong can sua code. Fallback 3.5-flash.
-export async function pickBestGeminiModel(apiKey) {
+// Liet ke TOAN BO model Gemini flash MIEN PHI cua chinh API key, xep hang CAO -> THAP.
+// Dung lam "chuoi tut model": het luot free o model cao thi tu chuyen xuong model ke tiep.
+export async function listFreeGeminiModels(apiKey) {
   const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`);
   if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d?.error?.message || `HTTP ${r.status}`); }
   const d = await r.json();
@@ -57,8 +57,17 @@ export async function pickBestGeminiModel(apiKey) {
     const base = /^gemini-\d+\.\d+-flash(-lite)?$/i.test(n) ? 10 : 0; // ten goc (alias -> luon tro ban moi nhat)
     return ver * 1000 + stable + full + base;
   };
-  cands.sort((a, b) => score(b) - score(a));
-  return cands[0] || "gemini-3.5-flash";
+  // Loai trung + bo alias "-latest" khi da co ban goc (tranh tut xuong dung 1 model 2 lan)
+  const uniq = [...new Set(cands)];
+  uniq.sort((a, b) => score(b) - score(a));
+  return uniq;
+}
+
+// Tu dong chon model Gemini CAO NHAT & MIEN PHI (flash) tu danh sach model cua chinh API key.
+// Khi Google ra model moi (vd 3.6-flash) -> tu dong dung, khong can sua code. Fallback 3.5-flash.
+export async function pickBestGeminiModel(apiKey) {
+  const list = await listFreeGeminiModels(apiKey);
+  return list[0] || "gemini-3.5-flash";
 }
 
 // "Va" JSON bi cat cut (do dung gioi han output): dong lai cac object/array con dang mo
@@ -155,13 +164,13 @@ export async function geminiJson({ apiKey, model, system, user, schema, maxToken
   return parseJsonResilient(text, cand?.finishReason);
 }
 
-export async function optimizeWithGemini({ apiKey, model, article, mode, count, keywords, targets }) {
+export async function optimizeWithGemini({ apiKey, model, article, mode, count, keywords, targets, targetContexts }) {
   const mdl = model || "gemini-3.5-flash";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${mdl}:generateContent?key=${encodeURIComponent(
     apiKey
   )}`;
 
-  const userContent = buildUserPrompt({ article, mode, count, keywords, targets });
+  const userContent = buildUserPrompt({ article, mode, count, keywords, targets, targetContexts });
 
   const body = {
     systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },

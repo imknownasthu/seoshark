@@ -19,7 +19,7 @@ const ENGINES = {
     models: [
       ["gemini-3.5-flash", "Gemini Flash (FREE — tự chọn cao nhất)"],
     ],
-    hint: "Tự động dùng model Gemini Flash CAO NHẤT & miễn phí theo API key của bạn (khi Google ra bản mới sẽ tự cập nhật). Cố định trong suốt phiên, không tự tụt xuống model thấp hơn.",
+    hint: "Tự động dùng model Gemini Flash CAO NHẤT & miễn phí theo API key của bạn (khi Google ra bản mới sẽ tự cập nhật). Nếu model đó hết lượt miễn phí, tool tự chuyển xuống model kế tiếp, báo cho bạn và hiện model đang dùng trên header — hết thời gian chờ sẽ tự quay lại model cao nhất.",
   },
   claude: {
     needKey: true,
@@ -356,11 +356,13 @@ window.gscConnected = () => (GSC.mode === "sa" ? (GSC.sites || []).length > 0 : 
   })();
 })();
 
-function toast(msg) {
+let _toastTimer = null;
+function toast(msg, ms) {
   const t = $("#toast");
   t.textContent = msg;
   t.classList.add("show");
-  setTimeout(() => t.classList.remove("show"), 1800);
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => t.classList.remove("show"), ms || 1800);
 }
 function alertHtml(type, msg) {
   return `<div class="alert ${type}">${msg}</div>`;
@@ -853,9 +855,34 @@ window.fetch = async (...args) => {
   try {
     const url = typeof args[0] === "string" ? args[0] : args[0]?.url || "";
     if (res.status === 401 && !url.includes("/api/auth/")) showAuth();
+    // Server bao model AI THUC SU vua dung (co the da tut xuong vi het luot free) -> cap nhat header
+    const m = res.headers.get("X-Ai-Model");
+    const n = res.headers.get("X-Ai-Notice");
+    if (m || n) noteServerModel(m || "", n ? decodeURIComponent(n) : "");
   } catch {}
   return res;
 };
+
+// Cap nhat model dang dung tren header + bao 1 lan khi phai tut model vi het luot mien phi
+let _lastAiNotice = "", _lastAiNoticeAt = 0;
+function noteServerModel(model, notice) {
+  const engine = ($("#engine") || {}).value || "local";
+  if (model && engine === "gemini") {
+    const sel = $("#model");
+    if (!sel || sel.value !== model) applyGeminiModel(model);
+    setAiPill(true, `${prettyModel("gemini", model)} · đang dùng`);
+  }
+  if (notice) {
+    const now = Date.now();
+    if (notice !== _lastAiNotice || now - _lastAiNoticeAt > 60000) {
+      _lastAiNotice = notice; _lastAiNoticeAt = now;
+      toast(notice, 7000);
+    }
+    const s = $("#engineStatus");
+    if (s) { s.textContent = "⚠ " + notice; s.style.color = "var(--amber)"; }
+  }
+}
+window.noteServerModel = noteServerModel;
 
 function showAuth() { $("#authOverlay").classList.add("show"); }
 function hideAuth() { $("#authOverlay").classList.remove("show"); }

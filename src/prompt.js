@@ -19,7 +19,14 @@ QUY TAC BAT BUOC:
 8. Giu nguyen dinh dang inline cu (<strong>, <em>...). Chi tra ve <a href="URL">anchor</a> voi DUNG URL dich da cho, khong bia URL.
 9. Chat luong hon so luong: tha it link that muot con hon nhieu link guong ep.
 
-DOC HIEU TRUOC KHI CHEN: phai doc & hieu noi dung + tu khoa cua bai goc VA cua trang dich (qua tieu de/URL) de anchor dung NGU NGHIA va dung NGU CANH. Anchor phai lien quan that su toi noi dung trang dich.
+DOC HIEU TRUOC KHI CHEN (BAT BUOC — day la buoc quyet dinh chat luong):
+Ban se duoc cung cap khoi "NGU CANH TRANG DICH" gom tieu de, mo ta, cac heading va tom tat noi dung THAT cua tung trang dich.
+1. Doc ky khoi do de tra loi 3 cau hoi truoc khi chen: (a) Trang dich noi ve DIEU GI cu the? (b) Nguoi doc bai nguon dang o giai doan nao, khi nao ho CAN bam sang trang dich? (c) Trong bai nguon, cau/doan nao dang noi DUNG chu de do?
+2. Chon block co lien quan NGU NGHIA MANH NHAT voi trang dich — KHONG chon block chi trung tu ngu be mat. Vi du: trang dich noi ve CHI PHI thi uu tien doan dang ban ve gia/chi phi/bang gia, khong nhet vao doan noi ve quy trinh.
+3. Cau chua anchor phai la mot "cau noi" hop ly: doc xong nguoi ta hieu vi sao nen bam vao. Neu can, dien dat lai cau do (giu nguyen y & so lieu) sao cho y cua cau khop voi noi dung trang dich.
+4. Anchor phai mo ta DUNG thu nguoi doc se thay sau khi bam (khop chu de/tu khoa chinh cua trang dich). KHONG dung anchor chung chung ("tai day", "xem them", "bai viet nay").
+5. Neu trang dich khong lien quan thuc su toi bat ky doan nao trong bai nguon: dung nhet go bo — viet THEM 1 cau chuyen tiep tu nhien o cuoi block gan chu de nhat (addedContent=true), cau do phai noi ro gia tri cua trang dich cho nguoi doc.
+6. TUYET DOI khong suy dien noi dung trang dich ngoai nhung gi co trong khoi ngu canh (khong bia dich vu, con so, cam ket).
 
 ĐUNG lam: chen kieu "Tham khao [tu khoa] de biet them." giua cau mot cach co hoc, hoac nhet anchor vao giua cau lam cau gay, hoac doi anchor cua link cu.
 NEN lam: dien dat lai cau tu nhien quanh anchor, vd: "Khi nieng rang, viec ve sinh dung cach giup han che mang bam" -> "Khi <a href=...>nieng rang</a>, ve sinh dung cach giup han che mang bam".
@@ -50,6 +57,25 @@ export function buildTargetsView(targets) {
   return targets.map((t, idx) => `${idx + 1}. ${t.title} -> ${t.url}`).join("\n");
 }
 
+// Khoi NGU CANH TRANG DICH: noi dung THAT cua trang dich (tieu de, mo ta, heading, tom tat)
+// -> AI hieu trang dich noi ve gi de chon dung cho chen + viet cau chuyen tiep muot.
+export function buildTargetContextView(contexts) {
+  if (!contexts || !contexts.length) return "";
+  return contexts
+    .map((c, i) => {
+      const heads = (c.headings || []).slice(0, 10);
+      return [
+        `--- TRANG DICH ${i + 1} ---`,
+        `URL: ${c.url}`,
+        `Tieu de: ${c.title || "(khong ro)"}`,
+        c.excerpt ? `Mo ta: ${c.excerpt}` : "",
+        heads.length ? `Cac muc chinh: ${heads.join(" | ")}` : "",
+        c.summary ? `Tom tat noi dung: ${c.summary}` : "",
+      ].filter(Boolean).join("\n");
+    })
+    .join("\n\n");
+}
+
 export function buildTaskInstruction({ mode, count, keywords }) {
   if (mode === "auto") {
     return `CHE DO: TU DONG.
@@ -68,22 +94,29 @@ Neu khong du ${count} vi tri thuc su phu hop, hay chen so luong toi da hop ly va
 Voi MOI tu khoa duoi day, tim vi tri phu hop nhat trong bai de chen internal link (1 link / tu khoa).
 - Neu tu khoa da co URL chi dinh: dung dung URL do.
 - Neu chua co URL: chon URL phu hop nhat tu DANH SACH URL DICH.
-- Neu trong bai khong co cau nao chua/phu hop voi tu khoa: viet them 1 cau lien mach de trien khai (addedContent=true).
+- BAT BUOC doi chieu tu khoa voi khoi "NGU CANH TRANG DICH" cua dung URL do: chon block ma noi dung dang ban ve dung chu de cua trang dich; neu can thi dien dat lai cau cho khop y (giu nguyen thong tin & so lieu).
+- Anchor NEN bam sat tu khoa da cho, nhung DUOC PHEP bien the tu nhien theo cau (them/bot tu phu, doi trat tu) mien la van dung ngu nghia va doc muot.
+- Neu trong bai khong co cau nao chua/phu hop voi tu khoa: viet them 1 cau lien mach de trien khai (addedContent=true), noi ro nguoi doc se nhan duoc gi o trang dich.
 
 DANH SACH TU KHOA:
 ${kwView}`;
 }
 
-export function buildUserPrompt({ article, mode, count, keywords, targets }) {
-  return `BAI VIET: "${article.title}"
+export function buildUserPrompt({ article, mode, count, keywords, targets, targetContexts }) {
+  const ctxView = buildTargetContextView(targetContexts);
+  return `BAI VIET NGUON: "${article.title}"
 URL goc: ${article.url}
-
+${article.excerpt ? `Mo ta bai nguon: ${article.excerpt}\n` : ""}
 CAC BLOCK NOI DUNG (dung blockIndex = so sau dau #):
 ${buildBlocksView(article.blocks)}
 
 DANH SACH URL DICH (internal link co the dung):
 ${targets.length ? buildTargetsView(targets) : "(khong co)"}
-
+${ctxView ? `
+NGU CANH TRANG DICH — DOC KY TRUOC KHI CHON CHO CHEN
+(day la noi dung THAT lay tu chinh trang dich; dung de hieu trang dich noi ve gi, tu do chon block lien quan nhat va viet cau chua anchor cho muot)
+${ctxView}
+` : ""}
 YEU CAU:
 ${buildTaskInstruction({ mode, count, keywords })}`;
 }

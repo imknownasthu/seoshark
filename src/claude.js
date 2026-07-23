@@ -56,9 +56,9 @@ export async function claudeJson({ apiKey, model, system, user, schema, maxToken
   return toolUse.input || {};
 }
 
-export async function optimizeWithClaude({ apiKey, model, article, mode, count, keywords, targets }) {
+export async function optimizeWithClaude({ apiKey, model, article, mode, count, keywords, targets, targetContexts }) {
   const client = new Anthropic({ apiKey });
-  const userContent = buildUserPrompt({ article, mode, count, keywords, targets });
+  const userContent = buildUserPrompt({ article, mode, count, keywords, targets, targetContexts });
 
   const response = await client.messages.create({
     model: model || "claude-sonnet-4-6",

@@ -9,7 +9,10 @@ import fs from "node:fs";
 import { extractArticle, blocksToHtml, blocksToMarkdown } from "./src/extract.js";
 import { loadTargets, rankTargets } from "./src/sitemap.js";
 import { optimizeLocally } from "./src/local.js";
-import { optimizeWithGemini, geminiJson, geminiPing, pickBestGeminiModel } from "./src/gemini.js";
+import { optimizeWithGemini, geminiJson, geminiPing, pickBestGeminiModel, listFreeGeminiModels } from "./src/gemini.js";
+import {
+  geminiWithFallback, aiHeaders, noteAiModel, cacheModelChain, liveModel, prettyModelName, QUOTA_ERR,
+} from "./src/ai-fallback.js";
 import { optimizeWithClaude, claudeJson, claudePing } from "./src/claude.js";
 import { auditUrl, benchmark } from "./src/onpage.js";
 import { fetchSerp, serpConfigured } from "./src/serp.js";
@@ -57,6 +60,12 @@ app.use(express.static(path.join(__dirname, "public"), {
 }));
 const UPLOAD_DIR = path.join(__dirname, "public", "uploads");
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+
+// ====== BAO MODEL AI DANG DUNG VE CLIENT ======
+// Moi request co 1 "store" rieng - geminiWithFallback ghi vao day model THUC SU da dung + ghi chu
+// (vd "het luot free -> tut xuong model thap hon"), roi dan vao header X-Ai-Model / X-Ai-Notice
+// de header cua UI luon hien dung model dang chay. Xem src/ai-fallback.js.
+app.use(aiHeaders());
 
 // ====== AUTH ======
 await auth.initAuth();
@@ -215,9 +224,16 @@ app.post("/api/engine/check", requireAuth, async (req, res) => {
       const k = (apiKey || process.env.GEMINI_API_KEY || "").trim();
       if (!k) return res.json({ ok: false, error: "Chưa nhập Gemini API key." });
       await geminiPing(k);
-      let best = "gemini-3.5-flash";
-      try { best = await pickBestGeminiModel(k); } catch { /* ping OK nhung liet ke loi -> giu mac dinh */ }
-      return res.json({ ok: true, label: `Gemini — đã kết nối (${best})`, model: best });
+      let best = "gemini-3.5-flash", chain = [];
+      // Lay ca CHUOI model free (cao -> thap) de khi het luot o model cao thi tu tut xuong model ke tiep
+      try {
+        chain = await listFreeGeminiModels(k);
+        if (chain.length) { best = chain[0]; cacheModelChain(k, chain); }
+      } catch { /* ping OK nhung liet ke loi -> giu mac dinh */ }
+      // Neu model cao nhat dang bi khoa vi het luot -> bao model dang dung THUC TE
+      const live = liveModel(k, chain) || best;
+      const note = live !== best ? ` — ${prettyModelName(best)} đang hết lượt, dùng tạm ${prettyModelName(live)}` : "";
+      return res.json({ ok: true, label: `Gemini — đã kết nối (${live})${note}`, model: live, bestModel: best, models: chain });
     }
     if (eng === "claude") {
       const k = (apiKey || process.env.ANTHROPIC_API_KEY || "").trim();
@@ -257,34 +273,6 @@ function attachKwStats(a, mainKeyword) {
   a.keywordDensity = a.wordCount ? +((cnt * kwWords / a.wordCount) * 100).toFixed(2) : 0;
 }
 
-// Cac model Gemini FREE (thu lan luot neu model chon bi loi/khong ton tai/quota)
-const FREE_FLASH = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
-const RECOVERABLE = /quota|exceeded|limit: 0|RESOURCE_EXHAUSTED|429|not found|404|NOT_FOUND|not supported|unavailable|is not found|does not exist|overload|high demand|experiencing high|try again later|temporar|\b503\b|\b500\b|INTERNAL|qua lau|timeout|timed out|aborted|AbortError|ETIMEDOUT|ECONNRESET|fetch failed|network/i;
-
-// Loi QUA TAI TAM THOI (nen thu lai cung model) vs loi model KHONG hop le (chuyen model khac ngay)
-const TRANSIENT = /overload|high demand|experiencing high|try again later|temporar|429|RESOURCE_EXHAUSTED|\b503\b|\b500\b|INTERNAL|unavailable/i;
-const _sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-// CHI dung DUNG 1 model (khong tu tut xuong model thap hon) — theo yeu cau: cố định Gemini 3.5.
-// Loi qua tai tam thoi -> nghi (backoff) roi thu lai CUNG model, toi da `attempts` lan.
-// Tra ve { result, model, switched:false }. Nem lastErr neu that bai het.
-async function geminiWithFallback(callFn, chosenModel, { attemptsPerModel = 4, backoffMs = 1500 } = {}) {
-  const m = chosenModel || "gemini-3.5-flash";
-  let lastErr;
-  for (let attempt = 1; attempt <= attemptsPerModel; attempt++) {
-    try {
-      const result = await callFn(m);
-      return { result, model: m, switched: false };
-    } catch (e) {
-      lastErr = e;
-      const msg = e.message || "";
-      if (!RECOVERABLE.test(msg)) throw e; // loi khac (vd sai key) -> nem ngay
-      if (TRANSIENT.test(msg) && attempt < attemptsPerModel) { await _sleep(backoffMs * attempt); continue; }
-      break; // loi khong the thu lai (404/not found...) -> dung, KHONG doi model
-    }
-  }
-  throw lastErr;
-}
 
 // ====== HELPER: chay engine (local mac dinh, gemini/claude tuy chon, tu fallback) ======
 async function runEngine({ engine, key, model, params }) {
@@ -302,13 +290,17 @@ async function runEngine({ engine, key, model, params }) {
       try {
         const r = await geminiWithFallback(
           (m) => optimizeWithGemini({ apiKey: gKey, model: m, ...params }),
-          gModel
+          gModel,
+          { apiKey: gKey }
         );
         result = r.result;
-        engineUsed = `Gemini (${r.model})${r.switched ? " — tự chuyển" : ""}`;
+        engineUsed = `Gemini (${r.model})${r.switched ? ` — tự chuyển vì ${r.notice || "hết lượt miễn phí"}` : ""}`;
       } catch (e) {
         eng = "local";
-        fellBack = `Gemini loi (${e.message}) -> tam dung engine Local.`;
+        // Het luot MOI model free -> noi ro cho nguoi dung thay vi do "Gemini loi ..." kho hieu
+        fellBack = QUOTA_ERR.test(e.message || "")
+          ? "Tất cả model Gemini miễn phí đều đã hết lượt trong lúc này → tạm dùng engine Local. Hãy thử lại sau ít phút."
+          : `Gemini lỗi (${e.message}) → tạm dùng engine Local.`;
       }
     }
   } else if (eng === "claude") {
@@ -384,6 +376,47 @@ function applyAndBuild(article, result) {
 // ==================== INTERNAL LINK ====================
 
 // --- POST /api/analyze : doc bai viet + nap pool URL dich ---
+// ====== NGU CANH TRANG DICH (de AI chen anchor DUNG NGU NGHIA, khong go bo) ======
+// Doc noi dung THAT cua tung URL dich (tieu de, mo ta, heading, tom tat) roi dua vao prompt.
+// Co cache 30 phut: 1 URL dich dung cho nhieu bai nguon chi phai tai 1 lan.
+const _ctxCache = new Map(); // normUrl -> { at, ctx }
+const CTX_TTL = 1000 * 60 * 30;
+const CTX_MAX = 200;
+
+function summarizeArticle(a, { words = 320 } = {}) {
+  const blocks = a.blocks || [];
+  const headings = blocks.filter((b) => /^h[1-4]$/i.test(b.tag)).map((b) => b.text).filter(Boolean).slice(0, 12);
+  const body = blocks.filter((b) => !/^h[1-4]$/i.test(b.tag)).map((b) => b.text).join(" ").replace(/\s+/g, " ").trim();
+  return {
+    url: a.url,
+    title: a.title || "",
+    excerpt: (a.excerpt || "").slice(0, 400),
+    headings,
+    summary: body.split(" ").slice(0, words).join(" "),
+  };
+}
+
+async function getPageContext(url) {
+  const k = norm(url);
+  const hit = _ctxCache.get(k);
+  if (hit && Date.now() - hit.at < CTX_TTL) return hit.ctx;
+  const ctx = summarizeArticle(await extractArticle(url));
+  _ctxCache.set(k, { at: Date.now(), ctx });
+  if (_ctxCache.size > CTX_MAX) {
+    const oldest = [..._ctxCache.entries()].sort((a, b) => a[1].at - b[1].at).slice(0, _ctxCache.size - CTX_MAX);
+    for (const [key] of oldest) _ctxCache.delete(key);
+  }
+  return ctx;
+}
+
+// Doc song song nhieu URL dich; URL nao khong doc duoc thi bo qua (khong lam hong ca lan chay)
+async function buildTargetContexts(urls, { max = 8 } = {}) {
+  const uniq = [...new Set((urls || []).map((u) => (u || "").trim()).filter((u) => /^https?:\/\//i.test(u)))].slice(0, max);
+  if (!uniq.length) return [];
+  const settled = await Promise.allSettled(uniq.map((u) => getPageContext(u)));
+  return settled.filter((r) => r.status === "fulfilled").map((r) => r.value);
+}
+
 app.post("/api/analyze", requireAuth, async (req, res) => {
   try {
     const { url, sitemapUrl } = req.body || {};
@@ -462,11 +495,20 @@ app.post("/api/optimize", requireAuth, async (req, res) => {
       });
     }
 
-    const params = { article, mode, count: n, keywords: kws, targets, allTargets: session.allTargets };
+    // Doc noi dung THAT cua cac URL dich -> AI hieu trang dich noi ve gi truoc khi chon cho chen
+    const ctxUrls = mode === "keywords" ? kws.map((k) => k.url) : targets.slice(0, 6).map((t) => t.url);
+    const targetContexts = await buildTargetContexts(ctxUrls);
+
+    const params = { article, mode, count: n, keywords: kws, targets, allTargets: session.allTargets, targetContexts };
     const { result, engineUsed } = await runEngine({ engine, key: apiKey, model, params });
     const built = applyAndBuild(article, result);
 
-    res.json({ mode, engine: engineUsed, notes: result.notes || "", usage: result.usage || null, ...built });
+    res.json({
+      mode, engine: engineUsed, notes: result.notes || "", usage: result.usage || null,
+      // Cho UI biet nhung URL dich nao da doc duoc noi dung (AI chen theo ngu canh that)
+      contextRead: targetContexts.map((c) => ({ url: c.url, title: c.title })),
+      ...built,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message || String(err) });
   }
@@ -507,6 +549,8 @@ app.post("/api/incoming/analyze", requireAuth, async (req, res) => {
       type: "incoming",
       createdAt: Date.now(),
       target: { url: target.url, title: target.title, host: target.host },
+      // Ngu canh URL dich (doc 1 lan, dung cho MOI bai nguon khi chen link)
+      targetContext: summarizeArticle(target),
       allTargets,
     });
 
@@ -539,6 +583,10 @@ app.post("/api/incoming/insert", requireAuth, async (req, res) => {
     const targetUrl = session.target.url;
     const fallbackAnchor = (defaultAnchor || session.target.title || "").trim();
 
+    // Ngu canh URL dich: uu tien ban da doc o buoc phan tich; neu phien cu chua co thi doc lai
+    let targetContexts = session.targetContext ? [session.targetContext] : [];
+    if (!targetContexts.length) targetContexts = await buildTargetContexts([targetUrl]);
+
     // Gioi han 10 bai / lan
     const list = sources
       .map((s) => ({ url: (s.url || "").trim(), anchor: (s.anchor || "").trim() }))
@@ -563,7 +611,9 @@ app.post("/api/incoming/insert", requireAuth, async (req, res) => {
           article: srcArticle,
           mode: "keywords",
           keywords: [{ keyword: anchor, url: targetUrl }],
-          targets: [],
+          // Cho AI biet URL dich la trang gi (tieu de/heading/tom tat) de dat anchor dung ngu canh
+          targets: [{ url: targetUrl, title: session.target.title || targetUrl }],
+          targetContexts,
           allTargets: [],
         };
         const { result, engineUsed } = await runEngine({ engine, key: apiKey, model, params });
@@ -636,7 +686,8 @@ async function _onpageAIOnce({ engine, key, model, system, user, schema, maxToke
     const gModel = (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim();
     const r = await geminiWithFallback(
       (m) => geminiJson({ apiKey: gKey, model: m, system, user, schema, maxTokens }),
-      gModel
+      gModel,
+      { apiKey: gKey }
     );
     return { data: r.result, engineUsed: `Gemini (${r.model})${r.switched ? " — tự chuyển" : ""}` };
   }
@@ -1156,7 +1207,7 @@ async function gbpAI({ engine, key, model, user, schema, maxTokens, image }) {
     const gKey = (key || process.env.GEMINI_API_KEY || "").trim();
     if (!gKey) throw new Error("Chưa có Gemini API key.");
     const gModel = (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim();
-    const r = await geminiWithFallback((m) => geminiJson({ apiKey: gKey, model: m, system: GBP_SYSTEM, user, schema, maxTokens, image }), gModel);
+    const r = await geminiWithFallback((m) => geminiJson({ apiKey: gKey, model: m, system: GBP_SYSTEM, user, schema, maxTokens, image }), gModel, { apiKey: gKey });
     return { data: r.result, engineUsed: `Gemini (${r.model})${r.switched ? " — tự chuyển" : ""}` };
   }
   if (eng === "claude") {
@@ -1656,7 +1707,7 @@ app.post("/api/keywords/research", requireAuth, async (req, res) => {
       const schema = { type: "object", properties: { items: { type: "array", items: { type: "object", properties: { keyword: { type: "string" }, intent: { type: "string" }, cluster: { type: "string" }, difficulty: { type: "string" }, popularity: { type: "string" } }, required: ["keyword"] } } }, required: ["items"] };
       try {
         let d = null;
-        if (eng === "gemini") { const k = (apiKey || process.env.GEMINI_API_KEY || "").trim(); if (k) { const r = await geminiWithFallback((m) => geminiJson({ apiKey: k, model: m, system: sys, user, schema, maxTokens: 8192 }), (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim()); d = r.result; } }
+        if (eng === "gemini") { const k = (apiKey || process.env.GEMINI_API_KEY || "").trim(); if (k) { const r = await geminiWithFallback((m) => geminiJson({ apiKey: k, model: m, system: sys, user, schema, maxTokens: 8192 }), (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim(), { apiKey: k }); d = r.result; } }
         else { const k = (apiKey || process.env.ANTHROPIC_API_KEY || "").trim(); if (k) d = await claudeJson({ apiKey: k, model: (model || process.env.SEOSHARK_MODEL || "claude-sonnet-4-6").trim(), system: sys, user, schema, maxTokens: 8000 }); }
         if (d && Array.isArray(d.items)) {
           const map = {};
@@ -1727,7 +1778,7 @@ async function aiJson(eng, { system, user, schema, maxTokens, model, apiKey }) {
   if (eng === "gemini") {
     const k = (apiKey || process.env.GEMINI_API_KEY || "").trim();
     if (!k) throw new Error("Chưa có Gemini API key (nhập ở ⚙️ hoặc đặt GEMINI_API_KEY trên server).");
-    const r = await geminiWithFallback((m) => geminiJson({ apiKey: k, model: m, system, user, schema, maxTokens }), (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim());
+    const r = await geminiWithFallback((m) => geminiJson({ apiKey: k, model: m, system, user, schema, maxTokens }), (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim(), { apiKey: k });
     return r.result;
   }
   const k = (apiKey || process.env.ANTHROPIC_API_KEY || "").trim();
@@ -2256,7 +2307,7 @@ app.post("/api/outline/generate", requireAuth, async (req, res) => {
           const k = (apiKey || process.env.GEMINI_API_KEY || "").trim();
           if (!k) throw new Error("Chưa có Gemini API key (nhập ở ⚙️ hoặc đặt GEMINI_API_KEY trên server).");
           const gModel = (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim();
-          const r = await geminiWithFallback((m) => geminiJson({ apiKey: k, model: m, system, user, schema, maxTokens: 8192 }), gModel);
+          const r = await geminiWithFallback((m) => geminiJson({ apiKey: k, model: m, system, user, schema, maxTokens: 8192 }), gModel, { apiKey: k });
           d = r.result; usedModel = `Gemini (${r.model})${r.switched ? " — tự chuyển model" : ""}`;
         } else {
           const k = (apiKey || process.env.ANTHROPIC_API_KEY || "").trim();
@@ -2327,7 +2378,7 @@ app.post("/api/outline/unique", requireAuth, async (req, res) => {
       const k = (apiKey || process.env.GEMINI_API_KEY || "").trim();
       if (!k) return res.status(400).json({ error: "Thiếu Gemini API key (nhập ở ⚙️)." });
       const gModel = (model || process.env.GEMINI_MODEL || "gemini-3.5-flash").trim();
-      const r = await geminiWithFallback((m) => geminiJson({ apiKey: k, model: m, system, user, schema, maxTokens: 6000 }), gModel);
+      const r = await geminiWithFallback((m) => geminiJson({ apiKey: k, model: m, system, user, schema, maxTokens: 6000 }), gModel, { apiKey: k });
       d = r.result;
     } else {
       const k = (apiKey || process.env.ANTHROPIC_API_KEY || "").trim();
